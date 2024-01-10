@@ -1,5 +1,5 @@
 #!/bin/sh
-#2019/08/30 by bkye
+#2024/01/10 by tekintian
 adbyby_enable=`nvram get adbyby_enable`
 adbyby_ip_x=`nvram get adbyby_ip_x`
 adbyby_rules_x=`nvram get adbyby_rules_x`
@@ -66,7 +66,7 @@ add_rules()
 	rm -f /tmp/adbyby/data/*.bak
 
 	touch /tmp/local-md5.json && md5sum /tmp/adbyby/data/lazy.txt /tmp/adbyby/data/video.txt > /tmp/local-md5.json
-	touch /tmp/md5.json && curl -k -s -o /tmp/md5.json --connect-timeout 5 --retry 3 https://adbyby.coding.net/p/xwhyc-rules/d/xwhyc-rules/git/raw/master/md5.json
+	touch /tmp/md5.json && curl -k -s -o /tmp/md5.json --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/md5.json
 
 	lazy_local=$(grep 'lazy' /tmp/local-md5.json | awk -F' ' '{print $1}')
 	video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')  
@@ -76,8 +76,8 @@ add_rules()
 	if [ "$lazy_online"x != "$lazy_local"x -o "$video_online"x != "$video_local"x ]; then
 	echo "MD5 not match! Need update!"
 	logger -t "adbyby" "发现更新的规则,下载规则！"
-	touch /tmp/lazy.txt && curl -k -s -o /tmp/lazy.txt --connect-timeout 5 --retry 3 https://adbyby.coding.net/p/xwhyc-rules/d/xwhyc-rules/git/raw/master/lazy.txt
-	touch /tmp/video.txt && curl -k -s -o /tmp/video.txt --connect-timeout 5 --retry 3 https://adbyby.coding.net/p/xwhyc-rules/d/xwhyc-rules/git/raw/master/video.txt
+	touch /tmp/lazy.txt && curl -k -s -o /tmp/lazy.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt
+	touch /tmp/video.txt && curl -k -s -o /tmp/video.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt
 	touch /tmp/local-md5.json && md5sum /tmp/lazy.txt /tmp/video.txt > /tmp/local-md5.json
 	lazy_local=$(grep 'lazy' /tmp/local-md5.json | awk -F' ' '{print $1}')
 	video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')
@@ -418,15 +418,24 @@ stat.pandora.xiaomi.com
 upgrade.mishop.pandora.xiaomi.com
 logonext.tv.kuyun.com
 config.kuyun.com
-mishop.pandora.xiaomi.com
-dvb.pandora.xiaomi.com
-api.ad.xiaomi.com
-de.pandora.xiaomi.com
-data.mistat.xiaomi.com
-jellyfish.pandora.xiaomi.com
-gallery.pandora.xiaomi.com
-o2o.api.xiaomi.com
-bss.pandora.xiaomi.com
+serving.bepolite.eu
+pagead2.googlesyndication.com
+c2.popads.net
+c1.popads.net
+serve.popads.net
+xenylclio.com
+exclusiveroughlywhich.com
+banquetunarmedgrater.com
+friendshipmale.com
+proftrafficcounter.com
+d3a781y1fb2dm6.cloudfront.net
+dlvds9i67c60j.cloudfront.net
+pogothere.xyz
+evidenceguidance.com
+d2ovgc4ipdt6us.cloudfront.net
+static.adsafeprotected.com
+du0pud0sdlmzf.cloudfront.net
+d2yeczd6cyyd0z.cloudfront.net
 
 EEE
 	chmod 755 "$adbyby_adblack"
