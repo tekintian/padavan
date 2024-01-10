@@ -19,6 +19,44 @@ This project is based on original rt-n56u with latest mtk 4.4.198 kernel, which 
  - And a lot of package related fixes
  - ...
 
+## 可选插件列表 List of optional plugins
+根据自己的需要在 trunk/configs/templates/K2P.config 这个配置文件里面 开启 y 或者关闭 n 插件或功能
+如: CONFIG_FIRMWARE_INCLUDE_ADBYBY=y 表示安装Adbyby插件, 如果是 n 表示不安装这个插件;
+
+注意: K2P 128M 版本构建后的.trx文件最大 15.68M 大于这个的固件无法刷入, breed web控制台直接提示错误!!
+
+~~~txt
+3proxy             hdparm             njit-client        sqm-qos
+802.1x             htop               ntfs-3g            srelay
+LPRng              httpd              nvram              strongswan
+Makefile           igmpproxy          openssh            tcpdump
+adbyby             inadyn             openvpn            transmission
+adguardhome        infosvr            optware            trojan
+aliddns            iperf3             p910nd             ttyd
+aliyundrive-webdav iproute2           parted             u2ec
+antfs              ipset              poptop             udpxy
+aria2              ipt2socks          pppd               uqmi
+iptables           pppoe              usb-modeswitch
+busybox            lanauth            pppoe-relay        util-linux
+libdisk            ralinkiappd        utils
+chnroute           lldt               rc                 v2ray
+comgt-0.32         lrzsz              redsocks           vlmcsd
+coremark           lua51              resolveip          vsftpd
+ddnsto             mentohust          rp-l2tp            wg-quick
+dns-forwarder      microsocks         rpcbind            wing
+dns2tcp            minidlna           samba36            wireguard
+dnsmasq            minieap            scripts            wireguard-tools
+dogcom             miniupnpd          scutclient         wireless-tools
+dosfstools         msd_lite           shadowsocks        wpa_supplicant
+dropbear           mtd-utils          shared             wsdd2
+dump1090           mtd_write          simple-obfs        www
+e2fsprogs          mtr                sing-box           xTun
+ebtables           naiveproxy         skipdbv2           xl2tpd
+firefly            nano               smartdns           xray
+frp                networkmap         socat              xupnpd
+gdut-drcom         nfs-utils          softethervpn       zerotier
+~~~
+
 # Features
 
 - Based on 4.4.198 Linux kernel
