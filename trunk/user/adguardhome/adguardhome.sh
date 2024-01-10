@@ -101,11 +101,11 @@ tls:
   private_key: ""
 filters:
 - enabled: true
-  url: https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt
+  url: https://gitee.com/tekintian/adt-rules/raw/master/AdGuard/dnsfilter.txt
   name: AdGuard Simplified Domain Names filter
   id: 1
 - enabled: true
-  url: https://adaway.org/hosts.txt
+  url: https://gitee.com/tekintian/adt-rules/raw/master/AdGuard/hosts.txt
   name: AdAway
   id: 2
 user_rules: []
