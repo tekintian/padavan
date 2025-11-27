@@ -27,7 +27,7 @@
 
 #include "rc.h"
 
-#define foreach_x(x)		for (i=0; i<nvram_get_int(x); i++)
+#define foreach_x(x)        for (int i=0; i<nvram_get_int(x); i++)
 
 #define BATTLENET_PORT		6112
 #define TRANSMISSION_PPORT	51413
@@ -917,6 +917,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			char *filter_mac;
+    		char mac_buf[24];
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
@@ -1519,6 +1521,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			char *filter_mac;
+    		char mac_buf[24];
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
