@@ -486,7 +486,7 @@ struct rtapd_config * Config_read(int ioctl_sock, char *prefix_name)
 		// 只警告而不失败，或者只严格检查RADIUS服务器IP
 		if (!(flag & 0x02)) {  // 只检查是否有RADIUS服务器IP
 			DBGPRINT(RT_DEBUG_ERROR, "Not enough necessary parameters are found: RADIUS server IP missing\n");
-			Config_free(config);
+			Config_free(conf);
 			return NULL;
 		}
 		// 其他参数缺失只警告

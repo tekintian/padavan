@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <ctype.h>
 
 #include <linux/if.h>			/* for IFNAMSIZ and co... */
 #include <linux/wireless.h>
