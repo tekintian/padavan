@@ -647,22 +647,3 @@ void Radius_client_deinit(rtapd *rtapd)
     rtapd->radius = NULL;
 }
 
-void Radius_client_flush(rtapd *rtapd)
-{
-    struct radius_msg_list *entry, *prev;
-
-    if (!rtapd || !rtapd->radius)  // 添加rtapd空指针检查
-        return;
-
-    eloop_cancel_timeout(Radius_client_timer, rtapd, NULL);
-
-    entry = rtapd->radius->msgs;
-    rtapd->radius->msgs = NULL;
-    rtapd->radius->num_msgs = 0;
-    while (entry)
-    {
-        prev = entry;
-        entry = entry->next;
-        Radius_client_msg_free(prev);
-    }
-}
