@@ -636,14 +636,14 @@ int Radius_client_init(rtapd *rtapd)
 
 void Radius_client_deinit(rtapd *rtapd)
 {
-    if (!rtapd || !rtapd->radius)  // 添加rtapd空指针检查
-        return;
+	if (!rtapd->radius)
+		return;
 
-    eloop_cancel_timeout(Radius_retry_primary_timer, rtapd, NULL);
+	eloop_cancel_timeout(Radius_retry_primary_timer, rtapd, NULL);
 
-    Radius_client_flush(rtapd);
-    free(rtapd->radius->auth_handlers);
-    free(rtapd->radius);
-    rtapd->radius = NULL;
+	Radius_client_flush(rtapd);
+	free(rtapd->radius->auth_handlers);
+	free(rtapd->radius);
+	rtapd->radius = NULL;
 }
 

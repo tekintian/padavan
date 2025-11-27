@@ -471,28 +471,18 @@ struct rtapd_config * Config_read(int ioctl_sock, char *prefix_name)
 #endif
 	
     if (errors)
-	{
-		DBGPRINT(RT_DEBUG_WARN,"%d warnings for radius setting, but continuing anyway\n", errors);
-		// 不再直接返回NULL
-	}
-	if ((flag&0x02)!=0x02) // 只检查RADIUS服务器IP是否有效
-	{
-		DBGPRINT(RT_DEBUG_ERROR,"RADIUS server IP address is required, flag = %x\n", flag);
-		Config_free(conf);
-		conf = NULL;
-	}
-	else if ((flag&0x0f)!=0x0f)
-	{
-		// 只警告而不失败，或者只严格检查RADIUS服务器IP
-		if (!(flag & 0x02)) {  // 只检查是否有RADIUS服务器IP
-			DBGPRINT(RT_DEBUG_ERROR, "Not enough necessary parameters are found: RADIUS server IP missing\n");
-			Config_free(conf);
-			return NULL;
-		}
-		// 其他参数缺失只警告
-		DBGPRINT(RT_DEBUG_WARN, "Some parameters are missing, but continuing with available configuration\n");
-	}
-
+    {
+        DBGPRINT(RT_DEBUG_ERROR,"%d errors for radius setting\n", errors);
+        Config_free(conf);
+        conf = NULL;
+    }
+    if ((flag&0x0f)!=0x0f)
+    {
+        DBGPRINT(RT_DEBUG_ERROR,"Not enough necessary parameters are found, flag = %x\n", flag);
+        Config_free(conf);
+        conf = NULL;
+    }
+		
     return conf;
 }
 
