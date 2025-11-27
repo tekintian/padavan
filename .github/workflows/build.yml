@@ -33,6 +33,15 @@ jobs:
           sudo apt install libtool-bin gperf python3-docutils autopoint gettext ccache
       - name: Build
         run: |
+          # 获取版本号信息
+          source trunk/versions.inc
+          KERNEL_VER=$(grep "FIRMWARE_KERNEL_VER=" trunk/Makefile | cut -d'"' -f2)
+          # 设置日期变量，确保 FIRMWARE_BUILDS_REV 能正确展开
+          export FIRMWARE_BUILDS_REV=$(date +%Y%m%d)
+          # 使用3个变量拼接完整版本号：内核版本.文件系统版本-构建版本-日期
+          VERSION="${KERNEL_VER}.${FIRMWARE_ROOTFS_VER}-${FIRMWARE_BUILDS_VER}-${FIRMWARE_BUILDS_REV}"
+          echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
+          
           make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain }}
           if [ "${{ matrix.target }}" = "K2P-NANO" ]; then
             image=$(ls trunk/images/*.trx)
@@ -44,7 +53,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}-${{ matrix.toolchain }}
+          name: ${{ matrix.target }}-${{ env.FIRMWARE_VERSION }}
           path: trunk/images/*.trx
   publish:
     needs: [build]
@@ -63,5 +72,5 @@ jobs:
         with:
           commit: ${{ github.sha }}
           tag: ${{ env.TAG_NAME }}
-          artifacts: "*-mipsel-linux-musl/*.trx"
+          artifacts: "*/*.trx"
           allowUpdates: true
