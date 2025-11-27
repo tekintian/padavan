@@ -140,13 +140,12 @@ static void Handle_reload_config(
 	}
 
 	/* TODO: update dynamic data based on changed configuration
-	 * items (e.g., open/close sockets, remove stations added to
+	* items (e.g., open/close sockets, remove stations added to
 	 * deny list, etc.) */
 	Radius_client_flush(rtapd);
 	Config_free(rtapd->conf);
 	rtapd->conf = newconf;
 	Apd_free_stas(rtapd);
-
 #ifdef MULTIPLE_RADIUS
 	for (i = 0; i < MAX_MBSSID_NUM; i++)
 		rtapd->radius->mbss_auth_serv_sock[i] = -1;
@@ -436,6 +435,9 @@ static void Apd_cleanup(rtapd *rtapd)
 {
 	int i;
 
+	if (!rtapd)  // 添加空指针检查
+		return;
+
 	for (i = 0; i < MAX_MBSSID_NUM; i++)
 	{
 		if (rtapd->wlan_sock[i] >= 0)
@@ -467,12 +469,43 @@ static int Apd_setup_interface(rtapd *rtapd)
 	if (Radius_client_init(rtapd))
 	{
 		DBGPRINT(RT_DEBUG_ERROR,"RADIUS client initialization failed.\n");
+		// 添加失败时的清理逻辑
+		int i;
+		for (i = 0; i < MAX_MBSSID_NUM; i++)
+		{
+			if (rtapd->wlan_sock[i] >= 0)
+			{
+				close(rtapd->wlan_sock[i]);
+				rtapd->wlan_sock[i] = -1;
+			}
+			if (rtapd->eth_sock[i] >= 0)
+			{
+				close(rtapd->eth_sock[i]);
+				rtapd->eth_sock[i] = -1;
+			}
+		}
 		return -1;
 	}
 
 	if (ieee802_1x_init(rtapd))
 	{
 		DBGPRINT(RT_DEBUG_ERROR,"IEEE 802.1X initialization failed.\n");
+		// 添加失败时的清理逻辑
+		Radius_client_deinit(rtapd);
+		int i;
+		for (i = 0; i < MAX_MBSSID_NUM; i++)
+		{
+			if (rtapd->wlan_sock[i] >= 0)
+			{
+				close(rtapd->wlan_sock[i]);
+				rtapd->wlan_sock[i] = -1;
+			}
+			if (rtapd->eth_sock[i] >= 0)
+			{
+				close(rtapd->eth_sock[i]);
+				rtapd->eth_sock[i] = -1;
+			}
+		}
 		return -1;
 	}
 
@@ -712,4 +745,3 @@ out:
 	else
 		return 0;
 }
-

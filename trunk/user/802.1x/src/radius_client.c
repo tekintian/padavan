@@ -106,7 +106,6 @@ static void Radius_client_timer(void *eloop_ctx, void *timeout_ctx)
 	entry = rtapd->radius->msgs;
 	if (!entry)
 		return;
-
 	time(&now);
 	first = 0;
 
@@ -636,14 +635,33 @@ int Radius_client_init(rtapd *rtapd)
 
 void Radius_client_deinit(rtapd *rtapd)
 {
-	if (!rtapd->radius)
-		return;
+    if (!rtapd || !rtapd->radius)  // 添加rtapd空指针检查
+        return;
 
-	eloop_cancel_timeout(Radius_retry_primary_timer, rtapd, NULL);
+    eloop_cancel_timeout(Radius_retry_primary_timer, rtapd, NULL);
 
-	Radius_client_flush(rtapd);
-	free(rtapd->radius->auth_handlers);
-	free(rtapd->radius);
-	rtapd->radius = NULL;
+    Radius_client_flush(rtapd);
+    free(rtapd->radius->auth_handlers);
+    free(rtapd->radius);
+    rtapd->radius = NULL;
 }
 
+void Radius_client_flush(rtapd *rtapd)
+{
+    struct radius_msg_list *entry, *prev;
+
+    if (!rtapd || !rtapd->radius)  // 添加rtapd空指针检查
+        return;
+
+    eloop_cancel_timeout(Radius_client_timer, rtapd, NULL);
+
+    entry = rtapd->radius->msgs;
+    rtapd->radius->msgs = NULL;
+    rtapd->radius->num_msgs = 0;
+    while (entry)
+    {
+        prev = entry;
+        entry = entry->next;
+        Radius_client_msg_free(prev);
+    }
+}
