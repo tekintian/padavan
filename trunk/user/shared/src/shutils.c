@@ -124,7 +124,15 @@ void time_zone_x_mapping()
 
 	/* special mapping */
 	if (strcmp(tmpstr, "JST") == 0)
-		nvram_set("time_zone_x", "UCT-9");
+		nvram_set("time_zone_x", "UTC+9");
+	else if (strcmp(tmpstr, "PRC") == 0)
+		nvram_set("time_zone_x", "UTC+8");
+	else if (strcmp(tmpstr, "CST") == 0)
+		nvram_set("time_zone_x", "UTC+8");
+	else if (strcmp(tmpstr, "CST-8") == 0)
+		nvram_set("time_zone_x", "UTC+8");
+	else if (strcmp(tmpstr, "CTT") == 0)
+		nvram_set("time_zone_x", "UTC+8");
 	else if (strcmp(tmpstr, "EST-10EDT") == 0)
 		nvram_set("time_zone_x", "EST-10EDT,M10.5.0,M3.5.0/3");
 	else if (strcmp(tmpstr, "TST-10TDT") == 0)

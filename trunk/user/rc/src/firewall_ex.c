@@ -219,68 +219,9 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	i_time_s = atoi(time_s);
 	i_time_e = atoi(time_e);
 
-	/* Convert local time to UTC using system timezone configuration */
-	char *tz_config = nvram_safe_get("time_zone_x");
-	int tz_offset = 0;
-	
-	if (tz_config && strlen(tz_config) > 0) {
-		/* Parse timezone offset from time_zone_x configuration */
-		if (strstr(tz_config, "UCT-") || strstr(tz_config, "UTC-") || strstr(tz_config, "GMT-")) {
-			/* Western timezones (negative offset) */
-			sscanf(tz_config, "%*[^-]-%d", &tz_offset);
-			tz_offset = -tz_offset;  /* Convert to positive for subtraction */
-		}
-		else if (strstr(tz_config, "UCT+") || strstr(tz_config, "UTC+") || strstr(tz_config, "GMT+")) {
-			/* Eastern timezones (positive offset) */
-			sscanf(tz_config, "%*[^+]%d", &tz_offset);
-		}
-		else if (strstr(tz_config, "EST5") || strstr(tz_config, "CST6") || strstr(tz_config, "MST7") || strstr(tz_config, "PST8")) {
-			/* US timezones with standard format */
-			if (strstr(tz_config, "EST5")) tz_offset = -5;
-			else if (strstr(tz_config, "CST6")) tz_offset = -6;
-			else if (strstr(tz_config, "MST7")) tz_offset = -7;
-			else if (strstr(tz_config, "PST8")) tz_offset = -8;
-		}
-		else if (strstr(tz_config, "BRT3")) {
-			tz_offset = -3;
-		}
-		else if (strstr(tz_config, "JST") || strstr(tz_config, "UCT-9")) {
-			tz_offset = 9;
-		}
-		else if (strstr(tz_config, "CET-1") || strstr(tz_config, "MET-1")) {
-			tz_offset = 1;
-		}
-		else if (strstr(tz_config, "EET-2")) {
-			tz_offset = 2;
-		}
-		else if (strstr(tz_config, "CST-9:30")) {
-			tz_offset = 9;  /* Handle half hour separately */
-			i_time_s -= tz_offset * 100 + 30;
-			i_time_e -= tz_offset * 100 + 30;
-			goto handle_wrap_around;  /* Skip standard offset processing */
-		}
-		else if (strstr(tz_config, "UCT-9:30")) {
-			tz_offset = 9;  /* Handle half hour separately */
-			i_time_s -= tz_offset * 100 + 30;
-			i_time_e -= tz_offset * 100 + 30;
-			goto handle_wrap_around;  /* Skip standard offset processing */
-		}
-		
-		/* Apply standard timezone offset */
-		if (tz_offset != 0) {
-			i_time_s -= tz_offset * 100;
-			i_time_e -= tz_offset * 100;
-		}
-	}
-
-handle_wrap_around:
-	/* Handle negative times (wrap around midnight) */
-	if (i_time_s < 0) i_time_s += 2400;
-	if (i_time_e < 0) i_time_e += 2400;
-	
-	/* Handle times > 2400 after conversion */
-	if (i_time_s >= 2400) i_time_s -= 2400;
-	if (i_time_e >= 2400) i_time_e -= 2400;
+	/* Use kernel timezone -- no manual conversion needed! */
+	/* The kernel timezone is set by setkernel_tz() in rc.c using sys_tz.tz_minuteswest */
+	/* iptables time module with --kerneltz will automatically use the system timezone */
 
 	i_full_time = ((i_time_s == i_time_e) || (i_time_s == 0 && i_time_e == 2359)) ? 1 : 0;
 
@@ -290,7 +231,7 @@ handle_wrap_around:
 
 	/* check whole day */
 	if (i_full_time) {
-		sprintf(mstr, " -m time");
+		sprintf(mstr, " -m time --kerneltz");
 	} else {
 		const char *contiguous = "";
 		
@@ -298,8 +239,8 @@ handle_wrap_around:
 		if (i_time_s > i_time_e)
 			contiguous = " --contiguous";
 		
-		sprintf(mstr, " -m time --timestart %c%c:%c%c:00 --timestop %c%c:%c%c:00%s",
-			time[0], time[1], time[2], time[3], time[4], time[5], time[6], time[7],
+		sprintf(mstr, " -m time --timestart %02d:%02d:00 --timestop %02d:%02d:00%s --kerneltz",
+			(i_time_s / 100), (i_time_s % 100), (i_time_e / 100), (i_time_e % 100),
 			contiguous);
 	}
 
@@ -489,27 +430,95 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 	const char *dtype = IPT_CHAIN_NAME_MAC_LIST;
 
 	if (mac_filter_mode > 0) {
-		if (mac_filter_mode == 2)
-			ftype = logdrop;
-		else
-			ftype = "RETURN";
-		
-		mac_num = 0;
-		foreach_x("macfilter_num_x") {
-			g_buf_init();
+		if (mac_filter_mode == 2) {
+			// 拒绝模式优化: 列表中的设备在指定时间内允许，其他时间拒绝；列表外的设备直接跳过maclist链
+			// 优化设计：
+			// 1. maclist链只包含规则设备的处理逻辑，不需要最后的ACCEPT规则
+			// 2. 主链路中只将规则设备重定向到maclist链，规则外设备直接ACCEPT
+			// 3. 按MAC地址分组处理，确保每个设备的拒绝规则在最后
 			
-			filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
-			if (*filter_mac) {
-				mac_num++;
-				sprintf(nv_date, "macfilter_date_x%d", i);
-				sprintf(nv_time, "macfilter_time_x%d", i);
-				timematch_conv(mac_timematch, nv_date, nv_time);
-				fprintf(fp, "-A %s -m mac --mac-source %s%s -j %s\n", dtype, filter_mac, mac_timematch, ftype);
+			char processed_macs[64][18]; // 记录已处理的MAC地址，扩展到64个
+			int processed_count = 0;
+			
+			mac_num = 0;
+			
+			// 按MAC地址分组处理
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					// 检查这个MAC是否已经处理过
+					int already_processed = 0;
+					for (int j = 0; j < processed_count; j++) {
+						if (strcasecmp(processed_macs[j], filter_mac) == 0) {
+							already_processed = 1;
+							break;
+						}
+					}
+					
+					if (!already_processed) {
+						// 标记这个MAC为已处理
+						if (processed_count < 64) {
+							strcpy(processed_macs[processed_count], filter_mac);
+							processed_count++;
+						}
+						
+						// 为这个MAC生成所有允许规则
+						int mac_has_rules = 0;
+						foreach_x("macfilter_num_x") {
+							g_buf_init();
+							
+							char *current_mac = mac_conv("macfilter_list_x", i, mac_buf);
+							if (*current_mac && strcasecmp(current_mac, filter_mac) == 0) {
+								mac_has_rules = 1;
+								mac_num++;
+								
+								sprintf(nv_date, "macfilter_date_x%d", i);
+								sprintf(nv_time, "macfilter_time_x%d", i);
+								timematch_conv(mac_timematch, nv_date, nv_time);
+								
+								// 在指定时间内允许列表中的设备
+								if (strlen(mac_timematch) > 0) {
+									fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", dtype, current_mac, mac_timematch);
+								}
+							}
+						}
+						
+						// 如果这个MAC有规则，则添加拒绝规则
+						if (mac_has_rules) {
+							fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n", dtype, filter_mac, logdrop);
+						}
+					}
+				}
+			}
+			
+			// 注意：拒绝模式下不再需要最后的ACCEPT规则
+			// 规则外的设备将在主链路中直接处理，不进入maclist链
+		}
+		else {
+			// 允许模式: 列表中的设备允许，其他设备拒绝
+			ftype = "RETURN";
+			
+			mac_num = 0;
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					mac_num++;
+					sprintf(nv_date, "macfilter_date_x%d", i);
+					sprintf(nv_time, "macfilter_time_x%d", i);
+					timematch_conv(mac_timematch, nv_date, nv_time);
+					fprintf(fp, "-A %s -m mac --mac-source %s%s -j %s\n", dtype, filter_mac, mac_timematch, ftype);
+				}
+			}
+			
+			if (mac_num > 0) {
+				// 允许模式: 列表外的设备拒绝
+				fprintf(fp, "-A %s -j %s\n", dtype, logdrop);
 			}
 		}
-		
-		if (mac_filter_mode != 2 && mac_num > 0)
-			fprintf(fp, "-A %s -j %s\n", dtype, logdrop);
 		
 		if (mac_num < 1)
 			mac_filter_mode = 0;
@@ -903,8 +912,23 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	dtype = "INPUT";
 
 	/* Policy for all traffic from MAC-filtered LAN clients */
-	if (i_mac_filter > 0 && nvram_match("fw_mac_drop", "1"))
-		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+	if (i_mac_filter > 0) {
+		int mac_filter_mode = nvram_get_int("macfilter_enable_x");
+		
+		if (mac_filter_mode == 2) {
+			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					fprintf(fp, "-A %s -i %s -m mac --mac-source %s -j %s\n", dtype, lan_if, filter_mac, IPT_CHAIN_NAME_MAC_LIST);
+				}
+			}
+		} else if (nvram_match("fw_mac_drop", "1")) {
+			// 允许模式或其他模式：所有LAN设备都进入maclist链
+			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+		}
+	}
 
 	/* Accept related connections, skip rest of checks */
 	fprintf(fp, "-A %s -m %s %s -j %s\n", dtype, CT_STATE, "ESTABLISHED,RELATED", "ACCEPT");
@@ -1098,8 +1122,23 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	// FORWARD chain
 	dtype = "FORWARD";
 
-	if (i_mac_filter > 0)
-		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+	if (i_mac_filter > 0) {
+		int mac_filter_mode = nvram_get_int("macfilter_enable_x");
+		
+		if (mac_filter_mode == 2) {
+			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					fprintf(fp, "-A %s -i %s -m mac --mac-source %s -j %s\n", dtype, lan_if, filter_mac, IPT_CHAIN_NAME_MAC_LIST);
+				}
+			}
+		} else {
+			// 允许模式或其他模式：所有LAN设备都进入maclist链
+			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+		}
+	}
 
 	if (is_fw_enabled) {
 		/* Accept the redirect packets (might be seen as INVALID) */
@@ -1475,8 +1514,23 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	dtype = "INPUT";
 
 	/* Policy for all traffic from MAC-filtered LAN clients */
-	if (i_mac_filter > 0 && nvram_match("fw_mac_drop", "1"))
-		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+	if (i_mac_filter > 0) {
+		int mac_filter_mode = nvram_get_int("macfilter_enable_x");
+		
+		if (mac_filter_mode == 2) {
+			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					fprintf(fp, "-A %s -i %s -m mac --mac-source %s -j %s\n", dtype, lan_if, filter_mac, IPT_CHAIN_NAME_MAC_LIST);
+				}
+			}
+		} else if (nvram_match("fw_mac_drop", "1")) {
+			// 允许模式或其他模式：所有LAN设备都进入maclist链
+			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+		}
+	}
 
 	/* Accept related connections, skip rest of checks */
 	fprintf(fp, "-A %s -m %s %s -j %s\n", dtype, CT_STATE, "ESTABLISHED,RELATED", "ACCEPT");
@@ -1603,8 +1657,23 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	// FORWARD chain (accept_source_route=0 by default, no needed drop RH0 packet)
 	dtype = "FORWARD";
 
-	if (i_mac_filter > 0)
-		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+	if (i_mac_filter > 0) {
+		int mac_filter_mode = nvram_get_int("macfilter_enable_x");
+		
+		if (mac_filter_mode == 2) {
+			// 拒绝模式：只将规则列表中的设备重定向到maclist链
+			foreach_x("macfilter_num_x") {
+				g_buf_init();
+				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
+				if (*filter_mac) {
+					fprintf(fp, "-A %s -i %s -m mac --mac-source %s -j %s\n", dtype, lan_if, filter_mac, IPT_CHAIN_NAME_MAC_LIST);
+				}
+			}
+		} else {
+			// 允许模式或其他模式：所有LAN设备都进入maclist链
+			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
+		}
+	}
 
 	if (is_fw_enabled) {
 		/* Pass the redirect, might be seen as INVALID, packets */
