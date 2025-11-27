@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <ctype.h>
 
 #include <linux/if.h>			/* for IFNAMSIZ and co... */
 #include <linux/wireless.h>
@@ -140,12 +141,13 @@ static void Handle_reload_config(
 	}
 
 	/* TODO: update dynamic data based on changed configuration
-	* items (e.g., open/close sockets, remove stations added to
+	 * items (e.g., open/close sockets, remove stations added to
 	 * deny list, etc.) */
 	Radius_client_flush(rtapd);
 	Config_free(rtapd->conf);
 	rtapd->conf = newconf;
 	Apd_free_stas(rtapd);
+
 #ifdef MULTIPLE_RADIUS
 	for (i = 0; i < MAX_MBSSID_NUM; i++)
 		rtapd->radius->mbss_auth_serv_sock[i] = -1;
@@ -745,3 +747,4 @@ out:
 	else
 		return 0;
 }
+
