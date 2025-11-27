@@ -219,97 +219,68 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	i_time_s = atoi(time_s);
 	i_time_e = atoi(time_e);
 
-	/* Convert local time to UTC by subtracting timezone offset */
-	tz_env = getenv("TZ");
-	if (tz_env) {
-		/* PRC/CST (China Standard Time) - UTC+8 */
-		if (strstr(tz_env, "PRC") || strstr(tz_env, "CST") || strstr(tz_env, "Asia/Shanghai") || strstr(tz_env, "Asia/Beijing")) {
-			i_time_s -= 800;
-			i_time_e -= 800;
+	/* Convert local time to UTC using system timezone configuration */
+	char *tz_config = nvram_safe_get("time_zone_x");
+	int tz_offset = 0;
+	
+	if (tz_config && strlen(tz_config) > 0) {
+		/* Parse timezone offset from time_zone_x configuration */
+		if (strstr(tz_config, "UCT-") || strstr(tz_config, "UTC-") || strstr(tz_config, "GMT-")) {
+			/* Western timezones (negative offset) */
+			sscanf(tz_config, "%*[^-]-%d", &tz_offset);
+			tz_offset = -tz_offset;  /* Convert to positive for subtraction */
 		}
-		/* JST (Japan Standard Time) - UTC+9 */
-		else if (strstr(tz_env, "JST") || strstr(tz_env, "Asia/Tokyo")) {
-			i_time_s -= 900;
-			i_time_e -= 900;
+		else if (strstr(tz_config, "UCT+") || strstr(tz_config, "UTC+") || strstr(tz_config, "GMT+")) {
+			/* Eastern timezones (positive offset) */
+			sscanf(tz_config, "%*[^+]%d", &tz_offset);
 		}
-		/* MSK (Moscow Standard Time) - UTC+3 */
-		else if (strstr(tz_env, "MSK") || strstr(tz_env, "Europe/Moscow")) {
-			i_time_s -= 300;
-			i_time_e -= 300;
+		else if (strstr(tz_config, "EST5") || strstr(tz_config, "CST6") || strstr(tz_config, "MST7") || strstr(tz_config, "PST8")) {
+			/* US timezones with standard format */
+			if (strstr(tz_config, "EST5")) tz_offset = -5;
+			else if (strstr(tz_config, "CST6")) tz_offset = -6;
+			else if (strstr(tz_config, "MST7")) tz_offset = -7;
+			else if (strstr(tz_config, "PST8")) tz_offset = -8;
 		}
-		/* ICT (Indochina Time - Thailand, Vietnam, Cambodia) - UTC+7 */
-		else if (strstr(tz_env, "ICT") || strstr(tz_env, "Asia/Bangkok") || strstr(tz_env, "Asia/Ho_Chi_Minh") || strstr(tz_env, "Asia/Phnom_Penh")) {
-			i_time_s -= 700;
-			i_time_e -= 700;
+		else if (strstr(tz_config, "BRT3")) {
+			tz_offset = -3;
 		}
-		/* WIB (Western Indonesia Time) - UTC+7 */
-		else if (strstr(tz_env, "WIB") || strstr(tz_env, "Asia/Jakarta")) {
-			i_time_s -= 700;
-			i_time_e -= 700;
+		else if (strstr(tz_config, "JST") || strstr(tz_config, "UCT-9")) {
+			tz_offset = 9;
 		}
-		/* MMT (Myanmar Time) - UTC+6:30 */
-		else if (strstr(tz_env, "MMT") || strstr(tz_env, "Asia/Yangon") || strstr(tz_env, "Asia/Rangoon")) {
-			i_time_s -= 630;
-			i_time_e -= 630;
+		else if (strstr(tz_config, "CET-1") || strstr(tz_config, "MET-1")) {
+			tz_offset = 1;
 		}
-		/* SGT (Singapore Time) - UTC+8 */
-		else if (strstr(tz_env, "SGT") || strstr(tz_env, "Asia/Singapore")) {
-			i_time_s -= 800;
-			i_time_e -= 800;
+		else if (strstr(tz_config, "EET-2")) {
+			tz_offset = 2;
 		}
-		/* PHT (Philippines Time) - UTC+8 */
-		else if (strstr(tz_env, "PHT") || strstr(tz_env, "Asia/Manila")) {
-			i_time_s -= 800;
-			i_time_e -= 800;
+		else if (strstr(tz_config, "CST-9:30")) {
+			tz_offset = 9;  /* Handle half hour separately */
+			i_time_s -= tz_offset * 100 + 30;
+			i_time_e -= tz_offset * 100 + 30;
+			goto handle_wrap_around;  /* Skip standard offset processing */
 		}
-		/* MYT (Malaysia Time) - UTC+8 */
-		else if (strstr(tz_env, "MYT") || strstr(tz_env, "Asia/Kuala_Lumpur")) {
-			i_time_s -= 800;
-			i_time_e -= 800;
-		}
-		/* WITA (Central Indonesia Time) - UTC+8 */
-		else if (strstr(tz_env, "WITA") || strstr(tz_env, "Asia/Makassar") || strstr(tz_env, "Asia/Ujung_Pandang")) {
-			i_time_s -= 800;
-			i_time_e -= 800;
-		}
-		/* WIT (Eastern Indonesia Time) - UTC+9 */
-		else if (strstr(tz_env, "WIT") || strstr(tz_env, "Asia/Jayapura")) {
-			i_time_s -= 900;
-			i_time_e -= 900;
-		}
-		/* BRT (Brazil Time) - UTC-3 */
-		else if (strstr(tz_env, "BRT") || strstr(tz_env, "America/Sao_Paulo")) {
-			i_time_s += 300;
-			i_time_e += 300;
-		}
-		/* EST (Eastern Standard Time) - UTC-5 */
-		else if (strstr(tz_env, "EST") || strstr(tz_env, "America/New_York") || strstr(tz_env, "US/Eastern")) {
-			i_time_s += 500;
-			i_time_e += 500;
-		}
-		/* PST (Pacific Standard Time) - UTC-8 */
-		else if (strstr(tz_env, "PST") || strstr(tz_env, "America/Los_Angeles") || strstr(tz_env, "US/Pacific")) {
-			i_time_s += 800;
-			i_time_e += 800;
-		}
-		/* CET (Central European Time) - UTC+1 */
-		else if (strstr(tz_env, "CET") || strstr(tz_env, "Europe/Paris") || strstr(tz_env, "Europe/Berlin")) {
-			i_time_s -= 100;
-			i_time_e -= 100;
-		}
-		/* GMT/UTC - UTC+0 */
-		else if (strstr(tz_env, "GMT") || strstr(tz_env, "UTC") || strstr(tz_env, "Etc/GMT")) {
-			/* No conversion needed for GMT/UTC */
+		else if (strstr(tz_config, "UCT-9:30")) {
+			tz_offset = 9;  /* Handle half hour separately */
+			i_time_s -= tz_offset * 100 + 30;
+			i_time_e -= tz_offset * 100 + 30;
+			goto handle_wrap_around;  /* Skip standard offset processing */
 		}
 		
-		/* Handle negative times (wrap around midnight) */
-		if (i_time_s < 0) i_time_s += 2400;
-		if (i_time_e < 0) i_time_e += 2400;
-		
-		/* Handle times > 2400 after conversion */
-		if (i_time_s >= 2400) i_time_s -= 2400;
-		if (i_time_e >= 2400) i_time_e -= 2400;
+		/* Apply standard timezone offset */
+		if (tz_offset != 0) {
+			i_time_s -= tz_offset * 100;
+			i_time_e -= tz_offset * 100;
+		}
 	}
+
+handle_wrap_around:
+	/* Handle negative times (wrap around midnight) */
+	if (i_time_s < 0) i_time_s += 2400;
+	if (i_time_e < 0) i_time_e += 2400;
+	
+	/* Handle times > 2400 after conversion */
+	if (i_time_s >= 2400) i_time_s -= 2400;
+	if (i_time_e >= 2400) i_time_e -= 2400;
 
 	i_full_time = ((i_time_s == i_time_e) || (i_time_s == 0 && i_time_e == 2359)) ? 1 : 0;
 
