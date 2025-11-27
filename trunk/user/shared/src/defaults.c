@@ -64,7 +64,7 @@ struct nvram_pair router_defaults[] = {
 	{ "wan_hwaddr", "" },			/* WAN interface MAC address */
 
 	/* WAN TCP/IP parameters */
-	{ "wan_proto", "dhcp" },		/* [static|dhcp|pppoe|pptp|l2tp|disabled] */
+	{ "wan_proto", "pppoe" },		/* [static|dhcp|pppoe|pptp|l2tp|disabled] */
 	{ "wan_ipaddr", "0.0.0.0" },		/* WAN IP address */
 	{ "wan_netmask", "0.0.0.0" },		/* WAN netmask */
 	{ "wan_gateway", "0.0.0.0" },		/* WAN gateway */
@@ -585,7 +585,7 @@ struct nvram_pair router_defaults[] = {
 	{ "ss_watchcat", "1" },
 	{ "lan_con", "0" },
 	{ "ss_chnroute_url", "https://ispip.clang.cn/all_cn.txt"},
-	{ "ss_adblock_url", "https://gitee.com/privacy-protection-tools/anti-ad/raw/master/anti-ad-for-dnsmasq.conf"},
+	{ "ss_adblock_url", "https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/anti-ad.conf"},
 	{ "ss_schedule_enable", "0" },
 	{ "ss_schedule", "00000000000" },
 
@@ -674,7 +674,7 @@ struct nvram_pair router_defaults[] = {
 	{ "block_ios", "0" },
 	{ "block_douyin", "0" },
 	{ "anti_ad", "0" },
-	{ "anti_ad_link", "https://anti-ad.net/anti-ad-for-dnsmasq.conf" },
+	{ "anti_ad_link", "https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/anti-ad.conf" },
 	{ "anti_ad_count", "0" },
 	/* Pdnsd */
 	{ "dns_enable", "0" },
@@ -758,7 +758,7 @@ struct nvram_pair router_defaults[] = {
 	/*UnblockNeteaseMusic*/
 	{ "wyy_enable", "0" },
 	{ "wyy_apptype", "cloud" },
-	{ "wyy_cloudserver", "cdn-shanghai.service.project-openwrt.eu.org:30000:30001" },
+	{ "wyy_cloudserver", "openwrt.org:30000:30001" },
 	{ "wyy_musicapptype", "kuwo" },
 	{ "wyy_coustom_server", "" },
 	{ "wyy_coustom_music", "" },
