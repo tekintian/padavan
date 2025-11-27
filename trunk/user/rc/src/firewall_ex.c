@@ -192,6 +192,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	const char *datestr[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 	char time_s[8], time_e[8], *time, *date;
 	int i, i_time_s, i_time_e, i_full_time, comma = 0;
+	char *tz_env;
 
 	date = nvram_get(nv_date);
 	if (!date)
@@ -218,6 +219,98 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	i_time_s = atoi(time_s);
 	i_time_e = atoi(time_e);
 
+	/* Convert local time to UTC by subtracting timezone offset */
+	tz_env = getenv("TZ");
+	if (tz_env) {
+		/* PRC/CST (China Standard Time) - UTC+8 */
+		if (strstr(tz_env, "PRC") || strstr(tz_env, "CST") || strstr(tz_env, "Asia/Shanghai") || strstr(tz_env, "Asia/Beijing")) {
+			i_time_s -= 800;
+			i_time_e -= 800;
+		}
+		/* JST (Japan Standard Time) - UTC+9 */
+		else if (strstr(tz_env, "JST") || strstr(tz_env, "Asia/Tokyo")) {
+			i_time_s -= 900;
+			i_time_e -= 900;
+		}
+		/* MSK (Moscow Standard Time) - UTC+3 */
+		else if (strstr(tz_env, "MSK") || strstr(tz_env, "Europe/Moscow")) {
+			i_time_s -= 300;
+			i_time_e -= 300;
+		}
+		/* ICT (Indochina Time - Thailand, Vietnam, Cambodia) - UTC+7 */
+		else if (strstr(tz_env, "ICT") || strstr(tz_env, "Asia/Bangkok") || strstr(tz_env, "Asia/Ho_Chi_Minh") || strstr(tz_env, "Asia/Phnom_Penh")) {
+			i_time_s -= 700;
+			i_time_e -= 700;
+		}
+		/* WIB (Western Indonesia Time) - UTC+7 */
+		else if (strstr(tz_env, "WIB") || strstr(tz_env, "Asia/Jakarta")) {
+			i_time_s -= 700;
+			i_time_e -= 700;
+		}
+		/* MMT (Myanmar Time) - UTC+6:30 */
+		else if (strstr(tz_env, "MMT") || strstr(tz_env, "Asia/Yangon") || strstr(tz_env, "Asia/Rangoon")) {
+			i_time_s -= 630;
+			i_time_e -= 630;
+		}
+		/* SGT (Singapore Time) - UTC+8 */
+		else if (strstr(tz_env, "SGT") || strstr(tz_env, "Asia/Singapore")) {
+			i_time_s -= 800;
+			i_time_e -= 800;
+		}
+		/* PHT (Philippines Time) - UTC+8 */
+		else if (strstr(tz_env, "PHT") || strstr(tz_env, "Asia/Manila")) {
+			i_time_s -= 800;
+			i_time_e -= 800;
+		}
+		/* MYT (Malaysia Time) - UTC+8 */
+		else if (strstr(tz_env, "MYT") || strstr(tz_env, "Asia/Kuala_Lumpur")) {
+			i_time_s -= 800;
+			i_time_e -= 800;
+		}
+		/* WITA (Central Indonesia Time) - UTC+8 */
+		else if (strstr(tz_env, "WITA") || strstr(tz_env, "Asia/Makassar") || strstr(tz_env, "Asia/Ujung_Pandang")) {
+			i_time_s -= 800;
+			i_time_e -= 800;
+		}
+		/* WIT (Eastern Indonesia Time) - UTC+9 */
+		else if (strstr(tz_env, "WIT") || strstr(tz_env, "Asia/Jayapura")) {
+			i_time_s -= 900;
+			i_time_e -= 900;
+		}
+		/* BRT (Brazil Time) - UTC-3 */
+		else if (strstr(tz_env, "BRT") || strstr(tz_env, "America/Sao_Paulo")) {
+			i_time_s += 300;
+			i_time_e += 300;
+		}
+		/* EST (Eastern Standard Time) - UTC-5 */
+		else if (strstr(tz_env, "EST") || strstr(tz_env, "America/New_York") || strstr(tz_env, "US/Eastern")) {
+			i_time_s += 500;
+			i_time_e += 500;
+		}
+		/* PST (Pacific Standard Time) - UTC-8 */
+		else if (strstr(tz_env, "PST") || strstr(tz_env, "America/Los_Angeles") || strstr(tz_env, "US/Pacific")) {
+			i_time_s += 800;
+			i_time_e += 800;
+		}
+		/* CET (Central European Time) - UTC+1 */
+		else if (strstr(tz_env, "CET") || strstr(tz_env, "Europe/Paris") || strstr(tz_env, "Europe/Berlin")) {
+			i_time_s -= 100;
+			i_time_e -= 100;
+		}
+		/* GMT/UTC - UTC+0 */
+		else if (strstr(tz_env, "GMT") || strstr(tz_env, "UTC") || strstr(tz_env, "Etc/GMT")) {
+			/* No conversion needed for GMT/UTC */
+		}
+		
+		/* Handle negative times (wrap around midnight) */
+		if (i_time_s < 0) i_time_s += 2400;
+		if (i_time_e < 0) i_time_e += 2400;
+		
+		/* Handle times > 2400 after conversion */
+		if (i_time_s >= 2400) i_time_s -= 2400;
+		if (i_time_e >= 2400) i_time_e -= 2400;
+	}
+
 	i_full_time = ((i_time_s == i_time_e) || (i_time_s == 0 && i_time_e == 2359)) ? 1 : 0;
 
 	/* check anytime */
@@ -226,7 +319,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 
 	/* check whole day */
 	if (i_full_time) {
-		sprintf(mstr, " -m time %s", "--kerneltz");
+		sprintf(mstr, " -m time");
 	} else {
 		const char *contiguous = "";
 		
@@ -234,9 +327,9 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 		if (i_time_s > i_time_e)
 			contiguous = " --contiguous";
 		
-		sprintf(mstr, " -m time --timestart %c%c:%c%c:00 --timestop %c%c:%c%c:00%s %s",
+		sprintf(mstr, " -m time --timestart %c%c:%c%c:00 --timestop %c%c:%c%c:00%s",
 			time[0], time[1], time[2], time[3], time[4], time[5], time[6], time[7],
-			contiguous, "--kerneltz");
+			contiguous);
 	}
 
 	/* check everyday */
