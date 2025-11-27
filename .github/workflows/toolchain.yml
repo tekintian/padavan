@@ -11,7 +11,7 @@ jobs:
       matrix:
         target: [mipsel-linux-uclibc, mipsel-linux-musl]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Prepare
         run: |
           sudo apt update
@@ -28,7 +28,7 @@ jobs:
           CT_TARGET: ${{ matrix.target }}
           CT_VERSION: 1.26.0
         working-directory: toolchain
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: toolchain
           path: toolchain/${{ matrix.target }}.tar.xz
