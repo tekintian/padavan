@@ -2,19 +2,21 @@ name: build
 
 on: 
   push:
-    branches:
-    - "*"
+    branches: 
+    - "main"
+    - "develop"
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
     strategy:
       matrix:
-        target: [K2P, K2P-NANO, K2P-USB]
+        target: [K2P, K2P-NANO, K2P-USB, K2P-TINY]
         toolchain: [mipsel-linux-musl]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ matrix.target }}-${{ matrix.toolchain }}
@@ -23,7 +25,7 @@ jobs:
           go-version: '1.20'
           check-latest: true
           cache: false
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
           check-latest: true
@@ -33,12 +35,16 @@ jobs:
           sudo apt install libtool-bin gperf python3-docutils autopoint gettext ccache
       - name: Build
         run: |
+          set -e
           make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain }}
           if [ "${{ matrix.target }}" = "K2P-NANO" ]; then
             image=$(ls trunk/images/*.trx)
             mv $image $(echo $image | sed 's/K2P/K2P-NANO/')
+          elif [ "${{ matrix.target }}" = "K2P-TINY" ]; then
+            image=$(ls trunk/images/*.trx)
+            mv $image $(echo $image | sed 's/K2P/K2P-TINY/')
           fi
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.toolchain }}
           path: trunk/images/*.trx
@@ -47,17 +53,17 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v3
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
       - name: Set Tag Name
-        run: echo "TAG_ANME=$(date +%Y%m%d)" >> $GITHUB_ENV
+        run: echo "TAG_NAME=$(date +%Y%m%d)" >> $GITHUB_ENV
       - uses: rickstaa/action-create-tag@v1
         with:
-          tag: ${{ env.TAG_ANME }}
+          tag: ${{ env.TAG_NAME }}
           force_push_tag: true
       - uses: ncipollo/release-action@v1
         with:
           commit: ${{ github.sha }}
-          tag: ${{ env.TAG_ANME }}
+          tag: ${{ env.TAG_NAME }}
           artifacts: "mipsel-linux-musl/*.trx"
           allowUpdates: true
