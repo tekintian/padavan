@@ -38,7 +38,7 @@ jobs:
             image=$(ls trunk/images/*.trx)
             mv $image $(echo $image | sed 's/K2P/K2P-NANO/')
           fi
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.toolchain }}
           path: trunk/images/*.trx
@@ -48,7 +48,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
       - name: Set Tag Name
         run: echo "TAG_ANME=$(date +%Y%m%d)" >> $GITHUB_ENV
       - uses: rickstaa/action-create-tag@v1
