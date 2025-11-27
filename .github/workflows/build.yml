@@ -33,16 +33,17 @@ jobs:
           sudo apt install libtool-bin gperf python3-docutils autopoint gettext ccache
       - name: Build
         run: |
-          # 获取版本号信息
-          source trunk/versions.inc
+          # 获取版本号信息 - 直接读取文件内容
+          ROOTFS_VER=$(grep "FIRMWARE_ROOTFS_VER=" trunk/versions.inc | cut -d'=' -f2)
+          BUILDS_VER=$(grep "FIRMWARE_BUILDS_VER=" trunk/versions.inc | cut -d'=' -f2)
           KERNEL_VER=$(grep "FIRMWARE_KERNEL_VER=" trunk/Makefile | cut -d'"' -f2)
-          # 设置日期变量，确保 FIRMWARE_BUILDS_REV 能正确展开
-          export FIRMWARE_BUILDS_REV=$(date +%Y%m%d)
+          # 按照FIRMWARE_BUILDS_REV的样式重新定义日期变量
+          BUILDS_REV=$(date +%Y%m%d)
           # 使用3个变量拼接完整版本号：内核版本.文件系统版本-构建版本-日期
-          VERSION="${KERNEL_VER}.${FIRMWARE_ROOTFS_VER}-${FIRMWARE_BUILDS_VER}-${FIRMWARE_BUILDS_REV}"
+          VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
           echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
           
-          make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain }}
+          make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain}}
           if [ "${{ matrix.target }}" = "K2P-NANO" ]; then
             image=$(ls trunk/images/*.trx)
             mv $image $(echo $image | sed 's/K2P/K2P-NANO/')
