@@ -427,6 +427,8 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 	int i, mac_num;
 	char mac_timematch[128], mac_buf[24], nv_date[32], nv_time[32];
 	char *filter_mac, *ftype;
+	char processed_rules[32][160]; // 记录已处理的时间规则，避免重复
+	int rule_count;
 	const char *dtype = IPT_CHAIN_NAME_MAC_LIST;
 
 	if (mac_filter_mode > 0) {
@@ -448,6 +450,12 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 				
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
 				if (*filter_mac) {
+					// 检查MAC地址数量是否超过限制
+					if (processed_count >= 64) {
+						logmessage("MAC Filter", "WARNING: Maximum MAC address limit (64) reached, skipping MAC %s", filter_mac);
+						continue;
+					}
+					
 					// 检查这个MAC是否已经处理过
 					int already_processed = 0;
 					for (int j = 0; j < processed_count; j++) {
@@ -464,23 +472,44 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 							processed_count++;
 						}
 						
-						// 为这个MAC生成所有允许规则
+						// 为这个MAC生成所有允许规则，避免重复的时间规则
 						int mac_has_rules = 0;
-						foreach_x("macfilter_num_x") {
+						int total_rules = nvram_get_int("macfilter_num_x");
+						rule_count = 0; // 重置规则计数器
+						for (int k = 0; k < total_rules; k++) {
 							g_buf_init();
 							
-							char *current_mac = mac_conv("macfilter_list_x", i, mac_buf);
+							char *current_mac = mac_conv("macfilter_list_x", k, mac_buf);
 							if (*current_mac && strcasecmp(current_mac, filter_mac) == 0) {
 								mac_has_rules = 1;
 								mac_num++;
 								
-								sprintf(nv_date, "macfilter_date_x%d", i);
-								sprintf(nv_time, "macfilter_time_x%d", i);
+								sprintf(nv_date, "macfilter_date_x%d", k);
+								sprintf(nv_time, "macfilter_time_x%d", k);
 								timematch_conv(mac_timematch, nv_date, nv_time);
 								
-								// 在指定时间内允许列表中的设备
-								if (strlen(mac_timematch) > 0) {
+								// 检查时间规则数量是否超过限制
+							if (rule_count >= 32) {
+								logmessage("MAC Filter", "WARNING: Maximum time rule limit (32) reached for MAC %s, skipping additional rules", filter_mac);
+								continue;
+							}
+							
+							// 检查这个时间规则是否已经处理过，避免重复规则
+								int rule_already_processed = 0;
+							if (strlen(mac_timematch) > 0) {
+									for (int r = 0; r < rule_count; r++) {
+									if (strcmp(processed_rules[r], mac_timematch) == 0) {
+										rule_already_processed = 1;
+										break;
+									}
+								}
+								
+								// 如果规则未重复，则添加到防火墙规则
+								if (!rule_already_processed && rule_count < 32) {
+									strcpy(processed_rules[rule_count], mac_timematch);
+									rule_count++;
 									fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", dtype, current_mac, mac_timematch);
+								}
 								}
 							}
 						}
@@ -495,6 +524,9 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 			
 			// 注意：拒绝模式下不再需要最后的ACCEPT规则
 			// 规则外的设备将在主链路中直接处理，不进入maclist链
+			
+			// 记录统计信息到日志
+			logmessage("MAC Filter", "INFO: Processed %d MAC addresses with %d time rules in deny mode", processed_count, mac_num);
 		}
 		else {
 			// 允许模式: 列表中的设备允许，其他设备拒绝
@@ -517,6 +549,9 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 			if (mac_num > 0) {
 				// 允许模式: 列表外的设备拒绝
 				fprintf(fp, "-A %s -j %s\n", dtype, logdrop);
+				
+				// 记录统计信息到日志
+				logmessage("MAC Filter", "INFO: Processed %d MAC entries in allow mode", mac_num);
 			}
 		}
 		
@@ -834,12 +869,15 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 {
 	FILE *fp;
 	char timematch[160], *ftype, *dtype, *vpnc_if;
+	char mac_buf[24];
 	const char *ipt_file = "/tmp/ipt_filter.rules";
 	int ret, wport, lport;
+	int i, j, k; // 循环变量
 	int is_nat_enabled, is_dos_enabled, is_fw_enabled, is_logaccept, is_logdrop;
 	int is_url_enabled, is_lwf_enabled;
 	int i_vpns_enable, i_vpns_type, i_vpns_actl, i_http_proto, i_bfplimit_ref;
 	int i_vpnc_enable, i_vpnc_type, i_vpnc_sfw, i_mac_filter;
+	char *filter_mac;
 #if defined (APP_OPENVPN)
 	int i_vpns_ov_mode = nvram_get_int("vpns_ov_mode");
 #endif
@@ -917,7 +955,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
-			char *filter_mac;
+
     		char mac_buf[24];
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
@@ -1129,8 +1167,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
-			char *filter_mac;
-			char mac_buf[24];
+
+
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
@@ -1475,10 +1513,13 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 {
 	FILE *fp;
 	char timematch[160], *ftype, *dtype;
+	char mac_buf[24];
 	int ret, wport, lport;
+	int i, j, k; // 循环变量
 	int ipv6_type, is_fw_enabled, is_url_enabled, is_logaccept, is_logdrop;
 	int i_http_proto, i_bfplimit_ref, i_mac_filter;
 	const char *ipt_file = "/tmp/ip6t_filter.rules";
+	char *filter_mac;
 
 	ret = 0;
 	i_bfplimit_ref = 0;
@@ -1523,7 +1564,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
-			char *filter_mac;
+
     		char mac_buf[24];
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
@@ -1668,8 +1709,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
-			char *filter_mac;
-			char mac_buf[24];
+
+
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
