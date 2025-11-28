@@ -3,7 +3,7 @@
 
 #include "common.h"
 #include "ap.h"
-#include "../../shared/src/shutils.h"
+#include <shutils.h>
 
 #define MAC_ADDR_LEN				6
 #define MAX_MBSSID_NUM              8
