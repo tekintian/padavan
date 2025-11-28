@@ -10,7 +10,7 @@ OBJS = rtdot1x.o eloop.o eapol_sm.o radius.o md5.o config.o \
 all: rt2860apd
 
 rt2860apd: $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o rt2860apd $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o rt2860apd $(OBJS) -lshared
 
 clean:
 	rm -f core *~ *.o rt2860apd *.d
