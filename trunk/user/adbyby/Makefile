@@ -4,9 +4,13 @@ all:
 clean:
 
 romfs:
-	# 创建目录结构
+	# 先创建基础目录（如果需要）
 	$(ROMFSINST) -d /etc_ro
+	# 确保/usr/share目录存在
+	mkdir -p $(ROMFSDIR)/usr/share 2>/dev/null || true
+	# 创建adbyby目录
 	$(ROMFSINST) -d /usr/share/adbyby
+	# 创建子目录
 	$(ROMFSINST) -d /usr/share/adbyby/data
 	$(ROMFSINST) -d /usr/share/adbyby/doc
 
