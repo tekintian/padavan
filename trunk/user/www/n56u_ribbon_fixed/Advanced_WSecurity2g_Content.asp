@@ -141,11 +141,11 @@ function done_validating(action){
                                             <th><a class="help_tooltip" href="javascript:void(0);"  onmouseover="openTooltip(this,2,4);">RADIUS Debug Level</a></th>
                                             <td>
                                                 <select name="rt_radius_debug_level" class="select">
-                                                    <option value="0" <% if (nvram_get_x("","rt_radius_debug_level") == "0") { %>selected<% } %>>不记录日志</option>
-                                                    <option value="1" <% if (nvram_get_x("","rt_radius_debug_level") == "1") { %>selected<% } %>>错误级别</option>
-                                                    <option value="2" <% if (nvram_get_x("","rt_radius_debug_level") == "2") { %>selected<% } %>>警告级别</option>
-                                                    <option value="3" <% if (nvram_get_x("","rt_radius_debug_level") == "3") { %>selected<% } %>>信息级别</option>
-                                                    <option value="4" <% if (nvram_get_x("","rt_radius_debug_level") == "4") { %>selected<% } %>>详细级别</option>
+                                                    <option value="0" <% nvram_match_x("","rt_radius_debug_level", "0","selected"); %>>不记录日志</option>
+                                                    <option value="1" <% nvram_match_x("","rt_radius_debug_level", "1","selected"); %>>错误级别</option>
+                                                    <option value="2" <% nvram_match_x("","rt_radius_debug_level", "2","selected"); %>>警告级别</option>
+                                                    <option value="3" <% nvram_match_x("","rt_radius_debug_level", "3","selected"); %>>信息级别</option>
+                                                    <option value="4" <% nvram_match_x("","rt_radius_debug_level", "4","selected"); %>>详细级别</option>
                                                 </select>
                                             </td>
                                         </tr>

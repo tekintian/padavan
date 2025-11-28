@@ -450,8 +450,6 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 	int i, mac_num;
 	char mac_timematch[128], mac_buf[24], nv_date[32], nv_time[32];
 	char *filter_mac, *ftype;
-	char processed_rules[32][160]; // 记录已处理的时间规则，避免重复
-	int rule_count;
 	const char *dtype = IPT_CHAIN_NAME_MAC_LIST;
 
 	if (mac_filter_mode > 0) {
@@ -498,7 +496,9 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 						// 为这个MAC生成所有允许规则，避免重复的时间规则
 						int mac_has_rules = 0;
 						int total_rules = nvram_get_int("macfilter_num_x");
-						rule_count = 0; // 重置规则计数器
+						int rule_count = 0; // 为每个MAC独立的规则计数器
+						char processed_rules[32][160] = {0}; // 为每个MAC独立的规则跟踪数组
+						
 						for (int k = 0; k < total_rules; k++) {
 							g_buf_init();
 							
@@ -512,27 +512,27 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 								timematch_conv(mac_timematch, nv_date, nv_time);
 								
 								// 检查时间规则数量是否超过限制
-							if (rule_count >= 32) {
-								logmessage("MAC Filter", "WARNING: Maximum time rule limit (32) reached for MAC %s, skipping additional rules", filter_mac);
-								continue;
-							}
-							
-							// 检查这个时间规则是否已经处理过，避免重复规则
-								int rule_already_processed = 0;
-							if (strlen(mac_timematch) > 0) {
-									for (int r = 0; r < rule_count; r++) {
-									if (strcmp(processed_rules[r], mac_timematch) == 0) {
-										rule_already_processed = 1;
-										break;
-									}
+								if (rule_count >= 32) {
+									logmessage("MAC Filter", "WARNING: Maximum time rule limit (32) reached for MAC %s, skipping additional rules", filter_mac);
+									continue;
 								}
 								
-								// 如果规则未重复，则添加到防火墙规则
-								if (!rule_already_processed && rule_count < 32) {
-									strcpy(processed_rules[rule_count], mac_timematch);
-									rule_count++;
-									fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", dtype, current_mac, mac_timematch);
-								}
+								// 检查这个时间规则是否已经处理过，避免重复规则
+								int rule_already_processed = 0;
+								if (strlen(mac_timematch) > 0) {
+									for (int r = 0; r < rule_count; r++) {
+										if (strcmp(processed_rules[r], mac_timematch) == 0) {
+											rule_already_processed = 1;
+											break;
+										}
+									}
+									
+									// 如果规则未重复，则添加到防火墙规则
+									if (!rule_already_processed && rule_count < 32) {
+										strcpy(processed_rules[rule_count], mac_timematch);
+										rule_count++;
+										fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", dtype, current_mac, mac_timematch);
+									}
 								}
 							}
 						}
@@ -584,7 +584,6 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 
 	return mac_filter_mode;
 }
-
 static int
 include_webstr_filter(FILE *fp)
 {
