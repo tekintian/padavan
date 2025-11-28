@@ -1,9 +1,6 @@
 name: build-k2
 
-on: 
-  push:
-    branches:
-    - "*"
+on:
   workflow_dispatch:
 
 jobs:

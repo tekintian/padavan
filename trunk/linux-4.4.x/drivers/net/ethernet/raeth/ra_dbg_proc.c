@@ -16,6 +16,11 @@
 #include "ra_dbg_proc.h"
 #include "ra_ethtool.h"
 
+// 添加默认的 PROCREG_DIR 定义，以防其他条件不满足
+#ifndef PROCREG_DIR
+#define PROCREG_DIR "raeth_debug"
+#endif
+
 int txd_cnt[MAX_SKB_FRAGS / 2 + 1];
 int tso_cnt[16];
 
