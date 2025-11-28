@@ -1,7 +1,5 @@
 # padavan 固件
 
-This project is based on original rt-n56u with latest mtk 4.4.198 kernel, which is fetch from D-LINK GPL code.
- 
 ## Padavan 固件版本功能模块列表与适用场景说明
 
 本固件支持多种基于MT7621等平台的路由器设备，包括但不限于：K2(测试中)、K2P、K2P-USB、MI-R3G、R2100、XY-C1等多款路由器。
@@ -200,18 +198,43 @@ CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n  # 禁用Shadowsocks插件
 - 启用插件会增加固件大小，需要根据设备内存和需求合理选择
 
 
-## Features
+## 新增调整功能模块说明：
 
+### 1. 网络访问控制逻辑重构 (解决之前版本无法使用问题)
+- **控制架构改进**：重构了防火墙相关逻辑，优化了NAT规则配置
+- **接口配置优化**：完善了WAN/LAN接口管理，提升了网络通信效率
+- **访问规则管理**：优化了端口转发、DMZ设置和UPnP映射功能
+- **性能提升**：通过代码重构提高了网络访问控制的响应速度
 
-- Based on 4.4.198 Linux kernel
-- Support MT7621 based devices
-- Support MT7615D/MT7615N/MT7915D wireless chips
-- Support raeth and mt7621 hwnat with legency driver
-- Support qca shortcut-fe
-- Support IPv6 NAT based on netfilter
-- Support WireGuard integrated in kernel
-- Support fullcone NAT (by Chion82)
-- Support LED&GPIO control via sysfs
+### 2. Radius认证模块增强
+- **调试日志支持**：增加了Radius调试日志控制功能，方便问题排查
+- **命令参数优化**：完善了Radius相关命令参数，支持更灵活的配置
+- **日志输出改进**：优化了日志格式和输出方式，提升可读性
+- **异常处理增强**：改进了客户端RSSI阈值配置和异常情况处理
+
+### 3. 系统构建与编译优化
+- **编译问题修复**：解决了构建过程中的依赖冲突和编译错误
+- **共享库支持**：改进了共享库链接机制，提高了代码复用性
+- **包含路径优化**：调整了头文件包含路径，使代码结构更清晰
+- **头文件依赖**：优化了头文件引用关系，减少了不必要的编译依赖
+
+### 4. 版本号与构建系统
+- **生成规则优化**：改进了版本号生成机制，使版本标识更准确
+- **构建工具升级**：更新了构建工具链，提高了编译效率
+- **K2P-TINY配置更新**：将K2P-TINY版本更新至v4，优化了功能模块配置
+
+### 5. Adbyby 广告过滤模块优化
+- **构建方式优化**：改进了Adbyby的构建流程，提高了编译效率和稳定性
+- **规则管理改进**：优化了规则更新机制，支持更灵活的规则配置
+- **配置管理**：完善了服务控制脚本（adbyby.sh），增加了启动/关闭流程的健壮性
+- **过滤性能**：优化了DNS配置和IP过滤控制，提升了广告过滤效果
+
+### 6. 其他功能改进
+- **翻译优化**：更新和完善了系统界面的翻译内容
+- **代码回滚机制**：增加了关键功能的回滚支持，提高了系统稳定性
+- **K2支持测试**：加强了对K2路由器平台的兼容性测试，确保功能正常
+- **性能监控工具**：优化了系统诊断工具，提供更全面的性能监控
+
 
 # Supported devices
 
@@ -264,7 +287,7 @@ CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n  # 禁用Shadowsocks插件
     ```
 - Clone source code
   ```sh
-  git clone https://github.com/tsl0922/padavan.git
+  git clone https://github.com/tekintian/padavan.git
   ```
 - Modify template file and start compiling
   ```sh

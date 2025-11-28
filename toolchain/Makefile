@@ -4,7 +4,7 @@ CT_DIR        := $(TOPDIR)/crosstool-ng-$(CT_VERSION)
 CT_PREFIX     := $(TOPDIR)/toolchain-mipsel
 CT_TARGET     := mipsel-linux-musl
 CT_URL        := https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-$(CT_VERSION)/crosstool-ng-$(CT_VERSION).tar.xz
-TOOLCHAIN_URL := https://github.com/tsl0922/padavan/releases/download/toolchain/$(CT_TARGET).tar.xz
+TOOLCHAIN_URL := https://github.com/tekintian/padavan/releases/download/toolchain/$(CT_TARGET).tar.xz
 
 all: build
 
