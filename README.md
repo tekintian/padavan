@@ -2,62 +2,79 @@
 
 This project is based on original rt-n56u with latest mtk 4.4.198 kernel, which is fetch from D-LINK GPL code.
  
-## K2P系列四个版本的功能模块对比：
+## Padavan 固件版本功能模块列表与适用场景说明
+
+本固件支持多种基于MT7621等平台的路由器设备，包括但不限于：K2(测试中)、K2P、K2P-USB、MI-R3G、R2100、XY-C1等多款路由器。
+
+## K2P系列固件版本对比
 
 ### 1. K2P（标准版）
-**特点**：功能完整，适合大多数用户
 
-**主要功能模块**：
-- **广告管理**：包含adbyby plus+广告拦截功能
-- **网络代理**：支持Shadowsocks、Trojan、simple-obfs等代理工具
-- **DNS服务**：包含SmartDNS
-- **SSH服务**：使用功能更完整的OpenSSH
+**适用场景**：
+- 需要完整功能的普通家庭用户
+- 对广告拦截、网络代理、网络工具等有全面需求的用户
+- 不需要USB存储功能的K2P用户
+
+**核心功能模块**：
+- **广告管理**：集成adbyby plus+广告拦截
+- **网络代理**：支持Shadowsocks、Trojan、simple-obfs等
+- **DNS服务**：内置SmartDNS智能解析
+- **安全通信**：完整的OpenSSH服务
 - **网络工具**：包含curl、ttyd、htop、iperf3、mtr、msd_lite等
-- **网络优化**：支持SQM和WireGuard
-- **其他功能**：包含IPSet、EAP-PEAP认证支持、OpenSSL等
+- **网络优化**：支持SQM智能队列管理和WireGuard VPN
+- **安全认证**：支持EAP-PEAP企业级认证
+- **高级功能**：IPSet、完整OpenSSL支持
 
 ### 2. K2P-NANO（精简版）
-**特点**：精简功能，但保留广告管理
 
-**主要功能模块**：
+**适用场景**：
+- 需要广告拦截但不需要代理工具的用户
+- 对固件稳定性有较高要求的用户
+- 希望平衡功能和性能的用户
+
+**核心功能模块**：
 - **广告管理**：保留adbyby plus+广告拦截功能
-- **网络工具**：保留htop、iperf3、mtr、msd_lite等基础工具
-- **网络优化**：保留SQM和WireGuard
-- **SSH服务**：使用OpenSSH
-- **精简功能**：移除了Shadowsocks、Trojan等代理工具，移除了SmartDNS、curl、ttyd等
+- **系统监控**：包含htop进程监控工具
+- **网络测试**：保留iperf3、mtr等基础网络诊断工具
+- **网络优化**：支持SQM和轻量级WireGuard
+- **安全管理**：使用功能完整的OpenSSH
+- **精简设计**：移除了Shadowsocks、Trojan等代理工具和SmartDNS
 
 ### 3. K2P-TINY（超精简版）
-**特点**：体积最小，移除广告管理，适合对固件大小要求严格的场景
 
-**主要功能模块**：
-- **最小化功能集**：移除了几乎所有可选功能
-- **SSH服务**：使用更轻量级的dropbear代替OpenSSH
-- **移除的关键功能**：
-  - 无广告管理（adbyby设置为n）
-  - 无代理工具（Shadowsocks、Trojan等均为n）
-  - 无DNS增强服务
-  - 无网络优化工具（SQM、WireGuard均为n）
-  - 无IPSet
-  - 无大多数网络诊断工具
+**适用场景**：
+- 对固件大小要求极高的场景（如固件空间受限）
+- 仅需要基本路由功能的用户
+- 追求极致稳定性和性能的用户
+- 作为二级路由或专用设备使用
 
-### 4. K2P-USB（增强版）
-**特点**：支持USB功能，增强存储和服务器功能
+**核心功能模块**：
+- **轻量级设计**：移除几乎所有可选功能，最小化固件体积
+- **SSH管理**：使用更轻量级的dropbear替代OpenSSH
+- **网络加速**：保留SFE硬件加速功能
+- **基础诊断**：保留htop、iperf3、mtr等核心网络工具
+- **基础功能**：支持IPv6、IPSet、EAP-PEAP认证
+- **轻量VPN**：支持WireGuard轻量级VPN协议
+- **移除的功能**：无广告管理、无代理工具、无DNS增强服务
 
-**主要功能模块**：
-- **USB支持**：完整的USB功能支持（CONFIG_FIRMWARE_ENABLE_USB=y）
-- **文件系统**：支持FAT/FAT32、exFAT、EXT2/3/4、FUSE、ANTFS等多种文件系统
-- **服务器功能**：包含SMB3.6服务器、FTP服务器、LPR打印守护进程、U2EC等
-- **网络工具**：丰富的网络工具，包括tcpdump、parted、hdparm、iperf3、mtr、socat等
-- **VPN支持**：包含OpenVPN
-- **代理工具**：支持Shadowsocks、Trojan、Xray、simple-obfs等
-- **移除的功能**：移除了adbyby广告管理功能
+### 4. K2P-USB（增强版, 注意这个版本需要改造过支持USB的K2P才可用）
 
-### 版本选择建议
-- 如果需要完整功能：选择标准版K2P
-- 如果需要广告拦截但功能精简：选择NANO版
-- 如果对固件大小要求极高：选择TINY版
-- 如果需要USB存储和服务器功能：选择USB增强版
-        
+**适用场景**：
+- 使用K2P-USB硬件版本的用户
+- 需要USB存储功能的用户
+- 需要文件共享和媒体服务器的用户
+- 需要VPN服务器功能的用户
+
+**核心功能模块**：
+- **USB支持**：完整的USB功能和设备驱动支持
+- **文件系统**：支持FAT/FAT32、exFAT、EXT2/3/4、FUSE等多种文件系统
+- **存储服务**：包含SMB3.6文件共享服务器、FTP服务器
+- **打印服务**：支持LPR打印守护进程、U2EC打印共享
+- **网络工具**：丰富的网络工具集，包括tcpdump、parted等
+- **VPN服务**：包含OpenVPN完整支持
+- **代理工具**：支持Shadowsocks、Trojan、Xray等多种代理
+- **专业诊断**：完整的网络诊断和维护工具
+
 
 ## Padavan路由器固件可选插件列表
 
