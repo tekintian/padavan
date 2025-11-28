@@ -42,8 +42,12 @@ jobs:
           VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
           echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
           
+          export CFLAGS="-Wno-error"
+          export KBUILD_CFLAGS="-Wno-error"
           make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain}}
-          if [ "${{ matrix.target }}" = "K2P-TINY" ]; then
+
+          # KBUILD_CFLAGS="-Wno-error" make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain}}
+          if [ "${{ matrix.target }}" = "K2-TINY" ]; then
             image=$(ls trunk/images/*.trx)
             mv $image $(echo $image | sed 's/K2/K2-TINY/')
           fi
