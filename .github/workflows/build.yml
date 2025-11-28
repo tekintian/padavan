@@ -2,8 +2,7 @@ name: build
 
 on: 
   push:
-    branches:
-    - "*"
+    tags: ["*"]
   workflow_dispatch:
 
 jobs:
@@ -11,7 +10,8 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        target: [K2P, K2P-NANO, K2P-TINY, K2P-USB]
+        # target: [K2P, K2P-NANO, K2P-TINY, K2P-USB]
+        target: [K2P, K2P-TINY]
         toolchain: [mipsel-linux-musl]
     steps:
       - uses: actions/checkout@v3
