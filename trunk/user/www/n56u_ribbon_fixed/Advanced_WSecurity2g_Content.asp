@@ -54,6 +54,8 @@ function validForm(){
 	if(!validate_string(document.form.rt_radius_key))
 		return false;
 
+	// 日志级别已经通过select选项限定在0-4范围内，无需额外验证
+	
 	return true;
 }
 
@@ -133,6 +135,18 @@ function done_validating(action){
                                                     <input type="password" name="rt_radius_key" id="rt_radius_key" maxlength="64" size="32" style="width: 175px;" value="<% nvram_get_x("","rt_radius_key"); %>" />
                                                     <button style="margin-left: -5px;" class="btn" type="button" onclick="passwordShowHide('rt_radius_key')"><i class="icon-eye-close"></i></button>
                                                 </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th><a class="help_tooltip" href="javascript:void(0);"  onmouseover="openTooltip(this,2,4);">RADIUS Debug Level</a></th>
+                                            <td>
+                                                <select name="rt_radius_debug_level" class="select">
+                                                    <option value="0" <% if (nvram_get_x("","rt_radius_debug_level") == "0") { %>selected<% } %>>不记录日志</option>
+                                                    <option value="1" <% if (nvram_get_x("","rt_radius_debug_level") == "1") { %>selected<% } %>>错误级别</option>
+                                                    <option value="2" <% if (nvram_get_x("","rt_radius_debug_level") == "2") { %>selected<% } %>>警告级别</option>
+                                                    <option value="3" <% if (nvram_get_x("","rt_radius_debug_level") == "3") { %>selected<% } %>>信息级别</option>
+                                                    <option value="4" <% if (nvram_get_x("","rt_radius_debug_level") == "4") { %>selected<% } %>>详细级别</option>
+                                                </select>
                                             </td>
                                         </tr>
                                     </table>

@@ -631,6 +631,38 @@ int Radius_client_init(rtapd *rtapd)
 			eloop_register_timeout(rtapd->conf->radius_retry_primary_interval, 0, Radius_retry_primary_timer, rtapd, NULL);
 	}
 #endif	
+
+// 记录RADIUS服务器配置和连接状态
+#ifdef MULTIPLE_RADIUS
+for (i = 0; i < rtapd->conf->SsidNum; i++) {
+    if (rtapd->conf->mbss_auth_server[i]) {
+        DBGPRINT(RT_DEBUG_INFO, "Initializing RADIUS client for interface %d, server IP: %s:%d\n", 
+                 i, rtapd->conf->mbss_auth_server[i]->addr, rtapd->conf->mbss_auth_server[i]->port);
+        
+        // 记录连接结果
+        if (rtapd->radius->mbss_auth_serv_sock[i] >= 0) {
+            DBGPRINT(RT_DEBUG_INFO, "RADIUS socket connected successfully for interface %d (fd=%d)\n", 
+                     i, rtapd->radius->mbss_auth_serv_sock[i]);
+        } else {
+            DBGPRINT(RT_DEBUG_ERROR, "Failed to connect to RADIUS server for interface %d\n", i);
+        }
+    }
+}
+#else
+if (rtapd->conf->auth_server) {
+    DBGPRINT(RT_DEBUG_INFO, "Initializing RADIUS client, server IP: %s:%d\n", 
+             rtapd->conf->auth_server->addr, rtapd->conf->auth_server->port);
+    
+    // 记录连接结果
+    if (rtapd->radius->auth_serv_sock >= 0) {
+        DBGPRINT(RT_DEBUG_INFO, "RADIUS socket connected successfully (fd=%d)\n", 
+                 rtapd->radius->auth_serv_sock);
+    } else {
+        DBGPRINT(RT_DEBUG_ERROR, "Failed to connect to RADIUS server\n");
+    }
+}
+#endif
+
 	return 0;
 }
 

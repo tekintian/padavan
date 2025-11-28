@@ -82,6 +82,15 @@ static void ieee802_1x_send(rtapd *rtapd, struct sta_info *sta, u8 type, u8 *dat
 
 void ieee802_1x_set_sta_authorized(rtapd *rtapd, struct sta_info *sta, int authorized)
 {
+	DBGPRINT(RT_DEBUG_INFO, "Setting station %02x:%02x:%02x:%02x:%02x:%02x authorized=%d\n", 
+         MAC2STR(sta->addr), authorized);
+
+	// 记录授权失败的详细信息
+	if (!authorized) {
+		DBGPRINT(RT_DEBUG_WARN, "Station %02x:%02x:%02x:%02x:%02x:%02x authentication failed\n", 
+				MAC2STR(sta->addr));
+	}
+	
 	switch(authorized)
 	{
 		case 0:
@@ -360,6 +369,21 @@ static void ieee802_1x_encapsulate_radius(rtapd *rtapd, struct sta_info *sta, u8
 		return;
 	}
 
+	// 记录RADIUS服务器信息和发送的数据包
+	#ifdef MULTIPLE_RADIUS
+	struct hostapd_radius_server *auth_server = rtapd->conf->mbss_auth_server[sta->ApIdx];
+	#else
+	struct hostapd_radius_server *auth_server = rtapd->conf->auth_server;
+	#endif
+
+	if (auth_server) {
+		DBGPRINT(RT_DEBUG_INFO, "Sending RADIUS packet to server %s:%d\n", 
+				auth_server->addr, auth_server->port);
+	}
+	DBGPRINT(RT_DEBUG_TRACE, "RADIUS packet identifier: %d, code: %d\n", 
+			msg->hdr->identifier, msg->hdr->code);
+	
+
 	Radius_msg_make_authenticator(msg, (u8 *) sta, sizeof(sta));
 
 	if (sta->identity && !Radius_msg_add_attr(msg, RADIUS_ATTR_USER_NAME, sta->identity, sta->identity_len))
@@ -517,6 +541,10 @@ static void handle_eap_response(struct sta_info *sta, struct eap_hdr *eap, u8 *d
 			*pos = '\0';
 			free(buf);
 		}
+
+		// 添加详细的身份信息日志
+    	DBGPRINT(RT_DEBUG_INFO, "Client %02x:%02x:%02x:%02x:%02x:%02x identity: %s\n", 
+             MAC2STR(sta->addr), buf);
 
 		sta->eapol_sm->auth_pae.rxInitialRsp = TRUE;
 
@@ -873,6 +901,16 @@ ieee802_1x_receive_auth(rtapd *rtapd, struct radius_msg *msg, struct radius_msg 
 	if (sta == NULL)
 	{
 		return RADIUS_RX_UNKNOWN;
+	}
+
+	// 记录接收到的RADIUS响应
+	DBGPRINT(RT_DEBUG_INFO, "Received RADIUS response for client %02x:%02x:%02x:%02x:%02x:%02x, code: %d\n", 
+			MAC2STR(sta->addr), msg->hdr->code);
+
+	// 记录RADIUS属性信息
+	if (msg->hdr->code == RADIUS_CODE_ACCESS_REJECT) {
+		DBGPRINT(RT_DEBUG_WARN, "RADIUS server rejected authentication for client %02x:%02x:%02x:%02x:%02x:%02x\n", 
+				MAC2STR(sta->addr));
 	}
 
 	/* RFC 2869, Ch. 5.13: valid Message-Authenticator attribute MUST be

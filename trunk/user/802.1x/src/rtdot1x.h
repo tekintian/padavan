@@ -3,7 +3,7 @@
 
 #include "common.h"
 #include "ap.h"
-
+#include "../../shared/src/shutils.h"
 
 #define MAC_ADDR_LEN				6
 #define MAX_MBSSID_NUM              8
@@ -82,19 +82,31 @@
 #define DEFAULT_IDLE_INTERVAL 				60
 
 
-#if DBG
-extern u32 	RTDebugLevel;	
-#define DBGPRINT(Level, fmt, args...) 					\
-{                                   \
-    if (Level <= RTDebugLevel)      \
-    {                               \
-        printf(NIC_DBG_STRING);   \
-		printf( fmt, ## args);			\
-    }                               \
+// #if DBG
+// extern u32 	RTDebugLevel;	
+// #define DBGPRINT(Level, fmt, args...) 					\
+// {                                   \
+//     if (Level <= RTDebugLevel)      \
+//     {                               \
+//         printf(NIC_DBG_STRING);   \
+// 		printf( fmt, ## args);			\
+//     }                               \
+// }
+// #else
+// #define DBGPRINT(Level, fmt, args...) 	
+// #endif
+
+// 移除原来依赖DBG宏的条件编译，直接定义DBGPRINT宏
+extern u32 RTDebugLevel;
+#define DBGPRINT(Level, fmt, args...) \
+{ \
+    if (Level <= RTDebugLevel) \
+    { \
+        printf(NIC_DBG_STRING); \
+        printf(fmt, ## args); \
+        logmessage("RADIUS", "%s" fmt, NIC_DBG_STRING, ## args); \
+    } \
 }
-#else
-#define DBGPRINT(Level, fmt, args...) 	
-#endif
 
 struct ieee8023_hdr {
 	u8 dAddr[6];
