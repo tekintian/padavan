@@ -96,7 +96,7 @@
 // #define DBGPRINT(Level, fmt, args...) 	
 // #endif
 
-// 移除原来依赖DBG宏的条件编译，直接定义DBGPRINT宏
+// 移除原来依赖DBG宏的条件编译，直接定义DBGPRINT宏 add by tekintian@gmail.com 2015-11-28
 extern u32 RTDebugLevel;
 #define DBGPRINT(Level, fmt, args...) \
 { \

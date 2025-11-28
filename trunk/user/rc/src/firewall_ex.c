@@ -421,6 +421,29 @@ include_vpns_clients(FILE *fp)
 	}
 }
 
+/**
+ * @brief 根据MAC过滤模式生成防火墙规则
+ *
+ * 该函数根据MAC地址过滤模式（允许/拒绝）生成相应的防火墙规则，并写入到指定文件指针中。
+ * 支持基于时间段的MAC地址过滤规则处理，并优化了拒绝模式的规则生成逻辑。
+ *
+ * 
+ * 
+ * @param fp 文件指针，用于写入生成的防火墙规则
+ * @param mac_filter_mode MAC过滤模式：0-关闭，1-允许模式，2-拒绝模式
+ * @param logdrop 用于拒绝流量的目标链名称
+ *
+ * @return int 返回实际应用的MAC过滤模式。如果没有任何MAC规则被处理，则返回0
+ *
+ * @note 拒绝模式优化特点：
+ * 1. maclist链只包含规则设备的处理逻辑，不需要最后的ACCEPT规则
+ * 2. 主链路中只将规则设备重定向到maclist链，规则外设备直接ACCEPT
+ * 3. 按MAC地址分组处理，确保每个设备的拒绝规则在最后
+ *
+ * @note 函数会记录处理统计信息到系统日志，包括处理的MAC地址数量和规则数量
+ * @author tekintian@gmail.com 2015-11-28
+ * @see https://dev.tekin.cn
+ */
 static int
 include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 {
@@ -1564,8 +1587,6 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		if (mac_filter_mode == 2) {
 			// 拒绝模式：只将规则列表中的设备重定向到maclist链
-
-    		char mac_buf[24];
 			foreach_x("macfilter_num_x") {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
