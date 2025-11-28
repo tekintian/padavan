@@ -796,6 +796,7 @@
 			{"wl_radius_ipaddr", "", NULL, EVM_RESTART_WIFI5},
 			{"wl_radius_port", "", NULL, EVM_RESTART_WIFI5},
 			{"wl_radius_key", "", NULL, EVM_RESTART_WIFI5},
+			{"rt_radius_debug_level", "", NULL, EVM_RESTART_WIFI5},
 #endif
 			{0,0,0,0}
 		};
@@ -804,6 +805,7 @@
 			{"rt_radius_ipaddr", "", NULL, EVM_RESTART_WIFI2},
 			{"rt_radius_port", "", NULL, EVM_RESTART_WIFI2},
 			{"rt_radius_key", "", NULL, EVM_RESTART_WIFI2},
+			{"rt_radius_debug_level", "", NULL, EVM_RESTART_WIFI2},
 			{0,0,0,0}
 		};
 
