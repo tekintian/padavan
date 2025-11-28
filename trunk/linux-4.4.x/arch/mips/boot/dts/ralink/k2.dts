@@ -1,0 +1,165 @@
+/dts-v1/;
+
+/include/ "mt7620a.dtsi"
+
+/ {
+	compatible = "phicomm,k2", "ralink,mt7620a-soc";
+	model = "PHICOMM K2";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x8000000>; /* 128MB RAM */
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,57600";
+	};
+
+	palmbus@10000000 {
+		gpio0: gpio@600 {
+			compatible = "ralink,mt7620a-gpio", "ralink,rt2880-gpio";
+			reg = <0x600 0x34>;
+
+			interrupt-parent = <&intc>;
+			interrupts = <6>;
+
+			#gpio-cells = <2>;
+			gpio-controller;
+		};
+
+		gpio1: gpio@638 {
+			compatible = "ralink,mt7620a-gpio", "ralink,rt2880-gpio";
+			reg = <0x638 0x24>;
+
+			interrupt-parent = <&intc>;
+			interrupts = <6>;
+
+			#gpio-cells = <2>;
+			gpio-controller;
+		};
+
+		gpio2: gpio@660 {
+			compatible = "ralink,mt7620a-gpio", "ralink,rt2880-gpio";
+			reg = <0x660 0x24>;
+
+			interrupt-parent = <&intc>;
+			interrupts = <6>;
+
+			#gpio-cells = <2>;
+			gpio-controller;
+		};
+
+		spi@b00 {
+			compatible = "ralink,mt7620a-spi", "ralink,rt2880-spi";
+			reg = <0xb00 0x60>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi_pins>;
+
+			status = "okay";
+
+			flash@0 {
+				compatible = "jedec,spi-nor";
+				reg = <0>;
+				spi-max-frequency = <10000000>;
+
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					partition@0 {
+						label = "u-boot";
+						reg = <0x0 0x30000>;
+						read-only;
+					};
+
+					partition@30000 {
+						label = "u-boot-env";
+						reg = <0x30000 0x10000>;
+						read-only;
+					};
+
+					factory: partition@40000 {
+						label = "factory";
+						reg = <0x40000 0x10000>;
+						read-only;
+					};
+
+					partition@50000 {
+						label = "firmware";
+						reg = <0x50000 0xfb0000>;
+					};
+				};
+			};
+		};
+	};
+
+	sdhci@10130000 {
+		compatible = "ralink,mt7620a-sdhci";
+		reg = <0x10130000 0x1000>;
+
+		status = "okay";
+	};
+
+	ethernet@10100000 {
+		status = "okay";
+		mtd-mac-address = <&factory 0x4>;
+
+		mediatek,portmap = "wllll";
+	};
+
+	wmac@10180000 {
+		ralink,mtd-eeprom = <&factory 0>;
+		ralink,led-polarity = <1>;
+	};
+
+	gpio-keys-polled {
+		compatible = "gpio-keys-polled";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		poll-interval = <20>;
+
+		reset {
+			label = "reset";
+			gpios = <&gpio0 1 1>;
+			linux,code = <0x198>;
+		};
+	};
+
+	gpio-leds {
+		compatible = "gpio-leds";
+
+		power {
+			label = "k2:blue:power";
+			gpios = <&gpio2 11 1>;
+			default-state = "on";
+		};
+
+		wifi {
+			label = "k2:blue:wifi";
+			gpios = <&gpio3 0 1>;
+		};
+	};
+
+	nand@1010000 {
+		status = "disabled";
+	};
+};
+
+&pinctrl {
+	state_default: pinctrl0 {
+		gpio {
+			ralink,group = "i2c", "uartf", "spi", "rgmii1", "wled";
+			ralink,function = "gpio";
+		};
+	};
+
+	spi_pins: spi {
+		ralink,group = "spi";
+		ralink,function = "spi";
+	};
+};

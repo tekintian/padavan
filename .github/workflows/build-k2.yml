@@ -1,0 +1,73 @@
+name: build
+
+on: 
+  push:
+    branches:
+    - "*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target: [K2, K2-TINY]
+        toolchain: [mipsel-linux-musl]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.target }}-${{ matrix.toolchain }}
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          check-latest: true
+          cache: false
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          check-latest: true
+      - name: Prepare
+        run: |
+          sudo apt update
+          sudo apt install libtool-bin gperf python3-docutils autopoint gettext ccache
+      - name: Build
+        run: |
+          # 获取版本号信息 - 直接读取文件内容
+          ROOTFS_VER=$(grep "FIRMWARE_ROOTFS_VER=" trunk/versions.inc | cut -d'=' -f2)
+          BUILDS_VER=$(grep "FIRMWARE_BUILDS_VER=" trunk/versions.inc | cut -d'=' -f2)
+          KERNEL_VER=$(grep "FIRMWARE_KERNEL_VER=" trunk/Makefile | cut -d'"' -f2)
+          # 按照FIRMWARE_BUILDS_REV的样式重新定义日期变量
+          BUILDS_REV=$(date +%Y%m%d)
+          # 使用3个变量拼接完整版本号：内核版本.文件系统版本-构建版本-日期
+          VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
+          echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
+          
+          make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain}}
+          if [ "${{ matrix.target }}" = "K2P-TINY" ]; then
+            image=$(ls trunk/images/*.trx)
+            mv $image $(echo $image | sed 's/K2/K2-TINY/')
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-${{ env.FIRMWARE_VERSION }}
+          path: trunk/images/*.trx
+  publish:
+    needs: [build]
+    runs-on: ubuntu-22.04
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v4
+      - name: Set Tag Name
+        run: echo "TAG_NAME=$(date +%Y%m%d)" >> $GITHUB_ENV
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ env.TAG_NAME }}
+          force_push_tag: true
+      - uses: ncipollo/release-action@v1
+        with:
+          commit: ${{ github.sha }}
+          tag: ${{ env.TAG_NAME }}
+          artifacts: "*/*.trx"
+          allowUpdates: true
