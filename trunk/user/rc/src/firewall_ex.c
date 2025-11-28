@@ -453,107 +453,112 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 	const char *dtype = IPT_CHAIN_NAME_MAC_LIST;
 
 	if (mac_filter_mode > 0) {
+		int total_rules = nvram_get_int("macfilter_num_x");
+		
 		if (mac_filter_mode == 2) {
-			// 拒绝模式: 列表中的设备在指定时间内允许，其他时间拒绝
-			// 优化策略：使用哈希思想，确保每个MAC只处理一次
+			// 拒绝模式: 每个MAC对应多条时间规则，DROP规则在最后
 			
-			char processed_macs[64][18]; // 已处理MAC地址缓存
-			int processed_count = 0;
-			int total_input_rules = nvram_get_int("macfilter_num_x");
+			typedef struct {
+				char mac[18];           // MAC地址
+				char time_rules[32][160]; // 时间规则数组
+				int time_rule_count;    // 时间规则数量
+				int has_drop_rule;      // 是否已添加DROP规则
+			} mac_entry_t;
+			
+			mac_entry_t mac_entries[64];
+			int mac_count = 0;
 			
 			mac_num = 0;
 			
-			// 第一轮：收集所有唯一的MAC地址
-			for (i = 0; i < total_input_rules; i++) {
+			// 第一轮：收集所有MAC及其时间规则
+			for (i = 0; i < total_rules; i++) {
 				g_buf_init();
 				filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
 				
 				if (!*filter_mac) continue;
 				
-				// 检查是否已经收集过这个MAC
-				int mac_exists = 0;
-				for (int j = 0; j < processed_count; j++) {
-					if (strcasecmp(processed_macs[j], filter_mac) == 0) {
-						mac_exists = 1;
+				// 查找或创建MAC条目
+				mac_entry_t *current_mac_entry = NULL;
+				int mac_found = 0;
+				
+				for (int j = 0; j < mac_count; j++) {
+					if (strcasecmp(mac_entries[j].mac, filter_mac) == 0) {
+						current_mac_entry = &mac_entries[j];
+						mac_found = 1;
 						break;
 					}
 				}
 				
-				if (!mac_exists && processed_count < 64) {
-					strcpy(processed_macs[processed_count], filter_mac);
-					processed_count++;
-				} else if (processed_count >= 64) {
-					logmessage("MAC Filter", "WARNING: Maximum MAC address limit (64) reached, skipping MAC %s", filter_mac);
-					break;
-				}
-			}
-			
-			// 第二轮：为每个唯一MAC生成规则
-			for (int mac_idx = 0; mac_idx < processed_count; mac_idx++) {
-				char *current_mac = processed_macs[mac_idx];
-				int mac_rule_count = 0;
-				char processed_time_rules[32][160] = {0};
-				int time_rule_count = 0;
-				
-				logmessage("MAC Filter", "DEBUG: Processing MAC %s", current_mac);
-				
-				// 为这个MAC查找所有时间规则
-				for (i = 0; i < total_input_rules; i++) {
-					g_buf_init();
-					filter_mac = mac_conv("macfilter_list_x", i, mac_buf);
-					
-					if (!*filter_mac || strcasecmp(filter_mac, current_mac) != 0) 
+				if (!mac_found) {
+					// 新MAC地址
+					if (mac_count >= 64) {
+						logmessage("MAC Filter", "WARNING: MAC limit reached, skipping %s", filter_mac);
 						continue;
+					}
 					
-					// 获取时间配置
-					sprintf(nv_date, "macfilter_date_x%d", i);
-					sprintf(nv_time, "macfilter_time_x%d", i);
-					timematch_conv(mac_timematch, nv_date, nv_time);
-					
-					if (strlen(mac_timematch) > 0) {
-						// 检查时间规则是否重复
-						int time_rule_exists = 0;
-						for (int r = 0; r < time_rule_count; r++) {
-							if (strcmp(processed_time_rules[r], mac_timematch) == 0) {
-								time_rule_exists = 1;
-								break;
-							}
-						}
-						
-						if (!time_rule_exists && time_rule_count < 32) {
-							// 生成允许规则
-							fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", 
-									dtype, current_mac, mac_timematch);
-							
-							strcpy(processed_time_rules[time_rule_count], mac_timematch);
-							time_rule_count++;
-							mac_rule_count++;
-							mac_num++;
-							
-							logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s", 
-									   current_mac, mac_timematch);
+					current_mac_entry = &mac_entries[mac_count];
+					strcpy(current_mac_entry->mac, filter_mac);
+					current_mac_entry->time_rule_count = 0;
+					current_mac_entry->has_drop_rule = 0;
+					mac_count++;
+				}
+				
+				// 获取时间规则
+				sprintf(nv_date, "macfilter_date_x%d", i);
+				sprintf(nv_time, "macfilter_time_x%d", i);
+				timematch_conv(mac_timematch, nv_date, nv_time);
+				
+				if (strlen(mac_timematch) > 0 && current_mac_entry->time_rule_count < 32) {
+					// 检查时间规则是否已存在
+					int time_rule_exists = 0;
+					for (int r = 0; r < current_mac_entry->time_rule_count; r++) {
+						if (strcmp(current_mac_entry->time_rules[r], mac_timematch) == 0) {
+							time_rule_exists = 1;
+							break;
 						}
 					}
-				}
-				
-				// 为这个MAC添加拒绝规则（如果有时间规则的话）
-				if (mac_rule_count > 0) {
-					fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n", 
-							dtype, current_mac, logdrop);
 					
-					logmessage("MAC Filter", "DEBUG: Added drop rule for MAC %s", current_mac);
+					if (!time_rule_exists) {
+						// 添加新的时间规则
+						strcpy(current_mac_entry->time_rules[current_mac_entry->time_rule_count], mac_timematch);
+						current_mac_entry->time_rule_count++;
+						mac_num++;
+					}
 				}
 			}
 			
-			logmessage("MAC Filter", "INFO: Processed %d unique MAC addresses with %d total rules in deny mode", 
-					   processed_count, mac_num);
+			// 第二轮：为每个MAC生成规则（先时间规则，最后DROP规则）
+			for (int j = 0; j < mac_count; j++) {
+				mac_entry_t *entry = &mac_entries[j];
+				
+				logmessage("MAC Filter", "DEBUG: Processing MAC %s with %d time rules", 
+						   entry->mac, entry->time_rule_count);
+				
+				// 生成所有时间允许规则
+				for (int r = 0; r < entry->time_rule_count; r++) {
+					fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", 
+							dtype, entry->mac, entry->time_rules[r]);
+					
+					logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s", 
+							   entry->mac, entry->time_rules[r]);
+				}
+				
+				// 最后添加DROP规则（确保是该MAC的最后一条规则）
+				if (entry->time_rule_count > 0) {
+					fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n", 
+							dtype, entry->mac, logdrop);
+					
+					logmessage("MAC Filter", "DEBUG: Added DROP rule for MAC %s", entry->mac);
+				}
+			}
+			
+			logmessage("MAC Filter", "INFO: Processed %d unique MACs with %d total rules in deny mode", 
+					   mac_count, mac_num);
 		}
 		else {
 			// 允许模式: 列表中的设备允许，其他设备拒绝
 			ftype = "RETURN";
-			
 			mac_num = 0;
-			int total_rules = nvram_get_int("macfilter_num_x");
 			
 			for (i = 0; i < total_rules; i++) {
 				g_buf_init();
@@ -569,7 +574,6 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 						dtype, filter_mac, mac_timematch, ftype);
 				
 				mac_num++;
-				
 				logmessage("MAC Filter", "DEBUG: Added allow rule for MAC %s: %s", 
 						   filter_mac, mac_timematch);
 			}
@@ -577,7 +581,6 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 			if (mac_num > 0) {
 				// 允许模式: 列表外的设备拒绝
 				fprintf(fp, "-A %s -j %s\n", dtype, logdrop);
-				
 				logmessage("MAC Filter", "INFO: Processed %d MAC entries in allow mode", mac_num);
 			}
 		}
