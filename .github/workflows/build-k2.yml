@@ -1,4 +1,4 @@
-name: build
+name: build-k2
 
 on: 
   push:
