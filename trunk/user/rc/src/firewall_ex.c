@@ -260,7 +260,6 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	}
 }
 
-
 static void
 apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, const char *timematch, const char *chain_name)
 {
@@ -651,7 +650,7 @@ static int
 include_webstr_filter(FILE *fp)
 {
     int i, webstr_items, url_length, url_total;
-    char url_list[256], nv_name[32], *filterstr;
+    char url_list[256], nv_name[32], url_buf[256], *filterstr;
     const char *dtype = IPT_CHAIN_NAME_URL_LIST;
     const char *split = "<&nbsp;>";
 
@@ -660,57 +659,75 @@ include_webstr_filter(FILE *fp)
     url_list[0] = 0;
     webstr_items = 0;
 
+    /* 调试：记录URL数量 */
+    int url_count = nvram_get_int("url_num_x");
+    logmessage("URL Filter", "DEBUG: url_num_x = %d", url_count);
+
     foreach_x("url_num_x") {
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
-        /* 清理URL前缀 */
-        if (strncasecmp(filterstr, "http://", 7) == 0)
-            filterstr += 7;
-        else if (strncasecmp(filterstr, "https://", 8) == 0)
-            filterstr += 8;
+        /* 调试：记录每个URL */
+        logmessage("URL Filter", "DEBUG: Processing URL %d: '%s'", i, filterstr);
         
-        /* 🔥 新增：生成SNI过滤规则 */
-        if (strlen(filterstr) > 0) {
-            /* 为每个关键词生成HTTPS SNI过滤规则 */
-            fprintf(fp, "-A %s -p tcp --dport 443 -m sni_filter --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
-                dtype, filterstr);
-            webstr_items++;
+        /* 复制到缓冲区以避免修改原始字符串 */
+        strncpy(url_buf, filterstr, sizeof(url_buf) - 1);
+        url_buf[sizeof(url_buf) - 1] = 0;
+        
+        /* 清理URL前缀 */
+        if (strncasecmp(url_buf, "http://", 7) == 0)
+            filterstr = url_buf + 7;
+        else if (strncasecmp(url_buf, "https://", 8) == 0)
+            filterstr = url_buf + 8;
+        else
+            filterstr = url_buf;
+        
+        /* 检查过滤字符串是否有效 */
+        url_length = strlen(filterstr);
+        if (url_length < 1 || url_length >= sizeof(url_list)) {
+            logmessage("URL Filter", "DEBUG: Skipping URL %d - length: %d", i, url_length);
+            continue;
         }
         
-        /* 原有的webstr合并逻辑继续... */
-        url_length = strlen(filterstr);
-        if (url_length < 1 || url_length >= sizeof(url_list))
-            continue;
+        /* 生成SNI过滤规则 - 针对HTTPS流量 */
+        fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+            dtype, filterstr);
+        webstr_items++;
+        logmessage("URL Filter", "DEBUG: Added SNI rule for HTTPS: %s", filterstr);
         
+        /* 生成webstr过滤规则 - 针对HTTP流量 */
         if (url_total > 0)
             url_length += strlen(split);
         
         if (url_total + url_length < sizeof(url_list)) {
             if (url_total > 0)
                 strcat(url_list, split);
+            strcat(url_list, filterstr);
+            url_total += url_length;
         } else {
-            url_length = strlen(filterstr);
-            
             /* flush merged url */
-            fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
-                dtype, url_list);
-            webstr_items++;
+            if (url_total > 0) {
+                fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+                    dtype, url_list);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added webstr rule for HTTP: %s", url_list);
+            }
             
-            url_total = 0;
-            url_list[0] = 0;
+            /* 开始新的URL列表 */
+            strcpy(url_list, filterstr);
+            url_total = strlen(filterstr);
         }
-        strcat(url_list, filterstr);
-        url_total += url_length;
     }
 
     /* 处理剩余的合并URL */
-    if (url_total) {
-        fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+    if (url_total > 0) {
+        fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
             dtype, url_list);
         webstr_items++;
+        logmessage("URL Filter", "DEBUG: Added final webstr rule for HTTP: %s", url_list);
     }
 
+    logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     return webstr_items;
 }
 static int
@@ -990,6 +1007,11 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	is_fw_enabled  = nvram_match("fw_enable_x", "1");
 	is_url_enabled = nvram_match("url_enable_x", "1");
 	is_lwf_enabled = nvram_match("fw_lw_enable_x", "1");
+
+	logmessage("Firewall", "DEBUG: fw_enable_x = %s, url_enable_x = %s, macfilter_enable_x = %s", 
+		nvram_safe_get("fw_enable_x"), 
+		nvram_safe_get("url_enable_x"), 
+		nvram_safe_get("macfilter_enable_x"));
 
 	i_mac_filter   = nvram_get_int("macfilter_enable_x");
 
@@ -1282,28 +1304,41 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	}
 
 	/* use url filter before accepting ESTABLISHED packets */
-	if (is_url_enabled && include_webstr_filter(fp) > 0) {
-		char mac_buf[24] = {0};
-		timematch[0] = 0;
-		timematch_conv(timematch, "url_date_x", "url_time_x");
-		
-		// 检查是否启用MAC地址组模式
-		if (nvram_match("url_mac_group_x", "1")) {
-			// 调用公共函数处理MAC地址组模式
-			apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
-		} else {
-			// 单个MAC地址模式 - 保持原有逻辑
-			mac_conv("url_mac_x", -1, mac_buf);
-			if (strlen(mac_buf) == 17) {
-				strcat(timematch, " -m mac");
-				if (nvram_match("url_inv_x", "1"))
-					strcat(timematch, " !");
-				strcat(timematch, " --mac-source ");
-				strcat(timematch, mac_buf);
+	logmessage("URL Filter", "DEBUG: is_url_enabled = %d", is_url_enabled);
+	if (is_url_enabled) {
+		int webstr_result = include_webstr_filter(fp);
+		logmessage("URL Filter", "DEBUG: include_webstr_filter returned = %d", webstr_result);
+		if (webstr_result > 0) {
+			char mac_buf[24] = {0};
+			timematch[0] = 0;
+			timematch_conv(timematch, "url_date_x", "url_time_x");
+			
+			logmessage("URL Filter", "DEBUG: timematch = '%s'", timematch);
+			
+			// 检查是否启用MAC地址组模式
+			if (nvram_match("url_mac_group_x", "1")) {
+				logmessage("URL Filter", "DEBUG: Using MAC group mode");
+				// 调用公共函数处理MAC地址组模式
+				apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+			} else {
+				logmessage("URL Filter", "DEBUG: Using single MAC mode");
+				// 单个MAC地址模式 - 保持原有逻辑
+				mac_conv("url_mac_x", -1, mac_buf);
+				logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
+				if (strlen(mac_buf) == 17) {
+					strcat(timematch, " -m mac");
+					if (nvram_match("url_inv_x", "1"))
+						strcat(timematch, " !");
+					strcat(timematch, " --mac-source ");
+					strcat(timematch, mac_buf);
+				}
+				fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+				logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			}
-			fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+			ret |= MODULE_WEBSTR_MASK;
+		} else {
+			logmessage("URL Filter", "DEBUG: No URL rules generated, skipping URL filter");
 		}
-		ret |= MODULE_WEBSTR_MASK;
 	}
 
 	/* Clamp TCP MSS to PMTU of WAN interface before accepting RELATED packets */
@@ -1830,28 +1865,41 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	}
 
 	/* use url filter before accepting ESTABLISHED packets */
-	if (is_url_enabled && include_webstr_filter(fp) > 0) {
-		char mac_buf[24] = {0};
-		timematch[0] = 0;
-		timematch_conv(timematch, "url_date_x", "url_time_x");
-		
-		// 检查是否启用MAC地址组模式
-		if (nvram_match("url_mac_group_x", "1")) {
-			// 调用公共函数处理MAC地址组模式
-			apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
-		} else {
-			// 单个MAC地址模式 - 保持原有逻辑
-			mac_conv("url_mac_x", -1, mac_buf);
-			if (strlen(mac_buf) == 17) {
-				strcat(timematch, " -m mac");
-				if (nvram_match("url_inv_x", "1"))
-					strcat(timematch, " !");
-				strcat(timematch, " --mac-source ");
-				strcat(timematch, mac_buf);
+	logmessage("URL Filter", "DEBUG: is_url_enabled = %d", is_url_enabled);
+	if (is_url_enabled) {
+		int webstr_result = include_webstr_filter(fp);
+		logmessage("URL Filter", "DEBUG: include_webstr_filter returned = %d", webstr_result);
+		if (webstr_result > 0) {
+			char mac_buf[24] = {0};
+			timematch[0] = 0;
+			timematch_conv(timematch, "url_date_x", "url_time_x");
+			
+			logmessage("URL Filter", "DEBUG: timematch = '%s'", timematch);
+			
+			// 检查是否启用MAC地址组模式
+			if (nvram_match("url_mac_group_x", "1")) {
+				logmessage("URL Filter", "DEBUG: Using MAC group mode");
+				// 调用公共函数处理MAC地址组模式
+				apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+			} else {
+				logmessage("URL Filter", "DEBUG: Using single MAC mode");
+				// 单个MAC地址模式 - 保持原有逻辑
+				mac_conv("url_mac_x", -1, mac_buf);
+				logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
+				if (strlen(mac_buf) == 17) {
+					strcat(timematch, " -m mac");
+					if (nvram_match("url_inv_x", "1"))
+						strcat(timematch, " !");
+					strcat(timematch, " --mac-source ");
+					strcat(timematch, mac_buf);
+				}
+				fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+				logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			}
-			fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+			ret |= MODULE_WEBSTR_MASK;
+		} else {
+			logmessage("URL Filter", "DEBUG: No URL rules generated, skipping URL filter");
 		}
-		ret |= MODULE_WEBSTR_MASK;
 	}
 	
 	/* Clamp TCP MSS to PMTU of WAN interface before accepting RELATED packets */
