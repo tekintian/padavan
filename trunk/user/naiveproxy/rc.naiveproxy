@@ -1,0 +1,39 @@
+#!/bin/sh
+
+NAME="naiveproxy"
+NAIVE_BIN="/usr/bin/naive"
+NAIVE_CONF="/etc/naiveproxy/naiveproxy.json"
+
+start_naiveproxy() {
+    [ -x "$NAIVE_BIN" ] || return 1
+    [ -f "$NAIVE_CONF" ] || return 1
+    
+    echo "Starting naiveproxy..."
+    $NAIVE_BIN $NAIVE_CONF &
+    echo $! > /var/run/naiveproxy.pid
+}
+
+stop_naiveproxy() {
+    if [ -f /var/run/naiveproxy.pid ]; then
+        kill $(cat /var/run/naiveproxy.pid) 2>/dev/null
+        rm -f /var/run/naiveproxy.pid
+    fi
+}
+
+case "$1" in
+    start)
+        start_naiveproxy
+        ;;
+    stop)
+        stop_naiveproxy
+        ;;
+    restart)
+        stop_naiveproxy
+        sleep 1
+        start_naiveproxy
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac

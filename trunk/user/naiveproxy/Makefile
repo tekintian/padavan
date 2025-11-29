@@ -7,6 +7,7 @@ include $(INCLUDE_DIR)/package.mk
 
 STATIC_FILE:=$(PKG_NAME)-v$(PKG_VERSION)-openwrt-mipsel_24kc-static.tar.xz
 STATIC_SUBDIR:=$(PKG_NAME)-v$(PKG_VERSION)-openwrt-mipsel_24kc-static
+
 define Download/$(PKG_NAME)-static
 	URL:=https://github.com/klzgrad/naiveproxy/releases/download/v$(PKG_VERSION)
 	URL_FILE:=$(STATIC_FILE)
@@ -31,3 +32,7 @@ $(eval $(call BuildPackage,naiveproxy))
 romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(STATIC_SUBDIR)/naive $(ROMFSDIR)/usr/bin/naive
+	$(INSTALL_DIR) $(ROMFSDIR)/etc/naiveproxy
+	$(INSTALL_DATA) ./naiveproxy.json $(ROMFSDIR)/etc/naiveproxy/naiveproxy.json
+	$(INSTALL_DIR) $(ROMFSDIR)/etc/rc.d
+	$(INSTALL_BIN) ./rc.naiveproxy $(ROMFSDIR)/etc/rc.d/S99naiveproxy

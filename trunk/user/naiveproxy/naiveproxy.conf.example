@@ -1,0 +1,10 @@
+{
+  "listen": "socks://0.0.0.0:1080",
+  "proxy": "https://username:password@proxy.example.com:443",
+  "log": "info",
+  "padding": true,
+  "concurrency": 8,
+  "connect_timeout": 10,
+  "read_timeout": 300,
+  "write_timeout": 300
+}
