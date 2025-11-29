@@ -655,7 +655,7 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 static int
 include_webstr_filter(FILE *fp)
 {
-    int i, webstr_items, url_length, url_total;
+    int webstr_items, url_length, url_total;
     char url_list[256], nv_name[32], url_buf[256], *filterstr;
     const char *dtype = IPT_CHAIN_NAME_URL_LIST;
     const char *split = "<&nbsp;>";
@@ -667,7 +667,9 @@ include_webstr_filter(FILE *fp)
 
     /* 调试：记录URL数量 */
     int url_count = nvram_get_int("url_num_x");
-    logmessage("URL Filter", "DEBUG: url_num_x = %d", url_count);
+    logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
+    logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
+    logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
 
     /* 🔥 修复：准备MAC地址信息，用于URL过滤规则 */
     /* 注意：多个MAC地址需要为每个MAC生成单独的URL规则，因为iptables的mac模块不支持OR操作 */
@@ -687,8 +689,9 @@ include_webstr_filter(FILE *fp)
             int j;
             
             /* 收集唯一的MAC地址 */
-            for (i = 0; i < mac_count && unique_count < 64; i++) {
-                mac_conv("macfilter_list_x", i, mac_buf);
+            int mac_idx;  // 🔥 修复：避免与foreach_x宏中的变量i冲突
+            for (mac_idx = 0; mac_idx < mac_count && unique_count < 64; mac_idx++) {
+                mac_conv("macfilter_list_x", mac_idx, mac_buf);
                 if (strlen(mac_buf) == 17) {
                     /* 检查重复 */
                     int is_duplicate = 0;
@@ -722,15 +725,18 @@ include_webstr_filter(FILE *fp)
     
     if (need_mac_condition) {
         logmessage("URL Filter", "DEBUG: Will generate URL rules for %d MAC addresses", mac_count);
-        for (i = 0; i < mac_count; i++) {
-            logmessage("URL Filter", "DEBUG: MAC %d: %s", i, mac_addresses[i]);
+        int mac_idx;  // 🔥 修复：使用独立变量
+        for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+            logmessage("URL Filter", "DEBUG: MAC %d: %s", mac_idx, mac_addresses[mac_idx]);
         }
     } else {
         logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
         mac_count = 0;
     }
 
+    logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
     foreach_x("url_num_x") {
+        logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
@@ -828,6 +834,7 @@ include_webstr_filter(FILE *fp)
     }
 
     logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
+    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int
