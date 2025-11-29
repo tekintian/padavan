@@ -262,7 +262,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 
 
 static void
-apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, const char *timematch, const char *IPT_CHAIN_NAME_URL_LIST)
+apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, const char *timematch, const char *chain_name)
 {
 	char mac_buf[24] = {0};
 	
@@ -302,7 +302,7 @@ apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, cons
 						strcat(mac_timematch, " !");
 					strcat(mac_timematch, " --mac-source ");
 					strcat(mac_timematch, mac_buf);
-					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
+					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, chain_name);
 				}
 			}
 		}
