@@ -5,13 +5,20 @@ CT_PREFIX     := $(TOPDIR)/toolchain-mipsel
 CT_TARGET     := mipsel-linux-musl
 CT_URL        := https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-$(CT_VERSION)/crosstool-ng-$(CT_VERSION).tar.xz
 TOOLCHAIN_URL := https://github.com/tekintian/padavan/releases/download/toolchain/$(CT_TARGET).tar.xz
+CT_LOCAL_FILE := $(TOPDIR)/files/crosstool-ng-$(CT_VERSION).tar.xz
 
 all: build
 
 build:
 	@if [ ! -d $(CT_DIR) ]; then \
-		echo "Downloading crosstool-ng..."; \
-		curl -fSsLo- $(CT_URL) | tar Jx; \
+		echo "crosstool-ng-$(CT_VERSION) not found, installing..."; \
+		if [ -f $(CT_LOCAL_FILE) ]; then \
+			echo "Found local crosstool-ng-$(CT_VERSION).tar.xz, extracting..."; \
+			tar -Jxf $(CT_LOCAL_FILE); \
+		else \
+			echo "Downloading crosstool-ng-$(CT_VERSION)..."; \
+			curl -fSsLo- $(CT_URL) | tar Jx; \
+		fi; \
 	fi
 
 	@echo "Building toolchain..."
