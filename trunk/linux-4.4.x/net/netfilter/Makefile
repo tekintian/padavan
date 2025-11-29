@@ -182,6 +182,9 @@ obj-$(CONFIG_NETFILTER_XT_MATCH_TIME) += xt_time.o
 obj-$(CONFIG_NETFILTER_XT_MATCH_U32) += xt_u32.o
 obj-$(CONFIG_NETFILTER_XT_MATCH_WEBSTR) += xt_webstr.o
 
+# SNI filter module
+obj-$(CONFIG_NETFILTER_XT_MATCH_SNI) += xt_sni_filter.o
+
 # ipset
 obj-$(CONFIG_IP_SET) += ipset/
 

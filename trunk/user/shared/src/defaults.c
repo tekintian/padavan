@@ -486,6 +486,7 @@ struct nvram_pair router_defaults[] = {
 	{ "url_date_x", "1111111" },
 	{ "url_time_x", "00002359" },
 	{ "url_mac_x", "" },
+	{"url_mac_group_x", "1"},  // 默认开启MAC地址组模式
 	{ "url_inv_x", "0" },
 	{ "url_num_x", "0" },
 	{ "macfilter_enable_x", "0" },

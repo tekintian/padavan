@@ -171,10 +171,22 @@ function hideClients_Block(){
 	isMenuopen = 0;
 }
 
+// 添加MAC地址模式切换函数
+function changeMacMode() {
+	var mode = document.form.url_mac_group_x.value;
+	if (mode == "1") {
+		$('single_mac_div').style.display = 'none';
+		$('mac_group_div').style.display = 'block';
+	} else {
+		$('single_mac_div').style.display = 'block';
+		$('mac_group_div').style.display = 'none';
+	}
+}
+
 function pullLANIPList(obj){
 	if(isMenuopen == 0){
 		$j(obj).children('i').removeClass('icon-chevron-down').addClass('icon-chevron-up');
-		$("ClientList_Block").style.display = 'block';
+		$("ClientList_Block").style.display = "block";
 		document.form.url_mac_x.focus();
 		isMenuopen = 1;
 	}
@@ -303,8 +315,21 @@ function done_validating(action){
                                             <td colspan="2" align="left">
                                                 <div id="ClientList_Block" class="alert alert-info ddown-list"></div>
                                                 <div class="input-append">
-                                                    <input type="text" maxlength="12" class="span12" size="15" name="url_mac_x" value="<% nvram_get_x("","url_mac_x"); %>" onKeyPress="return is_hwaddr(event);" style="float:left; width: 162px">
-                                                    <button class="btn btn-chevron" id="chevron" type="button" onclick="pullLANIPList(this);" title="Select the MAC of LAN clients."><i class="icon icon-chevron-down"></i></button>&nbsp;
+                                                    <!-- 添加MAC地址模式选择 -->
+                                                    <select name="url_mac_group_x" onchange="changeMacMode();" style="width: 120px; margin-bottom: 5px;">
+                                                        <option value="0" <% nvram_match_x("", "url_mac_group_x", "0", "selected"); %>>Single MAC</option>
+                                                        <option value="1" <% nvram_match_x("", "url_mac_group_x", "1", "selected"); %>>MAC Group</option>
+                                                    </select>
+                                                    <br/>
+                                                    <!-- 单个MAC地址输入框 -->
+                                                    <div id="single_mac_div" style="display: <% nvram_match_x("", "url_mac_group_x", "0", "block"); %><% nvram_match_x("", "url_mac_group_x", "1", "none"); %>;">
+                                                        <input type="text" maxlength="12" class="span12" size="15" name="url_mac_x" value="<% nvram_get_x("","url_mac_x"); %>" onKeyPress="return is_hwaddr(event);" style="float:left; width: 162px">
+                                                        <button class="btn btn-chevron" id="chevron" type="button" onclick="pullLANIPList(this);" title="Select the MAC of LAN clients."><i class="icon icon-chevron-down"></i></button>&nbsp;
+                                                    </div>
+                                                    <!-- MAC地址组提示信息 -->
+                                                    <div id="mac_group_div" style="display: <% nvram_match_x("", "url_mac_group_x", "1", "block"); %><% nvram_match_x("", "url_mac_group_x", "0", "none"); %>;">
+                                                        <span class="help-block">Using MAC Address Filter groups - configure in <a href="Advanced_MACFilter_Content.asp" target="_blank">MAC Filter</a></span>
+                                                    </div>
                                                     <label class="checkbox inline"><input type="checkbox" name="url_inv_fake" value="" onclick="click_mac_inv(this);" <% nvram_match_x("", "url_inv_x", "1", "checked"); %>/><#FirewallConfig_UrlInv#></label>
                                                 </div>
                                             </td>

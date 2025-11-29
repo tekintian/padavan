@@ -595,60 +595,69 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 static int
 include_webstr_filter(FILE *fp)
 {
-	int i, webstr_items, url_length, url_total;
-	char url_list[256], nv_name[32], *filterstr;
-	const char *dtype = IPT_CHAIN_NAME_URL_LIST;
-	const char *split = "<&nbsp;>";
+    int i, webstr_items, url_length, url_total;
+    char url_list[256], nv_name[32], *filterstr;
+    const char *dtype = IPT_CHAIN_NAME_URL_LIST;
+    const char *split = "<&nbsp;>";
 
-	/* webstr support max 256 bytes splitted URL */
+    /* 原有的webstr逻辑 */
+    url_total = 0;
+    url_list[0] = 0;
+    webstr_items = 0;
 
-	url_total = 0;
-	url_list[0] = 0;
+    foreach_x("url_num_x") {
+        sprintf(nv_name, "url_keyword_x%d", i);
+        filterstr = nvram_safe_get(nv_name);
+        
+        /* 清理URL前缀 */
+        if (strncasecmp(filterstr, "http://", 7) == 0)
+            filterstr += 7;
+        else if (strncasecmp(filterstr, "https://", 8) == 0)
+            filterstr += 8;
+        
+        /* 🔥 新增：生成SNI过滤规则 */
+        if (strlen(filterstr) > 0) {
+            /* 为每个关键词生成HTTPS SNI过滤规则 */
+            fprintf(fp, "-A %s -p tcp --dport 443 -m sni_filter --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+                dtype, filterstr);
+            webstr_items++;
+        }
+        
+        /* 原有的webstr合并逻辑继续... */
+        url_length = strlen(filterstr);
+        if (url_length < 1 || url_length >= sizeof(url_list))
+            continue;
+        
+        if (url_total > 0)
+            url_length += strlen(split);
+        
+        if (url_total + url_length < sizeof(url_list)) {
+            if (url_total > 0)
+                strcat(url_list, split);
+        } else {
+            url_length = strlen(filterstr);
+            
+            /* flush merged url */
+            fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+                dtype, url_list);
+            webstr_items++;
+            
+            url_total = 0;
+            url_list[0] = 0;
+        }
+        strcat(url_list, filterstr);
+        url_total += url_length;
+    }
 
-	webstr_items = 0;
+    /* 处理剩余的合并URL */
+    if (url_total) {
+        fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+            dtype, url_list);
+        webstr_items++;
+    }
 
-	foreach_x("url_num_x") {
-		sprintf(nv_name, "url_keyword_x%d", i);
-		filterstr = nvram_safe_get(nv_name);
-		if (strncasecmp(filterstr, "http://", 7) == 0)
-			filterstr += 7;
-		else if (strncasecmp(filterstr, "https://", 8) == 0)
-			filterstr += 8;
-		
-		url_length = strlen(filterstr);
-		if (url_length < 1 || url_length >= sizeof(url_list))
-			continue;
-		
-		if (url_total > 0)
-			url_length += strlen(split);
-		
-		if (url_total + url_length < sizeof(url_list)) {
-			if (url_total > 0)
-				strcat(url_list, split);
-		} else {
-			url_length = strlen(filterstr);
-			
-			/* flush merged url */
-			fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
-				dtype, url_list);
-			webstr_items++;
-			
-			url_total = 0;
-			url_list[0] = 0;
-		}
-		strcat(url_list, filterstr);
-		url_total += url_length;
-	}
-
-	if (url_total) {
-		fprintf(fp, "-A %s -p tcp -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
-			dtype, url_list);
-		webstr_items++;
-	}
-
-	return webstr_items;
+    return webstr_items;
 }
-
 static int
 include_lw_filter(FILE *fp, char *wan_if, char *logaccept, char *logdrop)
 {
@@ -1222,15 +1231,60 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		char mac_buf[24] = {0};
 		timematch[0] = 0;
 		timematch_conv(timematch, "url_date_x", "url_time_x");
-		mac_conv("url_mac_x", -1, mac_buf);
-		if (strlen(mac_buf) == 17) {
-			strcat(timematch, " -m mac");
-			if (nvram_match("url_inv_x", "1"))
-				strcat(timematch, " !");
-			strcat(timematch, " --mac-source ");
-			strcat(timematch, mac_buf);
+		
+		// 检查是否启用MAC地址组模式
+		if (nvram_match("url_mac_group_x", "1")) {
+			// MAC地址组模式 - 优化的去重实现
+			int mac_count = nvram_get_int("macfilter_num_x");
+			if (mac_count > 0) {
+				char processed_macs[64][18]; // 存储唯一MAC地址
+				int unique_count = 0;
+				int i, j;
+				
+				for (i = 0; i < mac_count; i++) {
+					mac_conv("macfilter_list_x", i, mac_buf);
+					
+					// 验证MAC地址格式
+					if (strlen(mac_buf) == 17) {
+						// 检查是否已经处理过这个MAC地址
+						int is_duplicate = 0;
+						for (j = 0; j < unique_count; j++) {
+							if (strcmp(processed_macs[j], mac_buf) == 0) {
+								is_duplicate = 1;
+								break;
+							}
+						}
+						
+						// 如果不是重复的MAC地址，则创建规则
+						if (!is_duplicate && unique_count < 64) {
+							strcpy(processed_macs[unique_count], mac_buf);
+							unique_count++;
+							
+							// 创建iptables规则
+							char mac_timematch[256] = {0};
+							strcpy(mac_timematch, timematch);
+							strcat(mac_timematch, " -m mac");
+							if (nvram_match("url_inv_x", "1"))
+								strcat(mac_timematch, " !");
+							strcat(mac_timematch, " --mac-source ");
+							strcat(mac_timematch, mac_buf);
+							fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
+						}
+					}
+				}
+			}
+		} else {
+			// 单个MAC地址模式 - 保持原有逻辑
+			mac_conv("url_mac_x", -1, mac_buf);
+			if (strlen(mac_buf) == 17) {
+				strcat(timematch, " -m mac");
+				if (nvram_match("url_inv_x", "1"))
+					strcat(timematch, " !");
+				strcat(timematch, " --mac-source ");
+				strcat(timematch, mac_buf);
+			}
+			fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		}
-		fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		ret |= MODULE_WEBSTR_MASK;
 	}
 
@@ -1760,18 +1814,70 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	/* use url filter before accepting ESTABLISHED packets */
 	if (is_url_enabled && include_webstr_filter(fp) > 0) {
 		char mac_buf[24] = {0};
-		
 		timematch[0] = 0;
 		timematch_conv(timematch, "url_date_x", "url_time_x");
-		mac_conv("url_mac_x", -1, mac_buf);
-		if (strlen(mac_buf) == 17) {
-			strcat(timematch, " -m mac");
-			if (nvram_match("url_inv_x", "1"))
-				strcat(timematch, " !");
-			strcat(timematch, " --mac-source ");
-			strcat(timematch, mac_buf);
+		
+		// 检查是否启用MAC地址组模式
+		if (nvram_match("url_mac_group_x", "1")) {
+			// MAC地址组模式 - 优化的去重实现
+			int mac_count = nvram_get_int("macfilter_num_x");
+			if (mac_count > 0) {
+				char processed_macs[64][18]; // 存储唯一MAC地址，假设最多64个
+				int unique_count = 0;
+				int i, j;
+				int duplicate_count = 0; // 统计重复的MAC地址数量
+				
+				for (i = 0; i < mac_count; i++) {
+					mac_conv("macfilter_list_x", i, mac_buf);
+					
+					// 验证MAC地址格式（17字符长度 + 基本格式检查）
+					if (strlen(mac_buf) == 17) {
+						// 检查是否已经处理过这个MAC地址
+						int is_duplicate = 0;
+						for (j = 0; j < unique_count; j++) {
+							if (strcmp(processed_macs[j], mac_buf) == 0) {
+								is_duplicate = 1;
+								duplicate_count++;
+								break;
+							}
+						}
+						
+						// 如果不是重复的MAC地址，则添加到唯一列表并创建规则
+						if (!is_duplicate && unique_count < 64) {
+							strcpy(processed_macs[unique_count], mac_buf);
+							unique_count++;
+							
+							// 创建iptables规则
+							char mac_timematch[256] = {0};
+							strcpy(mac_timematch, timematch);
+							strcat(mac_timematch, " -m mac");
+							if (nvram_match("url_inv_x", "1"))
+								strcat(mac_timematch, " !");
+							strcat(mac_timematch, " --mac-source ");
+							strcat(mac_timematch, mac_buf);
+							fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
+						}
+					}
+				}
+				
+				// 可选：记录优化统计信息（调试用）
+				if (duplicate_count > 0) {
+					// 可以在这里添加日志记录，例如：
+					// fprintf(stderr, "URL Filter: Removed %d duplicate MAC addresses\n", duplicate_count);
+				}
+			}
+		} else {
+			// 单个MAC地址模式 - 保持原有逻辑不变
+			mac_conv("url_mac_x", -1, mac_buf);
+			if (strlen(mac_buf) == 17) {
+				strcat(timematch, " -m mac");
+				if (nvram_match("url_inv_x", "1"))
+					strcat(timematch, " !");
+				strcat(timematch, " --mac-source ");
+				strcat(timematch, mac_buf);
+			}
+			fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		}
-		fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		ret |= MODULE_WEBSTR_MASK;
 	}
 

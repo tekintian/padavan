@@ -529,6 +529,7 @@
 			{"url_date_x", "", NULL, EVM_RESTART_FIREWALL},
 			{"url_time_x", "", NULL, EVM_RESTART_FIREWALL},
 			{"url_mac_x", "", NULL, EVM_RESTART_FIREWALL},
+			{"url_mac_group_x", "", NULL, EVM_RESTART_FIREWALL},  // 添加MAC地址组模式变量
 			{"url_inv_x", "", NULL, EVM_RESTART_FIREWALL},
 			{"url_num_x", "", NULL, EVM_RESTART_FIREWALL},
 			{"macfilter_enable_x", "", NULL, EVM_RESTART_FIREWALL},

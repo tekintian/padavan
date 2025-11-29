@@ -1250,7 +1250,6 @@ config NETFILTER_XT_MATCH_L2TP
 	L2TP protocol header fields.
 
 	To compile it as a module, choose M here. If unsure, say N.
-
 config NETFILTER_XT_MATCH_LENGTH
 	tristate '"length" match support'
 	depends on NETFILTER_ADVANCED
@@ -1553,6 +1552,15 @@ config NETFILTER_XT_MATCH_WEBSTR
           This option allows to match string in http web header
           To compile it as a module, choose M here.  If unsure, say N.
 
+config NETFILTER_XT_MATCH_SNI
+    tristate "SNI match support"
+    depends on NETFILTER_ADVANCED
+    select NETFILTER_XTABLES
+    help
+      This option adds a `sni' match, which allows you to match
+      SNI (Server Name Indication) from TLS ClientHello packets.
+      This is useful for filtering HTTPS traffic based on the
+      domain name requested in the TLS handshake.
 
 endif # NETFILTER_XTABLES
 
