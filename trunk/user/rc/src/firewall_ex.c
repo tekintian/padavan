@@ -311,6 +311,12 @@ apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, cons
 			// 可以在这里添加日志记录，例如：
 			// fprintf(stderr, "URL Filter: Removed %d duplicate MAC addresses\n", duplicate_count);
 		}
+	} else {
+		// 🔥 修复：当没有MAC地址配置时，也要生成基础的流量引导规则
+		// 这样可以确保URL过滤在没有MAC地址限制的情况下也能工作
+		logmessage("URL Filter", "DEBUG: No MAC addresses configured, generating basic traffic diversion rule");
+		fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, chain_name);
+		logmessage("URL Filter", "DEBUG: Added basic FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, chain_name);
 	}
 }
 
@@ -663,6 +669,62 @@ include_webstr_filter(FILE *fp)
     int url_count = nvram_get_int("url_num_x");
     logmessage("URL Filter", "DEBUG: url_num_x = %d", url_count);
 
+    /* 🔥 修复：准备MAC地址信息，用于URL过滤规则 */
+    /* 注意：多个MAC地址需要为每个MAC生成单独的URL规则，因为iptables的mac模块不支持OR操作 */
+    int mac_count = 0;
+    char mac_addresses[64][18]; // 存储MAC地址，最多64个
+    int need_mac_condition = 0;
+    
+    if (nvram_match("url_mac_group_x", "1")) {
+        /* MAC Group 模式 */
+        mac_count = nvram_get_int("macfilter_num_x");
+        if (mac_count > 0) {
+            char mac_buf[24] = {0};
+            int unique_count = 0;
+            int j;
+            
+            /* 收集唯一的MAC地址 */
+            for (i = 0; i < mac_count && unique_count < 64; i++) {
+                mac_conv("macfilter_list_x", i, mac_buf);
+                if (strlen(mac_buf) == 17) {
+                    /* 检查重复 */
+                    int is_duplicate = 0;
+                    for (j = 0; j < unique_count; j++) {
+                        if (strcmp(mac_addresses[j], mac_buf) == 0) {
+                            is_duplicate = 1;
+                            break;
+                        }
+                    }
+                    if (!is_duplicate) {
+                        strcpy(mac_addresses[unique_count], mac_buf);
+                        unique_count++;
+                    }
+                }
+            }
+            mac_count = unique_count;
+            need_mac_condition = (mac_count > 0);
+        }
+    } else {
+        /* Single MAC 模式 */
+        char mac_buf[24] = {0};
+        mac_conv("url_mac_x", -1, mac_buf);
+        if (strlen(mac_buf) == 17) {
+            strcpy(mac_addresses[0], mac_buf);
+            mac_count = 1;
+            need_mac_condition = 1;
+        }
+    }
+    
+    if (need_mac_condition) {
+        logmessage("URL Filter", "DEBUG: Will generate URL rules for %d MAC addresses", mac_count);
+        for (i = 0; i < mac_count; i++) {
+            logmessage("URL Filter", "DEBUG: MAC %d: %s", i, mac_addresses[i]);
+        }
+    } else {
+        logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
+        mac_count = 0;
+    }
+
     foreach_x("url_num_x") {
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
@@ -690,10 +752,21 @@ include_webstr_filter(FILE *fp)
         }
         
         /* 生成SNI过滤规则 - 针对HTTPS流量 */
-        fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
-            dtype, filterstr);
-        webstr_items++;
-        logmessage("URL Filter", "DEBUG: Added SNI rule for HTTPS: %s", filterstr);
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的SNI规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, filterstr, mac_addresses[mac_idx]);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added SNI rule for HTTPS: %s (MAC: %s)", filterstr, mac_addresses[mac_idx]);
+            }
+        } else {
+            /* 没有MAC限制，应用到所有流量 */
+            fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+                dtype, filterstr);
+            webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added SNI rule for HTTPS: %s (all MAC)", filterstr);
+        }
         
         /* 生成webstr过滤规则 - 针对HTTP流量 */
         if (url_total > 0)
@@ -707,10 +780,21 @@ include_webstr_filter(FILE *fp)
         } else {
             /* flush merged url */
             if (url_total > 0) {
-                fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
-                    dtype, url_list);
-                webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added webstr rule for HTTP: %s", url_list);
+                if (need_mac_condition) {
+                    /* 为每个MAC地址生成单独的webstr规则 */
+                    for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                        fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                            dtype, url_list, mac_addresses[mac_idx]);
+                        webstr_items++;
+                        logmessage("URL Filter", "DEBUG: Added webstr rule for HTTP: %s (MAC: %s)", url_list, mac_addresses[mac_idx]);
+                    }
+                } else {
+                    /* 没有MAC限制，应用到所有流量 */
+                    fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+                        dtype, url_list);
+                    webstr_items++;
+                    logmessage("URL Filter", "DEBUG: Added webstr rule for HTTP: %s (all MAC)", url_list);
+                }
             }
             
             /* 开始新的URL列表 */
@@ -721,10 +805,21 @@ include_webstr_filter(FILE *fp)
 
     /* 处理剩余的合并URL */
     if (url_total > 0) {
-        fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
-            dtype, url_list);
-        webstr_items++;
-        logmessage("URL Filter", "DEBUG: Added final webstr rule for HTTP: %s", url_list);
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的webstr规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, url_list, mac_addresses[mac_idx]);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added final webstr rule for HTTP: %s (MAC: %s)", url_list, mac_addresses[mac_idx]);
+            }
+        } else {
+            /* 没有MAC限制，应用到所有流量 */
+            fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\" -j REJECT --reject-with tcp-reset\n",
+                dtype, url_list);
+            webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added final webstr rule for HTTP: %s (all MAC)", url_list);
+        }
     }
 
     logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
