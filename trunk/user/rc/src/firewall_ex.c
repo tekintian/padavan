@@ -260,6 +260,61 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	}
 }
 
+
+static void
+apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, const char *timematch, const char *IPT_CHAIN_NAME_URL_LIST)
+{
+	char mac_buf[24] = {0};
+	
+	// MAC地址组模式 - 优化的去重实现
+	int mac_count = nvram_get_int("macfilter_num_x");
+	if (mac_count > 0) {
+		char processed_macs[64][18]; // 存储唯一MAC地址，假设最多64个
+		int unique_count = 0;
+		int i, j;
+		int duplicate_count = 0; // 统计重复的MAC地址数量
+		
+		for (i = 0; i < mac_count; i++) {
+			mac_conv("macfilter_list_x", i, mac_buf);
+			
+			// 验证MAC地址格式（17字符长度 + 基本格式检查）
+			if (strlen(mac_buf) == 17) {
+				// 检查是否已经处理过这个MAC地址
+				int is_duplicate = 0;
+				for (j = 0; j < unique_count; j++) {
+					if (strcmp(processed_macs[j], mac_buf) == 0) {
+						is_duplicate = 1;
+						duplicate_count++;
+						break;
+					}
+				}
+				
+				// 如果不是重复的MAC地址，则添加到唯一列表并创建规则
+				if (!is_duplicate && unique_count < 64) {
+					strcpy(processed_macs[unique_count], mac_buf);
+					unique_count++;
+					
+					// 创建iptables规则
+					char mac_timematch[256] = {0};
+					strcpy(mac_timematch, timematch);
+					strcat(mac_timematch, " -m mac");
+					if (nvram_match("url_inv_x", "1"))
+						strcat(mac_timematch, " !");
+					strcat(mac_timematch, " --mac-source ");
+					strcat(mac_timematch, mac_buf);
+					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
+				}
+			}
+		}
+		
+		// 可选：记录优化统计信息（调试用）
+		if (duplicate_count > 0) {
+			// 可以在这里添加日志记录，例如：
+			// fprintf(stderr, "URL Filter: Removed %d duplicate MAC addresses\n", duplicate_count);
+		}
+	}
+}
+
 static char *
 iprange_ex_conv(const char *ip_name, int idx)
 {
@@ -1234,45 +1289,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		
 		// 检查是否启用MAC地址组模式
 		if (nvram_match("url_mac_group_x", "1")) {
-			// MAC地址组模式 - 优化的去重实现
-			int mac_count = nvram_get_int("macfilter_num_x");
-			if (mac_count > 0) {
-				char processed_macs[64][18]; // 存储唯一MAC地址
-				int unique_count = 0;
-				int i, j;
-				
-				for (i = 0; i < mac_count; i++) {
-					mac_conv("macfilter_list_x", i, mac_buf);
-					
-					// 验证MAC地址格式
-					if (strlen(mac_buf) == 17) {
-						// 检查是否已经处理过这个MAC地址
-						int is_duplicate = 0;
-						for (j = 0; j < unique_count; j++) {
-							if (strcmp(processed_macs[j], mac_buf) == 0) {
-								is_duplicate = 1;
-								break;
-							}
-						}
-						
-						// 如果不是重复的MAC地址，则创建规则
-						if (!is_duplicate && unique_count < 64) {
-							strcpy(processed_macs[unique_count], mac_buf);
-							unique_count++;
-							
-							// 创建iptables规则
-							char mac_timematch[256] = {0};
-							strcpy(mac_timematch, timematch);
-							strcat(mac_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(mac_timematch, " !");
-							strcat(mac_timematch, " --mac-source ");
-							strcat(mac_timematch, mac_buf);
-							fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
-						}
-					}
-				}
-			}
+			// 调用公共函数处理MAC地址组模式
+			apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		} else {
 			// 单个MAC地址模式 - 保持原有逻辑
 			mac_conv("url_mac_x", -1, mac_buf);
@@ -1819,55 +1837,10 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		// 检查是否启用MAC地址组模式
 		if (nvram_match("url_mac_group_x", "1")) {
-			// MAC地址组模式 - 优化的去重实现
-			int mac_count = nvram_get_int("macfilter_num_x");
-			if (mac_count > 0) {
-				char processed_macs[64][18]; // 存储唯一MAC地址，假设最多64个
-				int unique_count = 0;
-				int i, j;
-				int duplicate_count = 0; // 统计重复的MAC地址数量
-				
-				for (i = 0; i < mac_count; i++) {
-					mac_conv("macfilter_list_x", i, mac_buf);
-					
-					// 验证MAC地址格式（17字符长度 + 基本格式检查）
-					if (strlen(mac_buf) == 17) {
-						// 检查是否已经处理过这个MAC地址
-						int is_duplicate = 0;
-						for (j = 0; j < unique_count; j++) {
-							if (strcmp(processed_macs[j], mac_buf) == 0) {
-								is_duplicate = 1;
-								duplicate_count++;
-								break;
-							}
-						}
-						
-						// 如果不是重复的MAC地址，则添加到唯一列表并创建规则
-						if (!is_duplicate && unique_count < 64) {
-							strcpy(processed_macs[unique_count], mac_buf);
-							unique_count++;
-							
-							// 创建iptables规则
-							char mac_timematch[256] = {0};
-							strcpy(mac_timematch, timematch);
-							strcat(mac_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(mac_timematch, " !");
-							strcat(mac_timematch, " --mac-source ");
-							strcat(mac_timematch, mac_buf);
-							fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, mac_timematch, IPT_CHAIN_NAME_URL_LIST);
-						}
-					}
-				}
-				
-				// 可选：记录优化统计信息（调试用）
-				if (duplicate_count > 0) {
-					// 可以在这里添加日志记录，例如：
-					// fprintf(stderr, "URL Filter: Removed %d duplicate MAC addresses\n", duplicate_count);
-				}
-			}
+			// 调用公共函数处理MAC地址组模式
+			apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 		} else {
-			// 单个MAC地址模式 - 保持原有逻辑不变
+			// 单个MAC地址模式 - 保持原有逻辑
 			mac_conv("url_mac_x", -1, mac_buf);
 			if (strlen(mac_buf) == 17) {
 				strcat(timematch, " -m mac");
@@ -1880,7 +1853,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		}
 		ret |= MODULE_WEBSTR_MASK;
 	}
-
+	
 	/* Clamp TCP MSS to PMTU of WAN interface before accepting RELATED packets */
 	if ((ipv6_type != IPV6_NATIVE_STATIC && ipv6_type != IPV6_NATIVE_DHCP6) || tcp_mss_need)
 		fprintf(fp, "-A %s%s -o %s -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n", dtype, " !", lan_if);
