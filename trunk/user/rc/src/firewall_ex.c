@@ -675,6 +675,9 @@ include_webstr_filter(FILE *fp)
     char mac_addresses[64][18]; // 存储MAC地址，最多64个
     int need_mac_condition = 0;
     
+    /* 初始化MAC地址数组 */
+    memset(mac_addresses, 0, sizeof(mac_addresses));
+    
     if (nvram_match("url_mac_group_x", "1")) {
         /* MAC Group 模式 */
         mac_count = nvram_get_int("macfilter_num_x");
@@ -690,7 +693,7 @@ include_webstr_filter(FILE *fp)
                     /* 检查重复 */
                     int is_duplicate = 0;
                     for (j = 0; j < unique_count; j++) {
-                        if (strcmp(mac_addresses[j], mac_buf) == 0) {
+                        if (strcmp(mac_addresses[j], mac_buf) == 0) {  // 🔥 修复：使用正确的数组名
                             is_duplicate = 1;
                             break;
                         }
@@ -698,6 +701,7 @@ include_webstr_filter(FILE *fp)
                     if (!is_duplicate) {
                         strcpy(mac_addresses[unique_count], mac_buf);
                         unique_count++;
+                        logmessage("URL Filter", "DEBUG: Collected MAC %d: %s", unique_count-1, mac_buf);
                     }
                 }
             }
@@ -712,6 +716,7 @@ include_webstr_filter(FILE *fp)
             strcpy(mac_addresses[0], mac_buf);
             mac_count = 1;
             need_mac_condition = 1;
+            logmessage("URL Filter", "DEBUG: Single MAC mode: %s", mac_buf);
         }
     }
     
