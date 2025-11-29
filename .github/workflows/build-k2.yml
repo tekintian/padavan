@@ -2,8 +2,6 @@ name: build-k2
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["k2-*"]
 
 jobs:
   build:
