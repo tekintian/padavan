@@ -30,7 +30,7 @@ struct xt_sni_info {
     char sni[SNI_MAX_LEN];
     u_int16_t invert;
     u_int16_t len;
-};
+} __attribute__((packed));
 
 /* TLS解析相关结构 */
 struct tls_handshake {
@@ -57,84 +57,137 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
     u_int8_t compression_methods_len;
     u_int16_t extensions_len;
     
-    if (remaining < sizeof(struct tls_client_hello) + 1)
+    /* 确保输出缓冲区有效 */
+    if (!sni_out || sni_out_len < 1) {
         return -1;
+    }
+    
+    if (remaining < sizeof(struct tls_client_hello) + 1) {
+        return -1;
+    }
     
     ptr += sizeof(struct tls_client_hello); /* 跳过版本、随机数 */
     remaining -= sizeof(struct tls_client_hello);
     
     /* 跳过session_id */
-    if (remaining < 1)
+    if (remaining < 1) {
         return -1;
-    ptr += 1 + ptr[0]; /* session_id长度 + session_id */
-    remaining -= 1 + ptr[-1];
+    }
+    u_int8_t session_id_len = ptr[0];
+    if (remaining < 1 + session_id_len) {
+        return -1;
+    }
+    ptr += 1 + session_id_len;
+    remaining -= 1 + session_id_len;
     
-    if (remaining < 2)
+    if (remaining < 2) {
         return -1;
+    }
     
     /* 跳过cipher_suites */
     cipher_suites_len = ntohs(*(u_int16_t *)ptr);
+    if (remaining < 2 + cipher_suites_len) {
+        return -1;
+    }
     ptr += 2 + cipher_suites_len;
     remaining -= 2 + cipher_suites_len;
     
-    if (remaining < 1)
+    if (remaining < 1) {
         return -1;
+    }
     
     /* 跳过compression_methods */
     compression_methods_len = ptr[0];
+    if (remaining < 1 + compression_methods_len) {
+        return -1;
+    }
     ptr += 1 + compression_methods_len;
     remaining -= 1 + compression_methods_len;
     
-    if (remaining < 2)
+    if (remaining < 2) {
         return -1;
+    }
     
     /* 解析extensions */
     extensions_len = ntohs(*(u_int16_t *)ptr);
+    if (extensions_len > remaining - 2) {
+        return -1;
+    }
     ptr += 2;
     remaining -= 2;
     
-    if (remaining < extensions_len)
-        return -1;
-    
     const u_int8_t *ext_end = ptr + extensions_len;
+    if (ext_end > data + data_len) {
+        return -1;
+    }
     
-    while (ptr < ext_end && ptr + 4 <= ext_end) {
+    while (ptr < ext_end && remaining >= 4) {
         u_int16_t ext_type = ntohs(*(u_int16_t *)ptr);
         u_int16_t ext_len = ntohs(*(u_int16_t *)(ptr + 2));
         
-        ptr += 4;
-        
-        if (ptr + ext_len > ext_end)
+        if (ext_len > remaining - 4) {
             break;
-            
+        }
+        
+        ptr += 4;
+        remaining -= 4;
+        
         if (ext_type == TLS_EXTENSION_SNI) {
             /* SNI扩展 */
             const u_int8_t *sni_ptr = ptr;
-            u_int16_t server_name_list_len = ntohs(*(u_int16_t *)sni_ptr);
-            sni_ptr += 2;
+            u_int16_t server_name_list_len;
             
-            if (sni_ptr + server_name_list_len > ptr + ext_len)
-                break;
-                
-            while (sni_ptr < ptr + ext_len && sni_ptr + 3 <= ptr + ext_len) {
+            if (remaining < 2 || ext_len < 2) {
+                ptr += ext_len;
+                remaining -= ext_len;
+                continue;
+            }
+            
+            server_name_list_len = ntohs(*(u_int16_t *)sni_ptr);
+            if (server_name_list_len > ext_len - 2 || server_name_list_len > remaining - 2) {
+                ptr += ext_len;
+                remaining -= ext_len;
+                continue;
+            }
+            
+            sni_ptr += 2;
+            remaining -= 2;
+            
+            while (sni_ptr < ptr + ext_len && remaining >= 3) {
                 u_int8_t name_type = sni_ptr[0];
-                u_int16_t name_len = ntohs(*(u_int16_t *)(sni_ptr + 1));
+                u_int16_t name_len;
+                
+                if (ext_len - (sni_ptr - (ptr - 2)) < 3) {
+                    break;
+                }
+                
+                name_len = ntohs(*(u_int16_t *)(sni_ptr + 1));
+                
+                if (name_len > ext_len - (sni_ptr - (ptr - 2)) - 3 || 
+                    name_len > remaining - 3 || 
+                    name_len >= sni_out_len) {
+                    break;
+                }
                 
                 sni_ptr += 3;
+                remaining -= 3;
                 
                 if (name_type == 0 && name_len > 0) { /* host_name */
-                    if (sni_ptr + name_len <= ptr + ext_len && name_len < sni_out_len) {
+                    if (sni_ptr + name_len <= ptr + ext_len && remaining >= name_len) {
+                        memset(sni_out, 0, sni_out_len); /* 确保缓冲区初始化 */
                         memcpy(sni_out, sni_ptr, name_len);
-                        sni_out[name_len] = '\0';
+                        sni_out[name_len] = '\0'; /* 确保字符串终止 */
                         return name_len;
                     }
                 }
                 
                 sni_ptr += name_len;
+                remaining -= name_len;
             }
         }
         
         ptr += ext_len;
+        remaining -= ext_len;
     }
     
     return -1;
@@ -143,145 +196,227 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
 /* 检查是否为TLS ClientHello包 */
 static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
 {
-    const u_int8_t *data;
-    u_int32_t data_len;
-    const struct iphdr *iph;
-    const struct ipv6hdr *ipv6h;
-    const struct tcphdr *tcph;
-    const struct udphdr *udph;
+    const u_int8_t *data = NULL;
+    u_int32_t data_len = 0;
+    int offset = 0;
+    int payload_offset = 0;
     
+    if (!skb) {
+        return false;
+    }
+    
+    /* 获取传输层头部偏移量 */
     if (protocol == IPPROTO_TCP) {
         if (skb->protocol == htons(ETH_P_IP)) {
-            iph = ip_hdr(skb);
-            if (!iph || iph->protocol != IPPROTO_TCP)
+            struct iphdr *iph = ip_hdr(skb);
+            if (!iph || iph->protocol != IPPROTO_TCP) {
                 return false;
-            tcph = (void *)iph + iph->ihl * 4;
-            data = (void *)tcph + tcph->doff * 4;
-            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - tcph->doff * 4;
+            }
+            payload_offset = iph->ihl * 4 + sizeof(struct tcphdr);
         } else if (skb->protocol == htons(ETH_P_IPV6)) {
-            ipv6h = ipv6_hdr(skb);
-            if (!ipv6h)
+            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+            if (!ipv6h || ipv6h->nexthdr != IPPROTO_TCP) {
                 return false;
-            tcph = (void *)ipv6h + sizeof(struct ipv6hdr);
-            data = (void *)tcph + tcph->doff * 4;
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct tcphdr);
+            }
+            payload_offset = sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
         } else {
             return false;
         }
         
-        if (data_len < 6) /* TLS记录头最小长度 */
+        /* 获取TCP有效载荷 */
+        if (skb_copy_bits(skb, payload_offset, &data_len, sizeof(data_len)) != 0) {
             return false;
-            
+        }
+        
+        data_len = ntohs(data_len);
+        if (data_len < 6) { /* TLS记录头最小长度 */
+            return false;
+        }
+        
         /* 检查TLS记录头 */
-        if (data[0] == TLS_HANDSHAKE && data[5] == TLS_CLIENT_HELLO)
-            return true;
-            
+        if (skb_copy_bits(skb, payload_offset, &offset, 1) != 0) {
+            return false;
+        }
+        if (offset != TLS_HANDSHAKE) {
+            return false;
+        }
+        
+        if (skb_copy_bits(skb, payload_offset + 5, &offset, 1) != 0) {
+            return false;
+        }
+        if (offset != TLS_CLIENT_HELLO) {
+            return false;
+        }
+        
     } else if (protocol == IPPROTO_UDP) {
         /* 处理DTLS情况 */
         if (skb->protocol == htons(ETH_P_IP)) {
-            iph = ip_hdr(skb);
-            if (!iph || iph->protocol != IPPROTO_UDP)
+            struct iphdr *iph = ip_hdr(skb);
+            if (!iph || iph->protocol != IPPROTO_UDP) {
                 return false;
-            udph = (void *)iph + iph->ihl * 4;
-            data = (void *)udph + sizeof(struct udphdr);
-            data_len = ntohs(udph->len) - sizeof(struct udphdr);
+            }
+            payload_offset = iph->ihl * 4 + sizeof(struct udphdr);
         } else if (skb->protocol == htons(ETH_P_IPV6)) {
-            ipv6h = ipv6_hdr(skb);
-            if (!ipv6h)
+            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+            if (!ipv6h || ipv6h->nexthdr != IPPROTO_UDP) {
                 return false;
-            udph = (void *)ipv6h + sizeof(struct ipv6hdr);
-            data = (void *)udph + sizeof(struct udphdr);
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct udphdr);
+            }
+            payload_offset = sizeof(struct ipv6hdr) + sizeof(struct udphdr);
         } else {
             return false;
         }
         
-        if (data_len < 13) /* DTLS记录头最小长度 */
+        /* 获取UDP有效载荷长度 */
+        if (skb->protocol == htons(ETH_P_IP)) {
+            struct iphdr *iph = ip_hdr(skb);
+            data_len = ntohs(iph->tot_len) - (iph->ihl * 4) - sizeof(struct udphdr);
+        } else {
+            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+            data_len = ntohs(ipv6h->payload_len) - sizeof(struct udphdr);
+        }
+        
+        if (data_len < 13) { /* DTLS记录头最小长度 */
             return false;
-            
+        }
+        
         /* 检查DTLS记录头 */
-        if (data[0] == TLS_HANDSHAKE && data[13] == TLS_CLIENT_HELLO)
-            return true;
+        if (skb_copy_bits(skb, payload_offset, &offset, 1) != 0) {
+            return false;
+        }
+        if (offset != TLS_HANDSHAKE) {
+            return false;
+        }
+        
+        if (skb_copy_bits(skb, payload_offset + 13, &offset, 1) != 0) {
+            return false;
+        }
+        if (offset != TLS_CLIENT_HELLO) {
+            return false;
+        }
     }
     
-    return false;
+    return true;
 }
 
 /* 主要的匹配函数 */
 static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
     const struct xt_sni_info *info = par->matchinfo;
-    const u_int8_t *data;
-    u_int32_t data_len;
+    u_int32_t data_len = 0;
     char extracted_sni[SNI_MAX_LEN];
-    int sni_len;
-    const struct iphdr *iph;
-    const struct ipv6hdr *ipv6h;
-    const struct tcphdr *tcph;
-    const struct udphdr *udph;
+    int sni_len = -1;
     u_int8_t protocol;
+    int payload_offset = 0;
+    int tcp_doff = 0;
     
-    if (info->len < 1)
+    /* 参数验证 */
+    if (!skb || !info || !par) {
         return false;
-        
+    }
+    
+    if (info->len < 1 || info->len >= SNI_MAX_LEN) {
+        return false;
+    }
+    
     /* 确定协议类型 */
     if (par->match->family == NFPROTO_IPV4) {
-        iph = ip_hdr(skb);
-        if (!iph)
+        struct iphdr *iph = ip_hdr(skb);
+        if (!iph) {
             return false;
+        }
         protocol = iph->protocol;
     } else if (par->match->family == NFPROTO_IPV6) {
-        ipv6h = ipv6_hdr(skb);
-        if (!ipv6h)
+        struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+        if (!ipv6h) {
             return false;
+        }
         protocol = ipv6h->nexthdr;
     } else {
         return false;
     }
     
     /* 检查是否为TLS/DTLS ClientHello */
-    if (!is_tls_client_hello(skb, protocol))
-        return false;
-    
-    /* 提取传输层数据 */
-    if (protocol == IPPROTO_TCP) {
-        if (par->match->family == NFPROTO_IPV4) {
-            iph = ip_hdr(skb);
-            tcph = (void *)iph + iph->ihl * 4;
-            data = (void *)tcph + tcph->doff * 4;
-            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - tcph->doff * 4;
-        } else {
-            ipv6h = ipv6_hdr(skb);
-            tcph = (void *)ipv6h + sizeof(struct ipv6hdr);
-            data = (void *)tcph + tcph->doff * 4;
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct tcphdr);
-        }
-    } else if (protocol == IPPROTO_UDP) {
-        if (par->match->family == NFPROTO_IPV4) {
-            iph = ip_hdr(skb);
-            udph = (void *)iph + iph->ihl * 4;
-            data = (void *)udph + sizeof(struct udphdr);
-            data_len = ntohs(udph->len) - sizeof(struct udphdr);
-        } else {
-            ipv6h = ipv6_hdr(skb);
-            udph = (void *)ipv6h + sizeof(struct ipv6hdr);
-            data = (void *)udph + sizeof(struct udphdr);
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct udphdr);
-        }
-    } else {
+    if (!is_tls_client_hello(skb, protocol)) {
         return false;
     }
     
-    if (data_len < 6)
+    /* 提取传输层数据 - 使用临时缓冲区而不是直接访问 */
+    u_int8_t *tmp_buffer = kmalloc(SNI_MAX_LEN * 2, GFP_ATOMIC);
+    if (!tmp_buffer) {
         return false;
-        
+    }
+    
+    /* 计算有效载荷偏移量 */
+    if (protocol == IPPROTO_TCP) {
+        if (par->match->family == NFPROTO_IPV4) {
+            struct iphdr *iph = ip_hdr(skb);
+            struct tcphdr _tcph, *tcph;
+            
+            tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
+            if (!tcph) {
+                kfree(tmp_buffer);
+                return false;
+            }
+            
+            tcp_doff = tcph->doff * 4;
+            payload_offset = iph->ihl * 4 + tcp_doff;
+            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - tcp_doff;
+        } else {
+            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+            struct tcphdr _tcph, *tcph;
+            
+            tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
+            if (!tcph) {
+                kfree(tmp_buffer);
+                return false;
+            }
+            
+            tcp_doff = tcph->doff * 4;
+            payload_offset = sizeof(struct ipv6hdr) + tcp_doff;
+            data_len = ntohs(ipv6h->payload_len) - tcp_doff;
+        }
+    } else if (protocol == IPPROTO_UDP) {
+        if (par->match->family == NFPROTO_IPV4) {
+            struct iphdr *iph = ip_hdr(skb);
+            payload_offset = iph->ihl * 4 + sizeof(struct udphdr);
+            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - sizeof(struct udphdr);
+        } else {
+            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+            payload_offset = sizeof(struct ipv6hdr) + sizeof(struct udphdr);
+            data_len = ntohs(ipv6h->payload_len) - sizeof(struct udphdr);
+        }
+    } else {
+        kfree(tmp_buffer);
+        return false;
+    }
+    
+    /* 限制最大数据长度以防止过大的分配 */
+    if (data_len < 6 || data_len > SNI_MAX_LEN * 2) {
+        kfree(tmp_buffer);
+        return false;
+    }
+    
+    /* 复制数据到临时缓冲区 */
+    if (skb_copy_bits(skb, payload_offset, tmp_buffer, data_len) != 0) {
+        kfree(tmp_buffer);
+        return false;
+    }
+    
     /* 提取SNI */
-    sni_len = extract_sni_from_tls(data, data_len, extracted_sni, sizeof(extracted_sni));
-    if (sni_len < 0)
+    sni_len = extract_sni_from_tls(tmp_buffer, data_len, extracted_sni, sizeof(extracted_sni));
+    kfree(tmp_buffer);
+    
+    if (sni_len < 0) {
         return false;
-        
-    /* 匹配SNI */
-    bool matched = (strstr(extracted_sni, info->sni) != NULL);
+    }
+    
+    /* 安全地进行字符串匹配 */
+    bool matched = false;
+    if (sni_len > 0 && sni_len < SNI_MAX_LEN) {
+        /* 确保提取的SNI以null结尾 */
+        extracted_sni[SNI_MAX_LEN - 1] = '\0';
+        matched = (strstr(extracted_sni, info->sni) != NULL);
+    }
     
     return (matched ^ info->invert);
 }
