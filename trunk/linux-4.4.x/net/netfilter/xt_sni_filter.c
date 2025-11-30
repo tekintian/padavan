@@ -370,7 +370,9 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
     return true;
 }
 
-/* 优化的字符串匹配函数 */
+// 优化的域名匹配函数，支持多种通配符格式和精确匹配
+// 支持严格匹配特定域名及其子域名：使用*.domain.com格式
+// 匹配所有以特定后缀结尾的域名时：使用*domain.com格式（更灵活）
 static bool match_string_safe(const char *haystack, size_t haystack_len, const char *needle, size_t needle_len)
 {
     size_t i, j;
@@ -379,16 +381,51 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
         return false;
     }
     
-    /* 简单的字符串匹配实现，可以根据需要替换为更高效的算法 */
-    for (i = 0; i <= haystack_len - needle_len; i++) {
-        for (j = 0; j < needle_len; j++) {
-            if (haystack[i + j] != needle[j]) {
-                break;
+    // 检查是否为通配符格式
+    if (needle[0] == '*') {
+        // 情况1：*.domain.com 格式 - 匹配主域名和所有子域名
+        if (needle_len >= 3 && needle[1] == '.') {
+            const char *domain_part = needle + 1; // 跳过*，从.开始
+            size_t domain_len = needle_len - 1;
+            
+            // 匹配主域名（domain.com）
+            if (haystack_len == domain_len - 1 && 
+                strncmp(haystack, domain_part + 1, domain_len - 1) == 0) {
+                return true;
             }
+            
+            // 匹配子域名（sub.domain.com）
+            if (haystack_len > domain_len && 
+                haystack[haystack_len - domain_len] == '.' && 
+                strncmp(haystack + haystack_len - domain_len, domain_part, domain_len) == 0) {
+                return true;
+            }
+            
+            return false;
         }
-        if (j == needle_len) {
-            return true;
+        
+        // 情况2：*domain.com 格式 - 匹配以domain.com结尾的任何字符串
+        if (needle_len >= 2) {
+            const char *suffix_part = needle + 1; // 跳过*，取剩余部分
+            size_t suffix_len = needle_len - 1;
+            
+            // 检查长度是否足够
+            if (haystack_len < suffix_len) {
+                return false;
+            }
+            
+            // 检查末尾是否匹配
+            if (strncmp(haystack + haystack_len - suffix_len, suffix_part, suffix_len) == 0) {
+                return true;
+            }
+            
+            return false;
         }
+    }
+    
+    // 精确域名匹配（性能最优）
+    if (haystack_len == needle_len) {
+        return memcmp(haystack, needle, needle_len) == 0;
     }
     
     return false;
