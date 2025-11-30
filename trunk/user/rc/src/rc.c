@@ -583,7 +583,10 @@ setkernel_tz(void)
 	localtime_r(&now, &local);
 
 	gm.tm_isdst = local.tm_isdst;
-	tz.tz_minuteswest = (mktime(&gm) - mktime(&local)) / 60;
+	// 时间问题处理
+	//tz.tz_minuteswest = (mktime(&gm) - mktime(&local)) / 60;
+	// 反向修正时区偏移计算，解决GMT+0显示CST时间的问题
+	tz.tz_minuteswest = -(mktime(&gm) - mktime(&local)) / 60;
 
 	if (tz_minuteswest_last == tz.tz_minuteswest)
 		return;

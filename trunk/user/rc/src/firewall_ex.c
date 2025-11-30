@@ -230,8 +230,22 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 		return;
 
 	/* check whole day */
+	// if (i_full_time) {
+	// 	sprintf(mstr, " -m time --kerneltz");
+	// } else {
+	// 	const char *contiguous = "";
+		
+	// 	/* check cross-night */
+	// 	if (i_time_s > i_time_e)
+	// 		contiguous = " --contiguous";
+		
+	// 	sprintf(mstr, " -m time --timestart %02d:%02d:00 --timestop %02d:%02d:00%s --kerneltz",
+	// 		(i_time_s / 100), (i_time_s % 100), (i_time_e / 100), (i_time_e % 100),
+	// 		contiguous);
+	// }
+	// 新时间处理
 	if (i_full_time) {
-		sprintf(mstr, " -m time --kerneltz");
+		sprintf(mstr, " -m time");
 	} else {
 		const char *contiguous = "";
 		
@@ -239,7 +253,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 		if (i_time_s > i_time_e)
 			contiguous = " --contiguous";
 		
-		sprintf(mstr, " -m time --timestart %02d:%02d:00 --timestop %02d:%02d:00%s --kerneltz",
+		sprintf(mstr, " -m time --timestart %02d:%02d:00 --timestop %02d:%02d:00%s",
 			(i_time_s / 100), (i_time_s % 100), (i_time_e / 100), (i_time_e % 100),
 			contiguous);
 	}
@@ -1424,14 +1438,14 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 			
 			// 检查是否启用MAC地址组模式
 			if (nvram_match("url_mac_group_x", "1")) {
-				logmessage("URL Filter", "DEBUG: Using MAC group mode");
+				//logmessage("URL Filter", "DEBUG: Using MAC group mode");
 				// 调用公共函数处理MAC地址组模式
 				apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			} else {
-				logmessage("URL Filter", "DEBUG: Using single MAC mode");
+				//logmessage("URL Filter", "DEBUG: Using single MAC mode");
 				// 单个MAC地址模式 - 保持原有逻辑
 				mac_conv("url_mac_x", -1, mac_buf);
-				logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
+				//logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
 				if (strlen(mac_buf) == 17) {
 					strcat(timematch, " -m mac");
 					if (nvram_match("url_inv_x", "1"))
@@ -1440,7 +1454,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 					strcat(timematch, mac_buf);
 				}
 				fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
-				logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+				//logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			}
 			ret |= MODULE_WEBSTR_MASK;
 		} else {
@@ -1985,14 +1999,14 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 			
 			// 检查是否启用MAC地址组模式
 			if (nvram_match("url_mac_group_x", "1")) {
-				logmessage("URL Filter", "DEBUG: Using MAC group mode");
+				//logmessage("URL Filter", "DEBUG: Using MAC group mode");
 				// 调用公共函数处理MAC地址组模式
 				apply_url_mac_group_filter(fp, dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			} else {
-				logmessage("URL Filter", "DEBUG: Using single MAC mode");
+				//logmessage("URL Filter", "DEBUG: Using single MAC mode");
 				// 单个MAC地址模式 - 保持原有逻辑
 				mac_conv("url_mac_x", -1, mac_buf);
-				logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
+				//logmessage("URL Filter", "DEBUG: MAC address = '%s'", mac_buf);
 				if (strlen(mac_buf) == 17) {
 					strcat(timematch, " -m mac");
 					if (nvram_match("url_inv_x", "1"))
@@ -2001,7 +2015,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 					strcat(timematch, mac_buf);
 				}
 				fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
-				logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
+				//logmessage("URL Filter", "DEBUG: Added FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, IPT_CHAIN_NAME_URL_LIST);
 			}
 			ret |= MODULE_WEBSTR_MASK;
 		} else {
