@@ -1,5 +1,10 @@
 # padavan 固件
 
+mac过滤模块重构, 完美支持mac地址组模式;
+修复mac过滤时区等一系列问题;
+网址过滤模块, 修复了网址过滤模块在某些情况下无法正常工作的问题;
+新增https域名过滤支持模块SNI, 完美解决了https域名过滤的问题;
+
 ## Padavan 固件版本功能模块列表与适用场景说明
 
 本固件支持多种基于MT7621等平台的路由器设备，包括但不限于：K2(测试中)、K2P、K2P-USB、MI-R3G、R2100、XY-C1等多款路由器。
@@ -232,9 +237,26 @@ CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n  # 禁用Shadowsocks插件
 ### 6. 其他功能改进
 - **翻译优化**：更新和完善了系统界面的翻译内容
 - **代码回滚机制**：增加了关键功能的回滚支持，提高了系统稳定性
-- **K2支持测试**：加强了对K2路由器平台的兼容性测试，确保功能正常
 - **性能监控工具**：优化了系统诊断工具，提供更全面的性能监控
 
+
+## 详细模块文档
+
+### SNI过滤与MAC地址组模式优化
+详细介绍SNI过滤模块功能、通配符域名匹配支持、智能路径规则分流机制和MAC地址组优化特性。
+- [SNI_FILTER_README.md](./docs/SNI_FILTER_README.md)
+
+### 网址过滤模块使用文档
+完整的URL过滤解决方案说明，包含配置方法、过滤模式详解、应用场景示例和调试监控指南。
+- [URL_FILTER_README.md](./docs/URL_FILTER_README.md)
+
+### SNI模块增加详细指南
+详细介绍如何在Padavan系统中添加和配置SNI过滤模块的步骤和注意事项。
+- [Padavan系统中SNI模块增加详细指南.md](./docs/Padavan系统中SNI模块增加详细指南.md)
+
+### Docker环境编译指南
+使用Docker容器环境编译Padavan固件的详细步骤和配置说明。
+- [Padavan固件docker环境编译指南.md](./docs/Padavan固件docker环境编译指南.md)
 
 # Supported devices
 
