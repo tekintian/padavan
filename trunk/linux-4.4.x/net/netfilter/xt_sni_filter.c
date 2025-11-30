@@ -373,12 +373,22 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
 // 优化的域名匹配函数，支持多种通配符格式和精确匹配
 // 支持严格匹配特定域名及其子域名：使用*.domain.com格式
 // 匹配所有以特定后缀结尾的域名时：使用*domain.com格式（更灵活）
+// 自动检测并在SNI规则里面跳过包含路径模式(/xxx)的规则
 static bool match_string_safe(const char *haystack, size_t haystack_len, const char *needle, size_t needle_len)
 {
     size_t i, j;
     
     if (!haystack || !needle || needle_len == 0 || haystack_len < needle_len) {
         return false;
+    }
+    
+    // 检测规则中是否包含路径模式(/xxx)，如果包含则SNI模块跳过处理
+    // 因为路径级匹配应该由HTTP过滤模块负责处理
+    for (i = 0; i < needle_len; i++) {
+        if (needle[i] == '/') {
+            DEBUGP("Rule contains path pattern, SNI module skipped: %s\n", needle);
+            return false;  // 包含路径模式，SNI模块不处理
+        }
     }
     
     // 检查是否为通配符格式
@@ -430,7 +440,6 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
     
     return false;
 }
-
 /* 主要的匹配函数 */
 static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
