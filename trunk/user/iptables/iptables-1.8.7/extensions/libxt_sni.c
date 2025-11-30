@@ -9,14 +9,8 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <xtables.h>
+#include <linux/netfilter/xt_sni.h>
 
-#define SNI_MAX_LEN 256
-
-struct xt_sni_info {
-    char sni[SNI_MAX_LEN];
-    u_int16_t invert;
-    u_int16_t len;
-};
 
 /* Function which prints out usage message. */
 static void sni_help(void)
