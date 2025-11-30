@@ -163,8 +163,16 @@ sys_script(char *name)
 	{
 		if (SystemCmd[0] && get_login_safe()) {
 			char path_env[64];
+			char tz_env[64];
+			
+			// 设置PATH环境变量
 			snprintf(path_env, sizeof(path_env), "PATH=%s", SYS_EXEC_PATH_OPT);
 			putenv(path_env);
+			
+			// 设置时区环境变量
+			snprintf(tz_env, sizeof(tz_env), "TZ=%s", nvram_safe_get("time_zone_x"));
+			putenv(tz_env);
+			
 			doSystem("%s >/tmp/syscmd.log 2>&1\n", SystemCmd);
 			SystemCmd[0] = '\0';
 		} else {
