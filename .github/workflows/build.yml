@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
     strategy:
       matrix:
         target: [K2P, K2P-NANO, K2P-TINY, K2P-USB]
@@ -60,6 +62,8 @@ jobs:
   publish:
     needs: [build]
     runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v3
