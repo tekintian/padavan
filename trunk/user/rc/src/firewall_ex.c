@@ -831,9 +831,9 @@ include_webstr_filter(FILE *fp)
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-            fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\"%s -j REJECT --reject-with tcp-reset\n",
-                dtype, url_list);
-            webstr_items++;
+             fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\"%s -j REJECT --reject-with tcp-reset\n",
+            dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
+        	webstr_items++;
             logmessage("URL Filter", "DEBUG: Added final webstr rule for HTTP: %s (all MAC)", url_list);
         }
     }
@@ -1702,12 +1702,15 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fclose(fp);
 
 	if (ret & MODULE_WEBSTR_MASK) {
-		module_smart_load("xt_webstr", NULL);
-		module_smart_load("xt_sni_filter", NULL);
+		if (!module_smart_load("xt_webstr", NULL))
+			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
+		
+		if (!module_smart_load("xt_sni_filter", NULL))
+			logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
 	}
 
 	doSystem("iptables-restore %s", ipt_file);
-
+	
 	return ret;
 }
 
@@ -2248,8 +2251,11 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	fclose(fp);
 
 	if (ret & MODULE_WEBSTR_MASK) {
-		module_smart_load("xt_webstr", NULL);
-		module_smart_load("xt_sni_filter", NULL);
+		if (!module_smart_load("xt_webstr", NULL))
+			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
+		
+		if (!module_smart_load("xt_sni_filter", NULL))
+			logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
 	}
 
 	doSystem("ip6tables-restore %s", ipt_file);
@@ -2828,7 +2834,12 @@ start_firewall_ex(void)
 		{doSystem("/usr/bin/detect.sh");}
 		
 	/* try unload unused iptables modules */
-	module_smart_unload("xt_webstr", 0);
+	// module_smart_unload("xt_webstr", 0);
+	/* 只在未使用webstr时卸载 */
+	if (!(ret & MODULE_WEBSTR_MASK)) {
+		module_smart_unload("xt_webstr", 0);
+		module_smart_unload("xt_sni_filter", 0);
+	}
 	module_smart_unload("xt_HL", 0);
 	module_smart_unload("iptable_raw", 0);
 	module_smart_unload("iptable_mangle", 0);
