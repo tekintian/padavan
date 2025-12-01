@@ -1,9 +1,8 @@
-name: build
+name: Padvan Firmware build
 
 on: 
   push:
-    branches: ["dev"] # 分支触发
-    # tags: ["*"] # 标签触发
+    branches: ["dev"] # 触发分支
   workflow_dispatch:
 
 jobs:
@@ -13,8 +12,10 @@ jobs:
       TZ: Asia/Shanghai
     strategy:
       matrix:
-        target: [K2P, K2P-NANO, K2P-TINY, K2P-USB]
-        # target: [K2P, K2P-TINY]
+        # 构建目标可选: K2P, K2P-NANO, K2P-TINY, K2P-USB 
+        # 还有 trunk/configs/templates/ 下的其他 xxx.config 配置中的名称xxx即为构建目标可选,
+        # 如: K2P-NANO.config 文件,构建目标即 K2P-NANO
+        target: [K2P, K2P-NANO, K2P-TINY]
         toolchain: [mipsel-linux-musl]
     steps:
       - uses: actions/checkout@v3
@@ -36,13 +37,10 @@ jobs:
           sudo apt install libtool-bin gperf python3-docutils autopoint gettext ccache
       - name: Build
         run: |
-          # 获取版本号信息 - 直接读取文件内容
           ROOTFS_VER=$(grep "FIRMWARE_ROOTFS_VER=" trunk/versions.inc | cut -d'=' -f2)
           BUILDS_VER=$(grep "FIRMWARE_BUILDS_VER=" trunk/versions.inc | cut -d'=' -f2)
           KERNEL_VER=$(grep "FIRMWARE_KERNEL_VER=" trunk/Makefile | cut -d'"' -f2)
-          # 按照FIRMWARE_BUILDS_REV的样式重新定义日期变量
           BUILDS_REV=$(date +%Y%m%d)
-          # 使用3个变量拼接完整版本号：内核版本.文件系统版本-构建版本-日期
           VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
           echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
           
@@ -59,24 +57,41 @@ jobs:
         with:
           name: ${{ matrix.target }}-${{ env.FIRMWARE_VERSION }}
           path: trunk/images/*.trx
+
   publish:
     needs: [build]
     runs-on: ubuntu-22.04
     env:
       TZ: Asia/Shanghai
-    if: ${{ github.ref == 'refs/heads/main' }}
+    # 发布触发条件为：main 分支，且是 push 或 workflow_dispatch 事件
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/ # 统一存放下载的产物，避免文件冲突
       - name: Set Tag Name
-        run: echo "TAG_NAME=$(date +%Y%m%d)" >> $GITHUB_ENV
+        run: |
+          # 优化标签：添加提交短哈希，避免重复（比如一天多次构建）
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          TAG_NAME="firmware-$(date +%Y%m%d)-$COMMIT_SHORT"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
       - uses: rickstaa/action-create-tag@v1
         with:
           tag: ${{ env.TAG_NAME }}
-          force_push_tag: true
+          force_push_tag: true # 如果标签已存在，强制覆盖
       - uses: ncipollo/release-action@v1
         with:
           commit: ${{ github.sha }}
           tag: ${{ env.TAG_NAME }}
-          artifacts: "*/*.trx"
+          name: "Firmware Build ${{ env.TAG_NAME }}" # 发布名称更清晰
+          body: |
+            ## 自动构建固件发布
+            - 分支：${{ github.ref_name }}
+            - 提交：${{ github.sha }}
+            - 构建时间：$(date +'%Y-%m-%d %H:%M:%S %Z')
+          artifacts: "artifacts/**/*.trx" # 正确匹配所有下载的 trx 文件
           allowUpdates: true
+          draft: false
+          prerelease: false
