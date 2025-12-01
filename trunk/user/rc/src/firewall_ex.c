@@ -1202,10 +1202,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "-A %s -m %s %s -j %s\n", dtype, CT_STATE, "ESTABLISHED,RELATED", "ACCEPT");
 
 	if (is_fw_enabled) {
-		/* Accept all traffic from LAN clients - only if URL filter is not enabled */
-		if (!is_url_enabled) {
-			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
-		}
+		/* Accept all traffic from LAN clients */
+		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
 		
 		/* Accept all traffic from localhost */
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, "lo", "ACCEPT");
@@ -1572,10 +1570,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	}
 
 	if (is_fw_enabled) {
-		/* Accept LAN other outbound traffic - only if URL filter is not enabled */
-		if (!is_url_enabled) {
-			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
-		}
+		/* Accept LAN other outbound traffic */
+		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
 		
 		/* Pass ICMPv4 in gateway mode w/o NAT */
 		if (!is_nat_enabled) {
@@ -1907,10 +1903,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	fprintf(fp, "-A %s -m %s %s -j %s\n", dtype, CT_STATE, "ESTABLISHED,RELATED", "ACCEPT");
 
 	if (is_fw_enabled) {
-		/* Accept all traffic from LAN clients - only if URL filter is not enabled */
-		if (!is_url_enabled) {
-			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
-		}
+		/* Accept all traffic from LAN clients */
+		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, "ACCEPT");
 		
 		/* Accept all traffic from localhost */
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, "lo", "ACCEPT");
