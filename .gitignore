@@ -1,3 +1,5 @@
 .vscode
 toolchain/crosstool-ng-*/
 toolchain/toolchain-*/
+/debug
+/mipsel-linux-musl_4.4.x.tar.xz
