@@ -283,13 +283,29 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         /* 获取TCP有效载荷长度 */
         if (skb->protocol == htons(ETH_P_IP)) {
             struct iphdr *iph = ip_hdr(skb);
-            data_len = ntohs(iph->tot_len) - (iph->ihl * 4) - sizeof(struct tcphdr);
+            struct tcphdr _tcph, *tcph;
+            
+            tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
+            if (!tcph) {
+                DEBUGP("Failed to get TCP header\n");
+                return false;
+            }
+            payload_offset = iph->ihl * 4 + tcph->doff * 4;
+            data_len = ntohs(iph->tot_len) - payload_offset;
         } else {
             struct ipv6hdr *ipv6h = ipv6_hdr(skb);
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct tcphdr);
+            struct tcphdr _tcph, *tcph;
+            
+            tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
+            if (!tcph) {
+                DEBUGP("Failed to get TCP header\n");
+                return false;
+            }
+            payload_offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+            data_len = ntohs(ipv6h->payload_len) - (tcph->doff * 4);
         }
         
-        if (data_len < 6) { /* TLS记录头最小长度 */
+        if (data_len < 5) { /* TLS记录头最小长度 */
             return false;
         }
         
@@ -300,6 +316,9 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         if (record_type != TLS_HANDSHAKE) {
             return false;
         }
+        
+        DEBUGP("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
+               record_type, data_len, payload_offset);
         
         /* 检查TLS ClientHello消息类型 */
         if (data_len < 5 + 1) { /* 记录头 + 消息类型 */
@@ -312,6 +331,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         if (message_type != TLS_CLIENT_HELLO) {
             return false;
         }
+        DEBUGP("TLS ClientHello detected\n");
         
     } else if (protocol == IPPROTO_UDP) {
         /* 处理DTLS情况 */
@@ -352,6 +372,9 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
             return false;
         }
         
+        DEBUGP("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
+               record_type, data_len, payload_offset);
+        
         /* 检查DTLS ClientHello消息类型 */
         if (data_len < 13 + 1) {
             return false;
@@ -363,6 +386,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         if (message_type != TLS_CLIENT_HELLO) {
             return false;
         }
+        DEBUGP("TLS ClientHello detected\n");
     } else {
         return false;
     }
@@ -503,9 +527,8 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
                 return false;
             }
             
-            tcp_doff = tcph->doff * 4;
-            payload_offset = iph->ihl * 4 + tcp_doff;
-            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - tcp_doff;
+            payload_offset = iph->ihl * 4 + tcph->doff * 4;
+            data_len = ntohs(iph->tot_len) - payload_offset;
         } else {
             struct ipv6hdr *ipv6h = ipv6_hdr(skb);
             struct tcphdr _tcph, *tcph;
@@ -516,9 +539,8 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
                 return false;
             }
             
-            tcp_doff = tcph->doff * 4;
-            payload_offset = sizeof(struct ipv6hdr) + tcp_doff;
-            data_len = ntohs(ipv6h->payload_len) - tcp_doff;
+            payload_offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+            data_len = ntohs(ipv6h->payload_len) - (tcph->doff * 4);
         }
     } else if (protocol == IPPROTO_UDP) {
         if (par->match->family == NFPROTO_IPV4) {
@@ -536,7 +558,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     }
     
     /* 限制最大数据长度以防止过大的分配 */
-    if (data_len < 6 || data_len > SNI_MAX_LEN * 2) {
+    if (data_len < 5 || data_len > SNI_MAX_LEN * 2) {
         DEBUGP("Invalid data length: %u\n", data_len);
         return false;
     }
@@ -558,12 +580,20 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     /* 提取SNI */
     sni_len = extract_sni_from_tls(tmp_buffer, buffer_size, extracted_sni, sizeof(extracted_sni));
-    kfree(tmp_buffer);
     
     if (sni_len < 0) {
         DEBUGP("Failed to extract SNI\n");
+        /* 添加更多调试信息 */
+        DEBUGP("Data length: %u, buffer size: %zu\n", data_len, buffer_size);
+        if (buffer_size >= 6) {
+            DEBUGP("First 6 bytes: %02x %02x %02x %02x %02x %02x\n", 
+                   tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
+        }
+        kfree(tmp_buffer);
         return false;
     }
+    
+    kfree(tmp_buffer);
     
     /* 安全地进行字符串匹配 */
     bool matched = false;
