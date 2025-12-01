@@ -1701,7 +1701,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	if (ret & MODULE_WEBSTR_MASK) {
+	// 统一使用nvram配置进行条件判断
+	if (nvram_match("url_enable_x", "1")) {
 		if (!module_smart_load("xt_webstr", NULL))
 			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
 		
@@ -2250,7 +2251,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	if (ret & MODULE_WEBSTR_MASK) {
+	// 统一使用nvram配置进行条件判断
+	if (nvram_match("url_enable_x", "1")) {
 		if (!module_smart_load("xt_webstr", NULL))
 			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
 		
@@ -2835,8 +2837,8 @@ start_firewall_ex(void)
 		
 	/* try unload unused iptables modules */
 	// module_smart_unload("xt_webstr", 0);
-	/* 只在未使用webstr时卸载 */
-	if (!(ret & MODULE_WEBSTR_MASK)) {
+	/* 只在未使用url_enable_x时卸载 */
+	if (!nvram_match("url_enable_x", "1")) {
 		module_smart_unload("xt_webstr", 0);
 		module_smart_unload("xt_sni_filter", 0);
 	}
