@@ -783,7 +783,16 @@ doSystem("/usr/sbin/skipd -d /etc/storage/db");
 	start_mentohust();
 #endif
 	system("/usr/bin/iappd.sh restart");
-	system("modprobe xt_TPROXY");
+
+	// 原无条件加载  xt_TPROXY
+	// system("modprobe xt_TPROXY");
+	// 使用条件加载 xt_TPROXY
+	int ss_enable = nvram_get_int("ss_enable");
+	int ss_tunnel_enable = nvram_get_int("ss-tunnel_enable");
+	if (ss_enable == 1 || ss_tunnel_enable == 1) {
+		system("modprobe xt_TPROXY");
+	}
+
 	system("/usr/bin/iappd.sh test");
 	return 0;
 }
