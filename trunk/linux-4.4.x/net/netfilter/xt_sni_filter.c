@@ -543,14 +543,14 @@ static bool xt_sni_match(const struct sk_buff *skb,
             /* 如果是应用数据，说明这不是握手阶段，直接返回false */
             if (record_type == TLS_APPLICATION_DATA) {
                 ENHANCED_DEBUG("TLS Application Data detected, not ClientHello\n");
-                return false;
+                return info->invert; // 改为返回info->invert，默认放行
             }
             if (retry_count < max_retries - 1) {
                 continue;
             }
             goto failed_packet;
         }
-        
+
         /* 获取握手类型 */
         if (payload_offset + 5 >= skb->len) {
             DEBUGP("Insufficient data for handshake type\n");
@@ -559,7 +559,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             }
             goto failed_packet;
         }
-        
+
         data_ptr = skb_header_pointer(skb, payload_offset + 5, 1, &handshake_type);
         if (!data_ptr) {
             DEBUGP("Failed to get handshake type on retry %d\n", retry_count);
@@ -569,16 +569,15 @@ static bool xt_sni_match(const struct sk_buff *skb,
             goto failed_packet;
         }
         handshake_type = *data_ptr;
-        
+
         ENHANCED_DEBUG("Handshake type: %u (expected TLS_CLIENT_HELLO: %u)\n", handshake_type, TLS_CLIENT_HELLO);
-        
+
         /* 检查是否为ClientHello */
         if (handshake_type != TLS_CLIENT_HELLO) {
             ENHANCED_DEBUG("Not a TLS ClientHello, type: %u\n", handshake_type);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
-            goto failed_packet;
+            // 对于其他TLS握手类型，直接返回info->invert而不是重试
+            // 这样可以避免将有效的TLS握手消息误标记为失败
+            return info->invert;
         }
         
         /* 如果到这里，说明成功识别了TLS ClientHello */
