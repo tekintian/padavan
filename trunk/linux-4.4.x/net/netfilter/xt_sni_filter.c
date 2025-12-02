@@ -452,7 +452,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     size_t save_size = 0;
     char reason[128];
     unsigned int protocol;
-    int max_retries = 3;
+    int max_retries = 2;
     int retry_count = 0;
     
     ENHANCED_DEBUG("Starting SNI match\n");
@@ -492,6 +492,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     for (retry_count = 0; retry_count < max_retries; retry_count++) {
         /* 添加延迟避免过度处理 */
         if (retry_count > 0) {
+            mdelay(1);  // 添加短暂延迟
             cpu_relax();
         }
         /* 重新获取TCP头部指针 */
@@ -559,7 +560,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             }
             goto failed_packet;
         }
-
+    
         data_ptr = skb_header_pointer(skb, payload_offset + 5, 1, &handshake_type);
         if (!data_ptr) {
             DEBUGP("Failed to get handshake type on retry %d\n", retry_count);
@@ -578,6 +579,22 @@ static bool xt_sni_match(const struct sk_buff *skb,
             // 对于其他TLS握手类型，直接返回info->invert而不是重试
             // 这样可以避免将有效的TLS握手消息误标记为失败
             return info->invert;
+        }
+
+        // 添加TLS版本验证（在握手类型验证之后）
+        if (payload_offset + 9 < skb->len) {
+            unsigned char major_version, minor_version;
+            data_ptr = skb_header_pointer(skb, payload_offset + 6, 1, &major_version);
+            if (data_ptr) {
+                data_ptr = skb_header_pointer(skb, payload_offset + 7, 1, &minor_version);
+                if (data_ptr) {
+                    // 只处理TLS 1.0及以上版本 (3.1 = TLS 1.0)
+                    if (major_version < 3 || (major_version == 3 && minor_version < 1)) {
+                        ENHANCED_DEBUG("Unsupported TLS version: %u.%u\n", major_version, minor_version);
+                        return info->invert;
+                    }
+                }
+            }
         }
         
         /* 如果到这里，说明成功识别了TLS ClientHello */
@@ -645,7 +662,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     /* 限制最大数据长度以防止过大的分配 */
     if (data_len < 5) {
         DEBUGP("Data length too short: %u\n", data_len);
-        return false;
+        return info->invert; // 改为返回info->invert，保持一致性
     }
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
@@ -654,19 +671,23 @@ static bool xt_sni_match(const struct sk_buff *skb,
     /* 确保至少有基本的数据量进行处理 */
     if (buffer_size < 11) {  /* TLS头部(5) + Handshake头部(6) = 11 */
         DEBUGP("Insufficient buffer size: %zu\n", buffer_size);
-        return false;
+        return info->invert;
     }
     
     /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
     if (buffer_size <= STACK_BUFFER_SIZE) {
         tmp_buffer = stack_buffer;
+        // 确保栈缓冲区清零
+        memset(stack_buffer, 0, STACK_BUFFER_SIZE);
         ENHANCED_DEBUG("Using stack buffer of size: %zu\n", buffer_size);
     } else {
         tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
         if (!tmp_buffer) {
             DEBUGP("Memory allocation failed\n");
-            return false;
+            return info->invert;
         }
+        // 确保堆缓冲区清零
+        memset(tmp_buffer, 0, buffer_size);
         ENHANCED_DEBUG("Allocated heap buffer of size: %zu\n", buffer_size);
     }
     
@@ -676,7 +697,16 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        return false;
+        return info->invert;
+    }
+
+    // 添加防御性检查
+    if (!tmp_buffer || buffer_size == 0) {
+        DEBUGP("Invalid buffer or size\n");
+        if (buffer_size > STACK_BUFFER_SIZE) {
+            kfree(tmp_buffer);
+        }
+        return info->invert;
     }
     
     /* 提取SNI */
@@ -684,7 +714,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     if (sni_len < 0) {
         DEBUGP("Failed to extract SNI, allowing packet through\n Data length: %u, buffer size: %zu\n", data_len, buffer_size);
-        if (buffer_size >= 6) {
+        if (buffer_size >= 6 && tmp_buffer) {
             DEBUGP("First 6 bytes: %02x %02x %02x %02x %02x %02x\n", 
                tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
         }
