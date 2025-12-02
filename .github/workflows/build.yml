@@ -40,7 +40,11 @@ jobs:
           ROOTFS_VER=$(grep "FIRMWARE_ROOTFS_VER=" trunk/versions.inc | cut -d'=' -f2)
           BUILDS_VER=$(grep "FIRMWARE_BUILDS_VER=" trunk/versions.inc | cut -d'=' -f2)
           KERNEL_VER=$(grep "FIRMWARE_KERNEL_VER=" trunk/Makefile | cut -d'"' -f2)
-          BUILDS_REV=$(date +%Y%m%d)
+          BUILDS_REV=$(git rev-parse --short=7 HEAD 2>/dev/null)
+          # 如果 Git 命令失败（极端情况），用日期兜底
+          if [ -z "$BUILDS_REV" ]; then
+            BUILDS_REV=$(date +%Y%m%d)
+          fi
           VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
           echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
           
