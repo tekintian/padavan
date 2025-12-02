@@ -35,6 +35,7 @@
 #define TLS_MAX_HANDSHAKE_LEN 2048
 #define TLS_HANDSHAKE 22
 #define TLS_CLIENT_HELLO 1
+#define TLS_APPLICATION_DATA 23
 #define TLS_EXTENSION_SNI 0
 #define STACK_BUFFER_SIZE 512
 
@@ -489,6 +490,10 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     /* 重试机制：尝试多次解析TLS数据包 */
     for (retry_count = 0; retry_count < max_retries; retry_count++) {
+        /* 添加延迟避免过度处理 */
+        if (retry_count > 0) {
+            cpu_relax();
+        }
         /* 重新获取TCP头部指针 */
         if (par->match->family == NFPROTO_IPV4) {
             tcph_const = skb_header_pointer(skb, iph_const->ihl * 4, sizeof(_tcph_const), &_tcph_const);
@@ -511,8 +516,9 @@ static bool xt_sni_match(const struct sk_buff *skb,
         ENHANCED_DEBUG("Payload offset: %u\n", payload_offset);
         
         /* 检查偏移量是否合理 */
-        if (payload_offset >= skb->len) {
-            DEBUGP("Invalid payload offset: %u, skb len: %u\n", payload_offset, skb->len);
+        if (payload_offset >= skb->len || payload_offset + 6 > skb->len) {
+            DEBUGP("Invalid payload offset: %u, skb len: %u (need at least %u bytes)\n", 
+                   payload_offset, skb->len, payload_offset + 6);
             if (retry_count < max_retries - 1) {
                 continue;
             }
@@ -535,6 +541,11 @@ static bool xt_sni_match(const struct sk_buff *skb,
         /* 检查是否为TLS握手记录 */
         if (record_type != TLS_HANDSHAKE) {
             ENHANCED_DEBUG("Not a TLS Handshake record, type: %u\n", record_type);
+            /* 如果是应用数据，说明这不是握手阶段，直接返回false */
+            if (record_type == TLS_APPLICATION_DATA) {
+                ENHANCED_DEBUG("TLS Application Data detected, not ClientHello\n");
+                return false;
+            }
             if (retry_count < max_retries - 1) {
                 continue;
             }
@@ -626,21 +637,27 @@ static bool xt_sni_match(const struct sk_buff *skb,
     ENHANCED_DEBUG("Payload offset calculated: %d, data_len: %u\n", payload_offset, data_len);
     
     /* 检查数据长度是否有效 */
-    if (data_len == 0) {
-        DEBUGP("Data length is zero, trying alternative calculation\n");
-        // 尝试使用skb->len - payload_offset作为备选方案
+    if (data_len == 0 || data_len > skb->len - payload_offset) {
+        DEBUGP("Invalid data length: %u, using skb calculation\n", data_len);
+        // 使用skb->len - payload_offset作为准确的数据长度
         data_len = skb->len - payload_offset;
-        ENHANCED_DEBUG("Alternative data_len: %u\n", data_len);
+        ENHANCED_DEBUG("Corrected data_len: %u\n", data_len);
     }
     
     /* 限制最大数据长度以防止过大的分配 */
     if (data_len < 5) {
-        DEBUGP("Invalid data length: %u\n", data_len);
+        DEBUGP("Data length too short: %u\n", data_len);
         return false;
     }
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
     buffer_size = min_t(size_t, (size_t)data_len, (size_t)TLS_MAX_HANDSHAKE_LEN);
+    
+    /* 确保至少有基本的数据量进行处理 */
+    if (buffer_size < 11) {  /* TLS头部(5) + Handshake头部(6) = 11 */
+        DEBUGP("Insufficient buffer size: %zu\n", buffer_size);
+        return false;
+    }
     
     /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
     if (buffer_size <= STACK_BUFFER_SIZE) {
