@@ -520,8 +520,8 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (payload_offset >= skb->len || payload_offset + 6 > skb->len) {
             DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
                    payload_offset, skb->len);
-            // 立即返回false，不再继续处理，避免访问越界内存
-            return false;
+            // 返回info->invert而不是false，确保非规则流量默认放行
+            return info->invert;
         }
         
         /* 获取TLS记录类型 */
@@ -684,17 +684,17 @@ static bool xt_sni_match(const struct sk_buff *skb,
     sni_len = extract_sni_from_tls(tmp_buffer, buffer_size, extracted_sni, sizeof(extracted_sni));
     
     if (sni_len < 0) {
-        DEBUGP("Failed to extract SNI\n");
-        /* 添加更多调试信息 */
-        DEBUGP("Data length: %u, buffer size: %zu\n", data_len, buffer_size);
+        DEBUGP("Failed to extract SNI, allowing packet through\n Data length: %u, buffer size: %zu\n", data_len, buffer_size);
         if (buffer_size >= 6) {
             DEBUGP("First 6 bytes: %02x %02x %02x %02x %02x %02x\n", 
-                   tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
+               tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
         }
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        return false;
+        // 对于无法提取SNI的数据包，返回info->invert的值而不是false
+        // 这样只有在明确指定invert=1时才会匹配（拦截），否则默认放行
+        return info->invert;
     }
     
     if (buffer_size > STACK_BUFFER_SIZE) {
@@ -710,13 +710,13 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     /* 安全地进行字符串匹配 */
     if (sni_len > 0 && sni_len < SNI_MAX_LEN) {
-        /* 确保提取的SNI以null结尾 */
         extracted_sni[SNI_MAX_LEN - 1] = '\0';
         matched = match_string_safe(extracted_sni, sni_len, info->sni, info->len);
         ENHANCED_DEBUG("SNI match result: %s\n", matched ? "true" : "false");
     }
     
-    result = (matched ^ info->invert);
+    // 只有当明确匹配时才应用结果，否则默认放行
+    result = matched ? (matched ^ info->invert) : info->invert;
     ENHANCED_DEBUG("Final match result (after invert): %s\n", result ? "true" : "false");
     
     return result;
@@ -760,7 +760,8 @@ failed_packet:
         }
     }
     
-    return false;
+    // 返回info->invert而不是false，确保非规则流量默认放行
+    return info->invert;
 }
 
 static struct xt_match sni_match[] = {
