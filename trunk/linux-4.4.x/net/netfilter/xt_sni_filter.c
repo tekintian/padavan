@@ -516,12 +516,11 @@ static bool xt_sni_match(const struct sk_buff *skb,
         ENHANCED_DEBUG("Payload offset: %u\n", payload_offset);
         
         /* 检查偏移量是否合理 */
+        /* 严格验证payload_offset，这是导致崩溃的主要原因！ */
         if (payload_offset >= skb->len || payload_offset + 6 > skb->len) {
-            DEBUGP("Invalid payload offset: %u, skb len: %u (need at least %u bytes)\n", 
-                   payload_offset, skb->len, payload_offset + 6);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
+            DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
+                   payload_offset, skb->len);
+            // 立即返回false，不再继续处理，避免访问越界内存
             return false;
         }
         
