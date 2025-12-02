@@ -23,6 +23,8 @@ MODULE_ALIAS("ipt_sni");
 MODULE_DESCRIPTION("Xtables: match SNI from TLS ClientHello packets");
 
 #define SNI_MAX_LEN 256
+// 增加一个更大的缓冲区定义用于处理TLS数据
+#define TLS_MAX_HANDSHAKE_LEN 1024
 #define TLS_HANDSHAKE 22
 #define TLS_CLIENT_HELLO 1
 #define TLS_EXTENSION_SNI 0x0000
@@ -616,13 +618,13 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     ENHANCED_DEBUG("Payload offset calculated: %d, data_len: %u\n", payload_offset, data_len);
     
     /* 限制最大数据长度以防止过大的分配 */
-    if (data_len < 5 || data_len > SNI_MAX_LEN * 2) {
+    if (data_len < 5) {
         DEBUGP("Invalid data length: %u\n", data_len);
         return false;
     }
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
-    size_t buffer_size = min_t(size_t, data_len, SNI_MAX_LEN * 2);
+    size_t buffer_size = min_t(size_t, data_len, TLS_MAX_HANDSHAKE_LEN);
     u_int8_t *tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
     if (!tmp_buffer) {
         DEBUGP("Memory allocation failed\n");
