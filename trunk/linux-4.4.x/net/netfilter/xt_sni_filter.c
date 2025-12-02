@@ -10,6 +10,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/ipv6.h>
 
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
@@ -17,7 +18,13 @@
 #include <linux/ratelimit.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
-#include <linux/string.h>  // 添加string.h头文件以支持memmem函数
+#include <linux/string.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/types.h>
+#include <linux/errno.h>
+#include <linux/slab.h>
+#include <linux/time.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Padavan Firmware");
@@ -26,13 +33,13 @@ MODULE_ALIAS("ipt_sni");
 MODULE_DESCRIPTION("Xtables: match SNI from TLS ClientHello packets");
 
 #define SNI_MAX_LEN 256
-// 增加一个更大的缓冲区定义用于处理TLS数据
+/* 增加一个更大的缓冲区定义用于处理TLS数据 */
 #define TLS_MAX_HANDSHAKE_LEN 1024
 #define TLS_HANDSHAKE 22
 #define TLS_CLIENT_HELLO 1
 #define TLS_EXTENSION_SNI 0x0000
 
-// 对于小数据包使用栈分配，大数据包才使用堆分配
+/* 对于小数据包使用栈分配，大数据包才使用堆分配 */
 #define STACK_BUFFER_SIZE 512
 
 /* 模块参数配置 */
@@ -40,14 +47,14 @@ static int enable_debug = 0;
 module_param(enable_debug, int, 0644);
 MODULE_PARM_DESC(enable_debug, "Enable debugging messages (0=off, 1=on)");
 
-// 用来控制是否保存异常数据的全局变量
+/* 用来控制是否保存异常数据的全局变量 */
 static bool save_failed_packets = false;
 module_param(save_failed_packets, bool, 0644);
 MODULE_PARM_DESC(save_failed_packets, "Save failed packets to file for debugging");
 
-// 速率限制定义
-#define SNI_DEBUG_RATELIMIT_INTERVAL (60 * HZ)  // 60秒间隔
-#define SNI_DEBUG_RATELIMIT_BURST 10            // 每次最多输出10条
+/* 速率限制定义 */
+#define SNI_DEBUG_RATELIMIT_INTERVAL (60 * HZ)  /* 60秒间隔 */
+#define SNI_DEBUG_RATELIMIT_BURST 10            /* 每次最多输出10条 */
 
 /* 调试宏定义 */
 #ifdef DEBUG
@@ -623,8 +630,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     }
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
-    // 修复min_t宏的C90兼容性问题
-    buffer_size = min_t(size_t, data_len, TLS_MAX_HANDSHAKE_LEN);
+    buffer_size = min_t(size_t, (size_t)data_len, (size_t)TLS_MAX_HANDSHAKE_LEN);
     
     /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
     if (buffer_size <= STACK_BUFFER_SIZE) {
@@ -690,7 +696,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     return result;
 }
 
-static struct xt_match sni_match[] __read_mostly = {
+static struct xt_match sni_match[] = {
     {
         .name       = "sni",
         .family     = NFPROTO_IPV4,
@@ -698,7 +704,7 @@ static struct xt_match sni_match[] __read_mostly = {
         .matchsize  = sizeof(struct xt_sni_info),
         .me         = THIS_MODULE,
     },
-#if IS_ENABLED(CONFIG_IPV6)
+#if defined(CONFIG_IPV6)
     {
         .name       = "sni",
         .family     = NFPROTO_IPV6,
@@ -711,7 +717,6 @@ static struct xt_match sni_match[] __read_mostly = {
 
 static int __init xt_sni_init(void)
 {
-    // 修复C90兼容性问题：将变量声明移到函数开始处
     int ret;
     DEBUGP("Initializing SNI filter module\n");
     ret = xt_register_matches(sni_match, ARRAY_SIZE(sni_match));
