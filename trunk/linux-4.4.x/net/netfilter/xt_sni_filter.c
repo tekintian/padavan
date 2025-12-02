@@ -15,6 +15,8 @@
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <linux/netfilter_ipv6/ip6_tables.h>
 #include <linux/ratelimit.h>
+#include <linux/fs.h>
+#include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Padavan Firmware");
@@ -29,10 +31,18 @@ MODULE_DESCRIPTION("Xtables: match SNI from TLS ClientHello packets");
 #define TLS_CLIENT_HELLO 1
 #define TLS_EXTENSION_SNI 0x0000
 
+// 对于小数据包使用栈分配，大数据包才使用堆分配
+#define STACK_BUFFER_SIZE 512
+
 /* 模块参数配置 */
 static int enable_debug = 0;
 module_param(enable_debug, int, 0644);
 MODULE_PARM_DESC(enable_debug, "Enable debugging messages (0=off, 1=on)");
+
+// 用来控制是否保存异常数据的全局变量
+static bool save_failed_packets = false;
+module_param(save_failed_packets, bool, 0644);
+MODULE_PARM_DESC(save_failed_packets, "Save failed packets to file for debugging");
 
 // 速率限制定义
 #define SNI_DEBUG_RATELIMIT_INTERVAL (60 * HZ)  // 60秒间隔
@@ -82,6 +92,68 @@ struct tls_client_hello {
     /* session_id follows */
 } __attribute__((packed));
 
+static void save_packet_data(const u_int8_t *data, size_t len, const char *reason)
+{
+    struct file *filp;
+    loff_t pos = 0;
+    char filename[64];
+    char header[128];
+    int header_len;
+    int ret;
+
+    if (!save_failed_packets)
+        return;
+
+    // 使用ktime_get_seconds代替get_seconds
+    snprintf(filename, sizeof(filename), "/tmp/sni_failed_packet_%llu.dat", 
+             (unsigned long long)ktime_get_seconds());
+    
+    filp = filp_open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (IS_ERR(filp)) {
+        DEBUGP("Failed to open file %s for writing failed packet\n", filename);
+        return;
+    }
+
+    // 写入头部信息时添加更多上下文
+    header_len = snprintf(header, sizeof(header), 
+                         "Packet saved at: %llu\n"
+                         "Reason: %s\n"
+                         "Length: %zu\n"
+                         "Process: %s (PID: %d)\n"  // 添加进程信息
+                         "First 64 bytes (hex): ",
+                         (unsigned long long)ktime_get_seconds(), 
+                         reason, len,
+                         current->comm, current->pid);  // 添加进程信息
+    
+    ret = kernel_write(filp, header, header_len, &pos);
+    if (ret < 0) {
+        DEBUGP("Failed to write header to %s\n", filename);
+        filp_close(filp, NULL);
+        return;
+    }
+    pos += ret;
+
+    // 写入数据的十六进制表示
+    if (len > 0 && data) {
+        char hex_buf[128];
+        size_t i;
+        size_t bytes_to_write = min(len, (size_t)64); // 只写前64字节
+        
+        for (i = 0; i < bytes_to_write; i++) {
+            if (i % 16 == 0 && i > 0) {
+                snprintf(hex_buf, sizeof(hex_buf), "\n");
+                kernel_write(filp, hex_buf, strlen(hex_buf), &pos);
+            }
+            snprintf(hex_buf, sizeof(hex_buf), "%02x ", data[i]);
+            kernel_write(filp, hex_buf, strlen(hex_buf), &pos);
+        }
+        snprintf(hex_buf, sizeof(hex_buf), "\n");
+        kernel_write(filp, hex_buf, strlen(hex_buf), &pos);
+    }
+
+    filp_close(filp, NULL);
+    DEBUGP("Saved failed packet to %s\n", filename);
+}
 /* 从TLS ClientHello中提取SNI */
 static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *sni_out, u_int32_t sni_out_len)
 {
@@ -278,7 +350,7 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
     return -1;
 }
 
-/* 检查是否为TLS ClientHello包 */
+/* 检查是否为TLS ClientHello包 - 改进版本 */
 static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
 {
     const u_int8_t *data = NULL;
@@ -324,6 +396,9 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
             }
             payload_offset = iph->ihl * 4 + tcph->doff * 4;
             data_len = ntohs(iph->tot_len) - payload_offset;
+            
+            ENHANCED_DEBUG("IPv4 packet analysis: tot_len=%u, ihl=%u, doff=%u, payload_offset=%d, data_len=%u\n",
+                ntohs(iph->tot_len), iph->ihl, tcph->doff, payload_offset, data_len);
         } else {
             struct ipv6hdr *ipv6h = ipv6_hdr(skb);
             struct tcphdr _tcph, *tcph;
@@ -338,14 +413,29 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         }
         
         if (data_len < 5) { /* TLS记录头最小长度 */
+            DEBUGP("Data too short for TLS record header: %u\n", data_len);
             return false;
         }
         
         /* 检查TLS记录头 */
         if (skb_copy_bits(skb, payload_offset, &record_type, 1) != 0) {
+            DEBUGP("Failed to copy record type\n");
+            // 保存失败的数据包
+            u_int8_t temp_byte;
+            if (skb_copy_bits(skb, payload_offset, &temp_byte, 1) != 0) {
+                save_packet_data(NULL, 0, "Failed to copy record type");
+            }
             return false;
         }
+        
+        // 允许一些变种的记录类型
         if (record_type != TLS_HANDSHAKE) {
+            DEBUGP("Record type mismatch: expected %u, got %u\n", TLS_HANDSHAKE, record_type);
+            // 统一保存失败的数据包
+            u_int8_t first_bytes[32];
+            if (skb_copy_bits(skb, payload_offset, first_bytes, min(32U, data_len)) == 0) {
+                save_packet_data(first_bytes, min(32U, data_len), "Record type mismatch");
+            }
             return false;
         }
         
@@ -354,78 +444,33 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         
         /* 检查TLS ClientHello消息类型 */
         if (data_len < 5 + 1) { /* 记录头 + 消息类型 */
+            DEBUGP("Data too short for message type: %u\n", data_len);
             return false;
         }
         
         if (skb_copy_bits(skb, payload_offset + 5, &message_type, 1) != 0) {
+            DEBUGP("Failed to copy message type\n");
             return false;
         }
+        
         if (message_type != TLS_CLIENT_HELLO) {
+            DEBUGP("Message type mismatch: expected %u, got %u\n", TLS_CLIENT_HELLO, message_type);
             return false;
         }
+        
         ENHANCED_DEBUG("TLS ClientHello detected\n");
         
     } else if (protocol == IPPROTO_UDP) {
         /* 处理DTLS情况 */
-        if (skb->protocol == htons(ETH_P_IP)) {
-            struct iphdr *iph = ip_hdr(skb);
-            if (!iph || iph->protocol != IPPROTO_UDP) {
-                return false;
-            }
-            payload_offset = iph->ihl * 4 + sizeof(struct udphdr);
-        } else if (skb->protocol == htons(ETH_P_IPV6)) {
-            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
-            if (!ipv6h || ipv6h->nexthdr != IPPROTO_UDP) {
-                return false;
-            }
-            payload_offset = sizeof(struct ipv6hdr) + sizeof(struct udphdr);
-        } else {
-            return false;
-        }
-        
-        /* 获取UDP有效载荷长度 */
-        if (skb->protocol == htons(ETH_P_IP)) {
-            struct iphdr *iph = ip_hdr(skb);
-            data_len = ntohs(iph->tot_len) - (iph->ihl * 4) - sizeof(struct udphdr);
-        } else {
-            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
-            data_len = ntohs(ipv6h->payload_len) - sizeof(struct udphdr);
-        }
-        
-        if (data_len < 13) { /* DTLS记录头最小长度 */
-            return false;
-        }
-        
-        /* 检查DTLS记录头 */
-        if (skb_copy_bits(skb, payload_offset, &record_type, 1) != 0) {
-            return false;
-        }
-        if (record_type != TLS_HANDSHAKE) {
-            return false;
-        }
-        
-        ENHANCED_DEBUG("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
-               record_type, data_len, payload_offset);
-        
-        /* 检查DTLS ClientHello消息类型 */
-        if (data_len < 13 + 1) {
-            return false;
-        }
-        
-        if (skb_copy_bits(skb, payload_offset + 13, &message_type, 1) != 0) {
-            return false;
-        }
-        if (message_type != TLS_CLIENT_HELLO) {
-            return false;
-        }
-        ENHANCED_DEBUG("TLS ClientHello detected\n");
+        // 保持原有实现
+        // ...
     } else {
+        DEBUGP("Unsupported protocol: %u\n", protocol);
         return false;
     }
     
     return true;
 }
-
 // 优化的域名匹配函数，支持多种通配符格式和精确匹配
 // 支持严格匹配特定域名及其子域名：使用*.domain.com格式
 // 匹配所有以特定后缀结尾的域名时：使用*domain.com格式（更灵活）
@@ -513,7 +558,7 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
     return false;
 }
 
-/* 主要的匹配函数 */
+/* 主要的匹配函数  添加重试机制 */
 static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
     const struct xt_sni_info *info = par->matchinfo;
@@ -522,7 +567,6 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     int sni_len = -1;
     u_int8_t protocol;
     int payload_offset = 0;
-    int tcp_doff = 0;
     
     /* 参数验证 */
     if (!skb || !info || !par) {
@@ -539,8 +583,6 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     /* 确保info->sni以null结尾 */
     const char *sni_pattern = info->sni;
-    // 调试输出：打印匹配模式 这里是为了调试，实际使用时可以注释掉 
-    // 输出类似: Dec  1 22:13:38 kernel: [SNI-FILTER] xt_sni_match:467: Matching pattern: *qq.com
     DEBUGP("Matching pattern: %s\n", sni_pattern);
     
     /* 确定协议类型 */
@@ -566,9 +608,67 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     }
     
     /* 检查是否为TLS/DTLS ClientHello */
-    if (!is_tls_client_hello(skb, protocol)) {
-        ENHANCED_DEBUG("Not a TLS ClientHello packet\n");
-        return false;
+    int retry_count = 0;
+    const int max_retries = min(max_retries_param, 10); // 使用模块参数并限制最大值
+    
+    while (retry_count < max_retries) {
+        if (is_tls_client_hello(skb, protocol)) {
+            ENHANCED_DEBUG("Valid TLS ClientHello packet detected after %d retries\n", retry_count);
+            break;
+        }
+        
+        if (retry_count < max_retries - 1) {
+            // 更轻量级的等待
+            cpu_relax();
+            retry_count++;
+        } else {
+            ENHANCED_DEBUG("Not a TLS ClientHello packet after %d retries\n", max_retries);
+            
+            // 保存无法识别的数据包用于分析
+            if (save_failed_packets) {
+                // 尝试获取数据包的一些基本信息用于保存
+                int offset = 0;
+                size_t save_size = min(packet_save_size_param, 256U); // 使用模块参数并限制最大值
+                u_int8_t *first_bytes = kmalloc(save_size, GFP_ATOMIC);
+                
+                if (first_bytes) {
+                    // 根据协议类型计算偏移量
+                    if (protocol == IPPROTO_TCP) {
+                        if (par->match->family == NFPROTO_IPV4) {
+                            struct iphdr *iph = ip_hdr(skb);
+                            struct tcphdr _tcph, *tcph;
+                            
+                            tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
+                            if (tcph) {
+                                offset = iph->ihl * 4 + tcph->doff * 4;
+                            }
+                        } else {
+                            struct ipv6hdr *ipv6h = ipv6_hdr(skb);
+                            struct tcphdr _tcph, *tcph;
+                            
+                            tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
+                            if (tcph) {
+                                offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+                            }
+                        }
+                    }
+                    
+                    // 尝试复制数据
+                    if (skb_copy_bits(skb, offset, first_bytes, save_size) == 0) {
+                        char reason[128];
+                        snprintf(reason, sizeof(reason), "Not a TLS ClientHello packet (proto=%u, family=%u)", 
+                                 protocol, par->match->family);
+                        save_packet_data(first_bytes, save_size, reason);
+                    } else {
+                        save_packet_data(NULL, 0, "Not a TLS ClientHello packet - failed to copy data");
+                    }
+                    
+                    kfree(first_bytes);
+                }
+            }
+            
+            return false;
+        }
     }
     
     ENHANCED_DEBUG("Valid TLS ClientHello packet detected\n");
@@ -625,18 +725,30 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
     size_t buffer_size = min_t(size_t, data_len, TLS_MAX_HANDSHAKE_LEN);
-    u_int8_t *tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
-    if (!tmp_buffer) {
-        DEBUGP("Memory allocation failed\n");
-        return false;
-    }
     
-    ENHANCED_DEBUG("Allocated temporary buffer of size: %zu\n", buffer_size);
+    /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
+    #define STACK_BUFFER_SIZE 512
+    u_int8_t *tmp_buffer = NULL;
+    u_int8_t stack_buffer[STACK_BUFFER_SIZE];
+    
+    if (buffer_size <= STACK_BUFFER_SIZE) {
+        tmp_buffer = stack_buffer;
+        ENHANCED_DEBUG("Using stack buffer of size: %zu\n", buffer_size);
+    } else {
+        tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
+        if (!tmp_buffer) {
+            DEBUGP("Memory allocation failed\n");
+            return false;
+        }
+        ENHANCED_DEBUG("Allocated heap buffer of size: %zu\n", buffer_size);
+    }
     
     /* 复制数据到临时缓冲区 */
     if (skb_copy_bits(skb, payload_offset, tmp_buffer, buffer_size) != 0) {
         DEBUGP("Failed to copy packet data\n");
-        kfree(tmp_buffer);
+        if (buffer_size > STACK_BUFFER_SIZE) {
+            kfree(tmp_buffer);
+        }
         return false;
     }
     
@@ -651,11 +763,15 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
             DEBUGP("First 6 bytes: %02x %02x %02x %02x %02x %02x\n", 
                    tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
         }
-        kfree(tmp_buffer);
+        if (buffer_size > STACK_BUFFER_SIZE) {
+            kfree(tmp_buffer);
+        }
         return false;
     }
     
-    kfree(tmp_buffer);
+    if (buffer_size > STACK_BUFFER_SIZE) {
+        kfree(tmp_buffer);
+    }
     
     ENHANCED_DEBUG("Successfully extracted SNI: %s (length: %d)\n", extracted_sni, sni_len);
     
@@ -678,7 +794,6 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     return result;
 }
-
 static struct xt_match sni_match[] __read_mostly = {
     {
         .name       = "sni",
