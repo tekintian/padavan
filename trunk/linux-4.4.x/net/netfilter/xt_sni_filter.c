@@ -14,6 +14,7 @@
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <linux/netfilter_ipv6/ip6_tables.h>
+#include <linux/ratelimit.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Padavan Firmware");
@@ -31,12 +32,31 @@ static int enable_debug = 0;
 module_param(enable_debug, int, 0644);
 MODULE_PARM_DESC(enable_debug, "Enable debugging messages (0=off, 1=on)");
 
+// 速率限制定义
+#define SNI_DEBUG_RATELIMIT_INTERVAL (60 * HZ)  // 60秒间隔
+#define SNI_DEBUG_RATELIMIT_BURST 10            // 每次最多输出10条
+
 /* 调试宏定义 */
 #ifdef DEBUG
-#define DEBUGP(fmt, args...) printk(KERN_DEBUG "[SNI-FILTER] %s:%d: " fmt, __func__, __LINE__, ##args)
+#define DEBUGP(fmt, args...) do { \
+    if (net_ratelimit()) { \
+        printk(KERN_DEBUG "[SNI-FILTER] %s:%d: " fmt, __func__, __LINE__, ##args); \
+    } \
+} while (0)
 #else
-#define DEBUGP(fmt, args...) do { if (enable_debug) printk(KERN_DEBUG "[SNI-FILTER] %s:%d: " fmt, __func__, __LINE__, ##args); } while (0)
+#define DEBUGP(fmt, args...) do { \
+    if (enable_debug && net_ratelimit()) { \
+        printk(KERN_DEBUG "[SNI-FILTER] %s:%d: " fmt, __func__, __LINE__, ##args); \
+    } \
+} while (0)
 #endif
+
+// 增强调试宏
+#define ENHANCED_DEBUG(fmt, args...) do { \
+    if (enable_debug && net_ratelimit()) { \
+        printk(KERN_DEBUG "[SNI-FILTER-ENHANCED] %s:%d: " fmt, __func__, __LINE__, ##args); \
+    } \
+} while (0)
 
 struct xt_sni_info {
     char sni[SNI_MAX_LEN];
@@ -93,6 +113,8 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
         DEBUGP("Not a ClientHello message\n");
         return -1;
     }
+    
+    ENHANCED_DEBUG("TLS Handshake verification passed, type=%u, length=%u\n", handshake->type, handshake_len);
     
     /* 跳过TLS握手头部，直接处理ClientHello内容 */
     ptr += sizeof(struct tls_handshake);
@@ -167,13 +189,13 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
         return -1;
     }
     
+    ENHANCED_DEBUG("Extensions parsing started, extensions_len=%u\n", extensions_len);
+    
     while (ptr < ext_end && remaining >= 4) {
         u_int16_t ext_type = ntohs(*(u_int16_t *)ptr);
         u_int16_t ext_len = ntohs(*(u_int16_t *)(ptr + 2));
         
-        if (ext_len > remaining - 4 || ext_type == TLS_EXTENSION_SNI) {
-            DEBUGP("Processing extension: type=%u, len=%u\n", ext_type, ext_len);
-        }
+        ENHANCED_DEBUG("Processing extension: type=%u, len=%u\n", ext_type, ext_len);
         
         if (ext_len > remaining - 4) {
             break;
@@ -230,7 +252,13 @@ static int extract_sni_from_tls(const u_int8_t *data, u_int32_t data_len, char *
                         memset(sni_out, 0, sni_out_len); /* 确保缓冲区初始化 */
                         memcpy(sni_out, sni_ptr, name_len);
                         sni_out[name_len] = '\0'; /* 确保字符串终止 */
-                        DEBUGP("Extracted SNI: %s\n", sni_out);
+                        ENHANCED_DEBUG("Extracted SNI: %s\n", sni_out);
+                        
+                        // 特殊处理 news.qq.com 的情况
+                        if (strcmp(sni_out, "news.qq.com") == 0) {
+                            ENHANCED_DEBUG("Special case detected: news.qq.com\n");
+                        }
+                        
                         return name_len;
                     }
                 }
@@ -261,6 +289,8 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
     if (!skb) {
         return false;
     }
+    
+    ENHANCED_DEBUG("Checking TLS ClientHello for protocol %u\n", protocol);
     
     /* 获取传输层头部偏移量 */
     if (protocol == IPPROTO_TCP) {
@@ -317,7 +347,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
             return false;
         }
         
-        DEBUGP("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
+        ENHANCED_DEBUG("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
                record_type, data_len, payload_offset);
         
         /* 检查TLS ClientHello消息类型 */
@@ -331,7 +361,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         if (message_type != TLS_CLIENT_HELLO) {
             return false;
         }
-        DEBUGP("TLS ClientHello detected\n");
+        ENHANCED_DEBUG("TLS ClientHello detected\n");
         
     } else if (protocol == IPPROTO_UDP) {
         /* 处理DTLS情况 */
@@ -372,7 +402,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
             return false;
         }
         
-        DEBUGP("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
+        ENHANCED_DEBUG("TLS record: type=%u, data_len=%u, payload_offset=%d\n", 
                record_type, data_len, payload_offset);
         
         /* 检查DTLS ClientHello消息类型 */
@@ -386,7 +416,7 @@ static bool is_tls_client_hello(const struct sk_buff *skb, u_int8_t protocol)
         if (message_type != TLS_CLIENT_HELLO) {
             return false;
         }
-        DEBUGP("TLS ClientHello detected\n");
+        ENHANCED_DEBUG("TLS ClientHello detected\n");
     } else {
         return false;
     }
@@ -406,6 +436,10 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
         return false;
     }
     
+    ENHANCED_DEBUG("Matching haystack='%.*s' (%zu) with needle='%.*s' (%zu)\n", 
+           (int)haystack_len, haystack, haystack_len, 
+           (int)needle_len, needle, needle_len);
+    
     // 检测规则中是否包含路径模式(/xxx)，如果包含则SNI模块跳过处理
     // 因为路径级匹配应该由HTTP过滤模块负责处理
     for (i = 0; i < needle_len; i++) {
@@ -422,9 +456,12 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
             const char *domain_part = needle + 1; // 跳过*，从.开始
             size_t domain_len = needle_len - 1;
             
+            ENHANCED_DEBUG("Wildcard format *.domain.com detected, domain_part='%s', domain_len=%zu\n", domain_part, domain_len);
+            
             // 匹配主域名（domain.com）
             if (haystack_len == domain_len - 1 && 
                 strncmp(haystack, domain_part + 1, domain_len - 1) == 0) {
+                ENHANCED_DEBUG("Matched main domain: %.*s\n", (int)(domain_len - 1), domain_part + 1);
                 return true;
             }
             
@@ -432,6 +469,7 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
             if (haystack_len > domain_len && 
                 haystack[haystack_len - domain_len] == '.' && 
                 strncmp(haystack + haystack_len - domain_len, domain_part, domain_len) == 0) {
+                ENHANCED_DEBUG("Matched subdomain: %.*s\n", (int)haystack_len, haystack);
                 return true;
             }
             
@@ -443,6 +481,8 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
             const char *suffix_part = needle + 1; // 跳过*，取剩余部分
             size_t suffix_len = needle_len - 1;
             
+            ENHANCED_DEBUG("Wildcard format *domain.com detected, suffix_part='%s', suffix_len=%zu\n", suffix_part, suffix_len);
+            
             // 检查长度是否足够
             if (haystack_len < suffix_len) {
                 return false;
@@ -450,6 +490,7 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
             
             // 检查末尾是否匹配
             if (strncmp(haystack + haystack_len - suffix_len, suffix_part, suffix_len) == 0) {
+                ENHANCED_DEBUG("Matched suffix: %.*s\n", (int)suffix_len, suffix_part);
                 return true;
             }
             
@@ -459,11 +500,17 @@ static bool match_string_safe(const char *haystack, size_t haystack_len, const c
     
     // 精确域名匹配（性能最优）
     if (haystack_len == needle_len) {
-        return memcmp(haystack, needle, needle_len) == 0;
+        bool result = memcmp(haystack, needle, needle_len) == 0;
+        if (result) {
+            ENHANCED_DEBUG("Exact match found: %.*s\n", (int)needle_len, needle);
+        }
+        return result;
     }
     
+    ENHANCED_DEBUG("No match found\n");
     return false;
 }
+
 /* 主要的匹配函数 */
 static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
@@ -486,8 +533,12 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
         return false;
     }
     
+    ENHANCED_DEBUG("Starting SNI matching process\n");
+    
     /* 确保info->sni以null结尾 */
     const char *sni_pattern = info->sni;
+    // 调试输出：打印匹配模式 这里是为了调试，实际使用时可以注释掉 
+    // 输出类似: Dec  1 22:13:38 kernel: [SNI-FILTER] xt_sni_match:467: Matching pattern: *qq.com
     DEBUGP("Matching pattern: %s\n", sni_pattern);
     
     /* 确定协议类型 */
@@ -498,6 +549,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
             return false;
         }
         protocol = iph->protocol;
+        ENHANCED_DEBUG("IPv4 protocol: %u\n", protocol);
     } else if (par->match->family == NFPROTO_IPV6) {
         struct ipv6hdr *ipv6h = ipv6_hdr(skb);
         if (!ipv6h) {
@@ -505,6 +557,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
             return false;
         }
         protocol = ipv6h->nexthdr;
+        ENHANCED_DEBUG("IPv6 protocol: %u\n", protocol);
     } else {
         DEBUGP("Unsupported protocol family\n");
         return false;
@@ -512,8 +565,11 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     /* 检查是否为TLS/DTLS ClientHello */
     if (!is_tls_client_hello(skb, protocol)) {
+        ENHANCED_DEBUG("Not a TLS ClientHello packet\n");
         return false;
     }
+    
+    ENHANCED_DEBUG("Valid TLS ClientHello packet detected\n");
     
     /* 计算有效载荷偏移量 */
     if (protocol == IPPROTO_TCP) {
@@ -557,6 +613,8 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
         return false;
     }
     
+    ENHANCED_DEBUG("Payload offset calculated: %d, data_len: %u\n", payload_offset, data_len);
+    
     /* 限制最大数据长度以防止过大的分配 */
     if (data_len < 5 || data_len > SNI_MAX_LEN * 2) {
         DEBUGP("Invalid data length: %u\n", data_len);
@@ -570,6 +628,8 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
         DEBUGP("Memory allocation failed\n");
         return false;
     }
+    
+    ENHANCED_DEBUG("Allocated temporary buffer of size: %zu\n", buffer_size);
     
     /* 复制数据到临时缓冲区 */
     if (skb_copy_bits(skb, payload_offset, tmp_buffer, buffer_size) != 0) {
@@ -595,16 +655,26 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     
     kfree(tmp_buffer);
     
+    ENHANCED_DEBUG("Successfully extracted SNI: %s (length: %d)\n", extracted_sni, sni_len);
+    
+    /* 特殊处理 news.qq.com */
+    if (strcmp(extracted_sni, "news.qq.com") == 0) {
+        ENHANCED_DEBUG("Special handling for news.qq.com\n");
+    }
+    
     /* 安全地进行字符串匹配 */
     bool matched = false;
     if (sni_len > 0 && sni_len < SNI_MAX_LEN) {
         /* 确保提取的SNI以null结尾 */
         extracted_sni[SNI_MAX_LEN - 1] = '\0';
         matched = match_string_safe(extracted_sni, sni_len, info->sni, info->len);
-        DEBUGP("SNI match result: %s\n", matched ? "true" : "false");
+        ENHANCED_DEBUG("SNI match result: %s\n", matched ? "true" : "false");
     }
     
-    return (matched ^ info->invert);
+    bool result = (matched ^ info->invert);
+    ENHANCED_DEBUG("Final match result (after invert): %s\n", result ? "true" : "false");
+    
+    return result;
 }
 
 static struct xt_match sni_match[] __read_mostly = {
