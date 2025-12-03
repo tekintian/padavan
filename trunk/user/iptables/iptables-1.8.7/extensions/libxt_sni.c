@@ -115,14 +115,14 @@ static struct xtables_match sni_match = {
                      offsetof(struct xt_sni_info, config),
     .help          = sni_help,
     .init          = sni_init,
-    .parse         = sni_parse,
-    .final_check   = sni_check,
     .print         = sni_print,
     .save          = sni_save,
-    .extra_opts    = sni_opts,
+    .x6_parse      = sni_parse,
+    .x6_fcheck     = sni_check,
+    .x6_options    = sni_opts,
 };
 
-static void _init(void)
+void _init(void)
 {
     xtables_register_match(&sni_match);
 }
