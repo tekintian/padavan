@@ -435,8 +435,7 @@ static bool match_string_safe(const char *haystack, size_t haystack_len,
 }
 
 /* 主匹配函数 */
-static bool xt_sni_match(const struct sk_buff *skb,
-                        struct xt_action_param *par) {
+static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par) {
     const struct xt_sni_info *info = par->matchinfo;
     const struct iphdr *iph_const = NULL;
     const struct ipv6hdr *ipv6h_const = NULL;
@@ -464,15 +463,31 @@ static bool xt_sni_match(const struct sk_buff *skb,
     unsigned int protocol;
     int max_retries = 2;
     int retry_count = 0;
+    bool is_interrupt_context = in_interrupt();
     
-    ENHANCED_DEBUG("Starting SNI match\n");
+    ENHANCED_DEBUG("Starting SNI match (interrupt context: %s)\n", 
+                  is_interrupt_context ? "yes" : "no");
+    
+    /* 检查skb指针有效性 */
+    if (!skb || !par || !info) {
+        DEBUGP("Invalid input parameters\n");
+        return false;
+    }
     
     /* 获取协议类型 */
     if (par->match->family == NFPROTO_IPV4) {
         iph_const = ip_hdr(skb);
+        if (!iph_const) {
+            DEBUGP("Failed to get IPv4 header\n");
+            return false;
+        }
         protocol = iph_const->protocol;
     } else {
         ipv6h_const = ipv6_hdr(skb);
+        if (!ipv6h_const) {
+            DEBUGP("Failed to get IPv6 header\n");
+            return false;
+        }
         protocol = ipv6h_const->nexthdr;
     }
     
@@ -496,7 +511,8 @@ static bool xt_sni_match(const struct sk_buff *skb,
         return false;
     }
     
-    ENHANCED_DEBUG("TCP source port: %u, dest port: %u\n", ntohs(tcph_const->source), ntohs(tcph_const->dest));
+    ENHANCED_DEBUG("TCP source port: %u, dest port: %u\n", 
+                  ntohs(tcph_const->source), ntohs(tcph_const->dest));
     
     /* 重试机制：尝试多次解析TLS数据包 */
     for (retry_count = 0; retry_count < max_retries; retry_count++) {
@@ -505,6 +521,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             mdelay(1);  // 添加短暂延迟
             cpu_relax();
         }
+        
         /* 重新获取TCP头部指针 */
         if (par->match->family == NFPROTO_IPV4) {
             tcph_const = skb_header_pointer(skb, iph_const->ihl * 4, sizeof(_tcph_const), &_tcph_const);
@@ -514,7 +531,10 @@ static bool xt_sni_match(const struct sk_buff *skb,
         
         if (!tcph_const) {
             DEBUGP("Failed to get TCP header on retry %d\n", retry_count);
-            return false;
+            if (retry_count < max_retries - 1) {
+                continue;
+            }
+            goto failed_packet;
         }
         
         /* 计算有效载荷偏移量 */
@@ -526,12 +546,23 @@ static bool xt_sni_match(const struct sk_buff *skb,
         
         ENHANCED_DEBUG("Payload offset: %u\n", payload_offset);
         
-        /* 检查偏移量是否合理 */
         /* 严格验证payload_offset，这是导致崩溃的主要原因！ */
-        if (payload_offset >= skb->len || payload_offset + 5 > skb->len) {
+        if (payload_offset >= skb->len || payload_offset < 0) {
             DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
                    payload_offset, skb->len);
-            return false;
+            if (retry_count < max_retries - 1) {
+                continue;
+            }
+            goto failed_packet;
+        }
+        
+        /* 检查是否有足够数据读取TLS记录类型 */
+        if (payload_offset + 1 > skb->len) {
+            DEBUGP("Insufficient data for TLS record type\n");
+            if (retry_count < max_retries - 1) {
+                continue;
+            }
+            goto failed_packet;
         }
         
         /* 获取TLS记录类型 */
@@ -545,9 +576,10 @@ static bool xt_sni_match(const struct sk_buff *skb,
         }
         record_type = *data_ptr;
         
-        ENHANCED_DEBUG("Record type: %u (expected TLS_HANDSHAKE: %u)\n", record_type, TLS_HANDSHAKE);
+        ENHANCED_DEBUG("Record type: %u (expected TLS_HANDSHAKE: %u)\n", 
+                      record_type, TLS_HANDSHAKE);
         
-        /* 检查是否为TLS握手记录 */
+        /* 检查是否为TLS握手记录 - 早期过滤 */
         if (record_type != TLS_HANDSHAKE) {
             ENHANCED_DEBUG("Not a TLS Handshake record, type: %u\n", record_type);
             /* 如果是应用数据，说明这不是握手阶段，直接返回false */
@@ -561,7 +593,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             goto failed_packet;
         }
 
-        /* 获取握手类型 */
+        /* 检查是否有足够数据读取握手类型 */
         if (payload_offset + 5 >= skb->len) {
             DEBUGP("Insufficient data for handshake type\n");
             if (retry_count < max_retries - 1) {
@@ -570,6 +602,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             goto failed_packet;
         }
 
+        /* 获取握手类型 */
         data_ptr = skb_header_pointer(skb, payload_offset + 5, 1, &handshake_type);
         if (!data_ptr) {
             DEBUGP("Failed to get handshake type on retry %d\n", retry_count);
@@ -580,7 +613,8 @@ static bool xt_sni_match(const struct sk_buff *skb,
         }
         handshake_type = *data_ptr;
 
-        ENHANCED_DEBUG("Handshake type: %u (expected TLS_CLIENT_HELLO: %u)\n", handshake_type, TLS_CLIENT_HELLO);
+        ENHANCED_DEBUG("Handshake type: %u (expected TLS_CLIENT_HELLO: %u)\n", 
+                      handshake_type, TLS_CLIENT_HELLO);
 
         /* 检查是否为ClientHello */
         if (handshake_type != TLS_CLIENT_HELLO) {
@@ -588,16 +622,17 @@ static bool xt_sni_match(const struct sk_buff *skb,
             return false;
         }
 
-        // 添加TLS版本验证（在握手类型验证之后）
+        /* 添加TLS版本验证 */
         if (payload_offset + 9 < skb->len) {
             unsigned char major_version, minor_version;
             data_ptr = skb_header_pointer(skb, payload_offset + 6, 1, &major_version);
             if (data_ptr) {
                 data_ptr = skb_header_pointer(skb, payload_offset + 7, 1, &minor_version);
                 if (data_ptr) {
-                    // 只处理TLS 1.0及以上版本 (3.1 = TLS 1.0)
+                    /* 只处理TLS 1.0及以上版本 (3.1 = TLS 1.0) */
                     if (major_version < 3 || (major_version == 3 && minor_version < 1)) {
-                        ENHANCED_DEBUG("Unsupported TLS version: %u.%u\n", major_version, minor_version);
+                        ENHANCED_DEBUG("Unsupported TLS version: %u.%u\n", 
+                                      major_version, minor_version);
                         return false;
                     }
                 }
@@ -616,66 +651,65 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     ENHANCED_DEBUG("Valid TLS ClientHello packet detected\n");
     
-    /* 计算有效载荷偏移量 */
-    if (protocol == IPPROTO_TCP) {
-        if (par->match->family == NFPROTO_IPV4) {
-            iph = ip_hdr(skb);
-            tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
-            if (!tcph) {
-                DEBUGP("Failed to get TCP header\n");
-                return false;
-            }
-            payload_offset = iph->ihl * 4 + tcph->doff * 4;
-             /* 必须添加的边界检查 */
-            if (payload_offset >= skb->len) {
-                DEBUGP("Invalid payload offset after TCP calculation: %u, skb len: %u\n", 
-                    payload_offset, skb->len);
-                return false;
-            }
-
-            data_len = ntohs(iph->tot_len) - payload_offset;
-        } else {
-            tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
-            if (!tcph) {
-                DEBUGP("Failed to get TCP header\n");
-                return false;
-            }
-            payload_offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
-            data_len = skb->len - payload_offset;
+    /* 重新计算有效载荷偏移量，确保准确性 */
+    if (par->match->family == NFPROTO_IPV4) {
+        iph = ip_hdr(skb);
+        if (!iph) {
+            DEBUGP("Failed to get IPv4 header for payload calculation\n");
+            return false;
         }
         
-        /* 添加紧急修复：验证payload_offset有效性 */
-        if (payload_offset >= skb->len || payload_offset + 5 > skb->len) {
-            DEBUGP("Invalid payload offset after recalculation: %u, skb len: %u\n", 
+        tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
+        if (!tcph) {
+            DEBUGP("Failed to get TCP header for payload calculation\n");
+            return false;
+        }
+        
+        payload_offset = iph->ihl * 4 + tcph->doff * 4;
+        /* 必须添加的边界检查 */
+        if (payload_offset >= skb->len || payload_offset < 0) {
+            DEBUGP("Invalid payload offset after TCP calculation: %u, skb len: %u\n", 
                 payload_offset, skb->len);
             return false;
         }
-    } else if (protocol == IPPROTO_UDP) {
-        if (par->match->family == NFPROTO_IPV4) {
-            iph = ip_hdr(skb);
-            payload_offset = iph->ihl * 4 + sizeof(struct udphdr);
-            data_len = ntohs(iph->tot_len) - iph->ihl * 4 - sizeof(struct udphdr);
-        } else {
-            payload_offset = sizeof(struct ipv6hdr) + sizeof(struct udphdr);
-            // 注意：对于IPv6 UDP，我们需要从skb中获取实际数据长度
-            data_len = skb->len - payload_offset;
-        }
+
+        data_len = ntohs(iph->tot_len) - payload_offset;
     } else {
-        DEBUGP("Unsupported protocol: %u\n", protocol);
+        tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
+        if (!tcph) {
+            DEBUGP("Failed to get TCP header for IPv6 payload calculation\n");
+            return false;
+        }
+        
+        payload_offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+        if (payload_offset >= skb->len || payload_offset < 0) {
+            DEBUGP("Invalid payload offset for IPv6: %u (skb len: %u)\n", 
+                   payload_offset, skb->len);
+            return false;
+        }
+        
+        data_len = skb->len - payload_offset;
+    }
+    
+    /* 再次验证payload_offset有效性 - 防止之前的计算错误 */
+    if (payload_offset >= skb->len || payload_offset < 0) {
+        DEBUGP("Invalid payload offset after recalculation: %u, skb len: %u\n", 
+            payload_offset, skb->len);
         return false;
     }
     
-    ENHANCED_DEBUG("Payload offset calculated: %d, data_len: %u\n", payload_offset, data_len);
+    ENHANCED_DEBUG("Payload offset calculated: %u, data_len: %u\n", 
+                  payload_offset, data_len);
     
     /* 检查数据长度是否有效 */
     if (data_len == 0 || data_len > skb->len - payload_offset) {
         DEBUGP("Invalid data length: %u, using skb calculation\n", data_len);
-        // 使用skb->len - payload_offset作为准确的数据长度
+        /* 使用skb->len - payload_offset作为准确的数据长度 */
         data_len = skb->len - payload_offset;
         ENHANCED_DEBUG("Corrected data_len: %u\n", data_len);
     }
     
-    /* 限制最大数据长度以防止过大的分配 */
+    /* 限制最小数据长度 */
     if (data_len < 5) {
         DEBUGP("Data length too short: %u\n", data_len);
         return false;
@@ -683,6 +717,12 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
     buffer_size = min_t(size_t, (size_t)data_len, (size_t)TLS_MAX_HANDSHAKE_LEN);
+    
+    /* 在中断上下文中使用更严格的内存限制 */
+    if (is_interrupt_context && buffer_size > STACK_BUFFER_SIZE / 2) {
+        DEBUGP("Packet too large for interrupt context processing, reducing size\n");
+        buffer_size = STACK_BUFFER_SIZE / 2;
+    }
     
     /* 确保至少有基本的数据量进行处理 */
     if (buffer_size < 11) {  /* TLS头部(5) + Handshake头部(6) = 11 */
@@ -693,18 +733,34 @@ static bool xt_sni_match(const struct sk_buff *skb,
     /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
     if (buffer_size <= STACK_BUFFER_SIZE) {
         tmp_buffer = stack_buffer;
-        // 确保栈缓冲区清零
+        /* 确保栈缓冲区清零 */
         memset(stack_buffer, 0, STACK_BUFFER_SIZE);
         ENHANCED_DEBUG("Using stack buffer of size: %zu\n", buffer_size);
     } else {
+        /* 在中断上下文中避免堆分配 */
+        if (is_interrupt_context) {
+            DEBUGP("Avoiding heap allocation in interrupt context\n");
+            return false;
+        }
+        
         tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
         if (!tmp_buffer) {
             DEBUGP("Memory allocation failed\n");
             return false;
         }
-        // 确保堆缓冲区清零
+        /* 确保堆缓冲区清零 */
         memset(tmp_buffer, 0, buffer_size);
         ENHANCED_DEBUG("Allocated heap buffer of size: %zu\n", buffer_size);
+    }
+    
+    /* 在复制数据前再次验证边界 */
+    if (payload_offset + buffer_size > skb->len || payload_offset < 0) {
+        DEBUGP("Invalid buffer size: %zu for skb len: %u at offset: %u\n", 
+               buffer_size, skb->len, payload_offset);
+        if (buffer_size > STACK_BUFFER_SIZE) {
+            kfree(tmp_buffer);
+        }
+        return false;
     }
     
     /* 复制数据到临时缓冲区 */
@@ -716,7 +772,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         return false;
     }
 
-    // 添加防御性检查
+    /* 添加防御性检查 */
     if (!tmp_buffer || buffer_size == 0) {
         DEBUGP("Invalid buffer or size\n");
         if (buffer_size > STACK_BUFFER_SIZE) {
@@ -729,7 +785,8 @@ static bool xt_sni_match(const struct sk_buff *skb,
     sni_len = extract_sni_from_tls(tmp_buffer, buffer_size, extracted_sni, sizeof(extracted_sni));
     
     if (sni_len < 0) {
-        DEBUGP("Failed to extract SNI, allowing packet through\n Data length: %u, buffer size: %zu\n", data_len, buffer_size);
+        DEBUGP("Failed to extract SNI, allowing packet through\n Data length: %u, buffer size: %zu\n", 
+               data_len, buffer_size);
         if (buffer_size >= 6 && tmp_buffer) {
             DEBUGP("First 6 bytes: %02x %02x %02x %02x %02x %02x\n", 
                tmp_buffer[0], tmp_buffer[1], tmp_buffer[2], tmp_buffer[3], tmp_buffer[4], tmp_buffer[5]);
@@ -737,15 +794,17 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        // 对于无法提取SNI的数据包，返回false
+        /* 对于无法提取SNI的数据包，返回false */
         return false;
     }
     
+    /* 释放临时缓冲区 */
     if (buffer_size > STACK_BUFFER_SIZE) {
         kfree(tmp_buffer);
     }
     
-    ENHANCED_DEBUG("Successfully extracted SNI: %s (length: %d)\n", extracted_sni, sni_len);
+    ENHANCED_DEBUG("Successfully extracted SNI: %s (length: %d)\n", 
+                  extracted_sni, sni_len);
     
     /* 安全地进行字符串匹配 */
     if (sni_len > 0 && sni_len < SNI_MAX_LEN) {
@@ -754,60 +813,76 @@ static bool xt_sni_match(const struct sk_buff *skb,
         ENHANCED_DEBUG("SNI match result: %s\n", matched ? "true" : "false");
     }
     
-    // 只有当明确匹配时才应用结果，否则默认放行 ^ 异或操作  true ^ 1 = false, false ^ 1 = true
+    /* 只有当明确匹配时才应用结果，否则默认放行 */
     result = matched ? (matched ^ info->invert) : info->invert;
     ENHANCED_DEBUG("Final match result (after invert): %s\n", result ? "true" : "false");
     
     return result;
 
 failed_packet:
-    // 保存无法识别的数据包用于分析
+    /* 保存无法识别的数据包用于分析 */
     if (save_failed_packets) {
-        // 尝试获取数据包的一些基本信息用于保存
-        // 修复min宏的类型问题
-        save_size = min_t(size_t, (size_t)packet_save_size_param, (size_t)256U); // 使用模块参数并限制最大值
-        first_bytes = kmalloc(save_size, GFP_ATOMIC);
+        /* 尝试获取数据包的一些基本信息用于保存 */
+        save_size = min_t(size_t, (size_t)packet_save_size_param, (size_t)256U); 
+        
+        /* 在中断上下文中避免堆分配 */
+        if (is_interrupt_context) {
+            save_size = 0;
+        }
+        
+        first_bytes = save_size > 0 ? kmalloc(save_size, GFP_ATOMIC) : NULL;
         
         if (first_bytes) {
-            // 根据协议类型计算偏移量
+            /* 根据协议类型计算偏移量 */
             if (protocol == IPPROTO_TCP) {
                 if (par->match->family == NFPROTO_IPV4) {
                     iph = ip_hdr(skb);
-                    
-                    tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
-                    if (tcph) {
-                        offset = iph->ihl * 4 + tcph->doff * 4;
-                        if (offset > skb->len) {
-                            DEBUGP("Invalid offset in failed packet handling: %u, skb len: %u\n", offset, skb->len);
-                            offset = 0; // 重置为安全值
+                    if (iph) {
+                        tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
+                        if (tcph) {
+                            offset = iph->ihl * 4 + tcph->doff * 4;
+                            /* 增强的边界检查 */
+                            if (offset > skb->len) {
+                                DEBUGP("Invalid offset in failed packet handling: %u, skb len: %u\n", 
+                                       offset, skb->len);
+                                offset = 0; /* 重置为安全值 */
+                            }
                         }
                     }
                 } else {
                     tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
                     if (tcph) {
                         offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+                        /* 增强的边界检查 */
                         if (offset > skb->len) {
-                            DEBUGP("Invalid offset in failed packet handling (IPv6): %u, skb len: %u\n", offset, skb->len);
-                            offset = 0; // 重置为安全值
+                            DEBUGP("Invalid offset in failed packet handling (IPv6): %u, skb len: %u\n", 
+                                   offset, skb->len);
+                            offset = 0; /* 重置为安全值 */
                         }
                     }
                 }
             }
             
-            // 尝试复制数据
-            if (skb_copy_bits(skb, offset, first_bytes, save_size) == 0) {
-                snprintf(reason, sizeof(reason), "Not a TLS ClientHello packet (proto=%u, family=%u)", 
-                         protocol, par->match->family);
-                save_packet_data(first_bytes, save_size, reason);
+            /* 尝试复制数据 */
+            if (save_size > 0 && offset < skb->len) {
+                /* 确保复制不会越界 */
+                size_t actual_size = min(save_size, (size_t)(skb->len - offset));
+                if (skb_copy_bits(skb, offset, first_bytes, actual_size) == 0) {
+                    snprintf(reason, sizeof(reason), "Not a TLS ClientHello packet (proto=%u, family=%u)", 
+                             protocol, par->match->family);
+                    save_packet_data(first_bytes, actual_size, reason);
+                } else {
+                    save_packet_data(NULL, 0, "Not a TLS ClientHello packet - failed to copy data");
+                }
             } else {
-                save_packet_data(NULL, 0, "Not a TLS ClientHello packet - failed to copy data");
+                save_packet_data(NULL, 0, "Not a TLS ClientHello packet - invalid parameters");
             }
             
             kfree(first_bytes);
         }
     }
     
-    // 返回false，确保非规则流量默认放行
+    /* 返回false，确保非规则流量默认放行 */
     return false;
 }
 
