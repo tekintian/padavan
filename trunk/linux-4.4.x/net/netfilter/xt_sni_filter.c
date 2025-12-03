@@ -30,6 +30,7 @@
 #include <linux/time.h>
 #include <net/tcp.h>
 #include <net/udp.h>
+#include <linux/jiffies.h>
 
 #define SNI_MAX_LEN 256
 #define TLS_MAX_HANDSHAKE_LEN 1536
@@ -514,15 +515,10 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     ENHANCED_DEBUG("TCP source port: %u, dest port: %u\n", 
                   ntohs(tcph_const->source), ntohs(tcph_const->dest));
     
-    /* 重试机制：尝试多次解析TLS数据包 */
-    for (retry_count = 0; retry_count < max_retries; retry_count++) {
-        /* 添加延迟避免过度处理 */
-        if (retry_count > 0) {
-            mdelay(1);  // 添加短暂延迟
-            cpu_relax();
-        }
+    /* 简化处理：只尝试一次，避免重试导致的性能问题 */
+    retry_count = 0;
         
-        /* 重新获取TCP头部指针 */
+        /* 获取TCP头部指针 */
         if (par->match->family == NFPROTO_IPV4) {
             tcph_const = skb_header_pointer(skb, iph_const->ihl * 4, sizeof(_tcph_const), &_tcph_const);
         } else {
@@ -530,10 +526,7 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
         }
         
         if (!tcph_const) {
-            DEBUGP("Failed to get TCP header on retry %d\n", retry_count);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
+            DEBUGP("Failed to get TCP header\n");
             goto failed_packet;
         }
         
@@ -550,28 +543,19 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
         if (payload_offset >= skb->len || payload_offset < 0) {
             DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
                    payload_offset, skb->len);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
             goto failed_packet;
         }
         
         /* 检查是否有足够数据读取TLS记录类型 */
         if (payload_offset + 1 > skb->len) {
             DEBUGP("Insufficient data for TLS record type\n");
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
             goto failed_packet;
         }
         
         /* 获取TLS记录类型 */
         data_ptr = skb_header_pointer(skb, payload_offset, 1, &record_type);
         if (!data_ptr) {
-            DEBUGP("Failed to get record type on retry %d\n", retry_count);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
+            DEBUGP("Failed to get record type\n");
             goto failed_packet;
         }
         record_type = *data_ptr;
@@ -587,28 +571,19 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
                 ENHANCED_DEBUG("TLS Application Data detected, not ClientHello\n");
                 return false;
             }
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
             goto failed_packet;
         }
 
         /* 检查是否有足够数据读取握手类型 */
         if (payload_offset + 5 >= skb->len) {
             DEBUGP("Insufficient data for handshake type\n");
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
             goto failed_packet;
         }
 
         /* 获取握手类型 */
         data_ptr = skb_header_pointer(skb, payload_offset + 5, 1, &handshake_type);
         if (!data_ptr) {
-            DEBUGP("Failed to get handshake type on retry %d\n", retry_count);
-            if (retry_count < max_retries - 1) {
-                continue;
-            }
+            DEBUGP("Failed to get handshake type\n");
             goto failed_packet;
         }
         handshake_type = *data_ptr;
@@ -820,8 +795,8 @@ static bool xt_sni_match(const struct sk_buff *skb, struct xt_action_param *par)
     return result;
 
 failed_packet:
-    /* 保存无法识别的数据包用于分析 */
-    if (save_failed_packets) {
+    /* 保存无法识别的数据包用于分析 - 添加频率限制避免性能问题 */
+    if (save_failed_packets && (jiffies % 100) == 0) {  /* 每100个jiffies保存一次 */
         /* 尝试获取数据包的一些基本信息用于保存 */
         save_size = min_t(size_t, (size_t)packet_save_size_param, (size_t)256U); 
         

@@ -838,7 +838,7 @@ include_webstr_filter(FILE *fp)
         }
     }
 
-    logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
+    //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     
     /* 🔥 修复：添加默认RETURN规则，确保不匹配URL规则的流量能正常通过 */
     if (webstr_items > 0) {
@@ -846,7 +846,7 @@ include_webstr_filter(FILE *fp)
         logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
     }
     
-    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
+    // logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int
