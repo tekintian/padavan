@@ -19,24 +19,30 @@ CONFIGURE_ARGS += \
 	--with-kernel=$(ROOTDIR)/$(LINUXDIR) \
 	--with-xt-lock-name="/var/lock/xtables.lock"
 
-# 确保自定义扩展库被编译
-define Build/Compile/Extensions
+# 修复编译流程 - 避免Hook问题
+define Build/Compile
+	$(call Build/Compile/Default)
+	# 在主编译完成后立即编译扩展
 	$(MAKE_VARS) \
 	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/extensions \
 		$(MAKE_FLAGS) \
 		libxt_sni.so libxt_webstr.so
 endef
 
-# 修复运行时环境问题
+# 预编译环境清理
 define Fix/Environment
-	@echo "清理编译环境变量..."
-	@sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c
-	@sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c
-	@sed -i 's|/usr/bin/sed|/bin/sed|g' $(PKG_BUILD_DIR)/iptables/iptables.c
+	@echo "预编译环境清理..."
+	@export CCACHE_DISABLE=1
+	@unset CCACHE_DIR CCACHE_BASEDIR
+	# 清理源码中的硬编码路径
+	@if [ -f $(PKG_BUILD_DIR)/iptables/iptables.c ]; then \
+		sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c; \
+		sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c; \
+	fi
 endef
 
-Hooks/Compile/Post += Build/Compile/Extensions
-Hooks/PreCompile += Fix/Environment
+# 在配置前执行环境清理
+Hooks/Configure/Pre += Fix/Environment
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
@@ -50,23 +56,41 @@ romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/bin
 	# 确保扩展库已编译
 	$(MAKE) -C $(PKG_BUILD_DIR)/extensions libxt_sni.so libxt_webstr.so
-	# 添加以下两行，确保库文件被安装到固件中
+	# 安装扩展库和二进制文件
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/iptables/xtables-legacy-multi $(ROMFSDIR)/bin/xtables-multi
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-restore
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-save
+	# 只创建必要的目录，不添加额外工具
+	$(INSTALL_DIR) $(ROMFSDIR)/tmp
 ifdef CONFIG_IPV6
 	$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables
 	$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables-restore
 	$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables-save
 endif
-# 修复运行时环境问题
-define Fix/Environment
-	@echo "清理编译环境变量..."
-	@sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c
-	@sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c
+# 修复编译流程 - 避免Hook问题
+define Build/Compile
+	$(call Build/Compile/Default)
+	# 在主编译完成后立即编译扩展
+	$(MAKE_VARS) \
+	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/extensions \
+		$(MAKE_FLAGS) \
+		libxt_sni.so libxt_webstr.so
 endef
 
-Hooks/PreCompile += Fix/Environment
+# 预编译环境清理
+define Fix/Environment
+	@echo "预编译环境清理..."
+	@export CCACHE_DISABLE=1
+	@unset CCACHE_DIR CCACHE_BASEDIR
+	# 清理源码中的硬编码路径
+	@if [ -f $(PKG_BUILD_DIR)/iptables/iptables.c ]; then \
+		sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c; \
+		sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c; \
+	fi
+endef
+
+# 在配置前执行环境清理
+Hooks/Configure/Pre += Fix/Environment
