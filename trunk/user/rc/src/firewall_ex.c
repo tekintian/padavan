@@ -770,7 +770,8 @@ include_webstr_filter(FILE *fp)
         /* 生成SNI过滤规则 - 针对HTTPS流量 */
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的SNI规则 */
-            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+            int mac_idx;
+            for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
                 fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\"%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
@@ -798,7 +799,8 @@ include_webstr_filter(FILE *fp)
             if (url_total > 0) {
                 if (need_mac_condition) {
                     /* 为每个MAC地址生成单独的webstr规则 */
-                    for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                    int mac_idx;
+                    for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
                         fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\"%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                         webstr_items++;
