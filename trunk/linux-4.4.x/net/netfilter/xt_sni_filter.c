@@ -521,8 +521,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (payload_offset >= skb->len || payload_offset + 6 > skb->len) {
             DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
                    payload_offset, skb->len);
-            // 返回info->invert而不是false，确保非规则流量默认放行
-            return info->invert;
+            return false;
         }
         
         /* 获取TLS记录类型 */
@@ -544,7 +543,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             /* 如果是应用数据，说明这不是握手阶段，直接返回false */
             if (record_type == TLS_APPLICATION_DATA) {
                 ENHANCED_DEBUG("TLS Application Data detected, not ClientHello\n");
-                return info->invert; // 改为返回info->invert，默认放行
+                return false;
             }
             if (retry_count < max_retries - 1) {
                 continue;
@@ -576,9 +575,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         /* 检查是否为ClientHello */
         if (handshake_type != TLS_CLIENT_HELLO) {
             ENHANCED_DEBUG("Not a TLS ClientHello, type: %u\n", handshake_type);
-            // 对于其他TLS握手类型，直接返回info->invert而不是重试
-            // 这样可以避免将有效的TLS握手消息误标记为失败
-            return info->invert;
+            return false;
         }
 
         // 添加TLS版本验证（在握手类型验证之后）
@@ -591,7 +588,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
                     // 只处理TLS 1.0及以上版本 (3.1 = TLS 1.0)
                     if (major_version < 3 || (major_version == 3 && minor_version < 1)) {
                         ENHANCED_DEBUG("Unsupported TLS version: %u.%u\n", major_version, minor_version);
-                        return info->invert;
+                        return false;
                     }
                 }
             }
@@ -662,7 +659,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     /* 限制最大数据长度以防止过大的分配 */
     if (data_len < 5) {
         DEBUGP("Data length too short: %u\n", data_len);
-        return info->invert; // 改为返回info->invert，保持一致性
+        return false;
     }
     
     /* 优化内存分配策略 - 根据实际需要的大小分配 */
@@ -671,7 +668,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
     /* 确保至少有基本的数据量进行处理 */
     if (buffer_size < 11) {  /* TLS头部(5) + Handshake头部(6) = 11 */
         DEBUGP("Insufficient buffer size: %zu\n", buffer_size);
-        return info->invert;
+        return false;
     }
     
     /* 对于小数据包使用栈分配，大数据包才使用堆分配 */
@@ -684,7 +681,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         tmp_buffer = kmalloc(buffer_size, GFP_ATOMIC);
         if (!tmp_buffer) {
             DEBUGP("Memory allocation failed\n");
-            return info->invert;
+            return false;
         }
         // 确保堆缓冲区清零
         memset(tmp_buffer, 0, buffer_size);
@@ -697,7 +694,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        return info->invert;
+        return false;
     }
 
     // 添加防御性检查
@@ -706,7 +703,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        return info->invert;
+        return false;
     }
     
     /* 提取SNI */
@@ -721,9 +718,8 @@ static bool xt_sni_match(const struct sk_buff *skb,
         if (buffer_size > STACK_BUFFER_SIZE) {
             kfree(tmp_buffer);
         }
-        // 对于无法提取SNI的数据包，返回info->invert的值而不是false
-        // 这样只有在明确指定invert=1时才会匹配（拦截），否则默认放行
-        return info->invert;
+        // 对于无法提取SNI的数据包，返回false
+        return false;
     }
     
     if (buffer_size > STACK_BUFFER_SIZE) {
@@ -732,11 +728,6 @@ static bool xt_sni_match(const struct sk_buff *skb,
     
     ENHANCED_DEBUG("Successfully extracted SNI: %s (length: %d)\n", extracted_sni, sni_len);
     
-    /* 特殊处理 news.qq.com */
-    if (strcmp(extracted_sni, "news.qq.com") == 0) {
-        ENHANCED_DEBUG("Special handling for news.qq.com\n");
-    }
-    
     /* 安全地进行字符串匹配 */
     if (sni_len > 0 && sni_len < SNI_MAX_LEN) {
         extracted_sni[SNI_MAX_LEN - 1] = '\0';
@@ -744,7 +735,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         ENHANCED_DEBUG("SNI match result: %s\n", matched ? "true" : "false");
     }
     
-    // 只有当明确匹配时才应用结果，否则默认放行
+    // 只有当明确匹配时才应用结果，否则默认放行 ^ 异或操作  true ^ 1 = false, false ^ 1 = true
     result = matched ? (matched ^ info->invert) : info->invert;
     ENHANCED_DEBUG("Final match result (after invert): %s\n", result ? "true" : "false");
     
