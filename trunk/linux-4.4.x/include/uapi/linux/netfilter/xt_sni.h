@@ -3,12 +3,31 @@
 
 #include <linux/types.h>
 
-#define SNI_MAX_LEN 256
+#define XT_SNI_MAX_PATTERN_SIZE 256
+
+enum {
+    XT_SNI_FLAG_INVERT = 0x01,
+    XT_SNI_FLAG_IGNORECASE = 0x02,
+};
 
 struct xt_sni_info {
-    char sni[SNI_MAX_LEN];
-    __u16 invert;
-    __u16 len;
+    __u16 from_offset;
+    __u16 to_offset;
+    char   algo[16];  /* algo name size */
+    char   pattern[XT_SNI_MAX_PATTERN_SIZE];
+    __u8   patlen;
+    union {
+        struct {
+            __u8  invert;
+        } v0;
+
+        struct {
+            __u8  flags;
+        } v1;
+    } u;
+
+    /* Used internally by the kernel */
+    struct ts_config __attribute__((aligned(8))) *config;
 };
 
 #endif /* _XT_SNI_H */
