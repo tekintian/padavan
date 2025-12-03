@@ -32,7 +32,7 @@
 #include <net/udp.h>
 
 #define SNI_MAX_LEN 256
-#define TLS_MAX_HANDSHAKE_LEN 2048
+#define TLS_MAX_HANDSHAKE_LEN 1536
 #define TLS_HANDSHAKE 22
 #define TLS_CLIENT_HELLO 1
 #define TLS_APPLICATION_DATA 23
@@ -412,7 +412,17 @@ static int extract_sni_from_tls(const unsigned char *data, size_t data_len,
     return -1;
 }
 
-/* 安全的字符串匹配函数 */
+/**
+ * @brief 安全地在字符串中查找子字符串
+ * 
+ * @param haystack 要搜索的主字符串
+ * @param haystack_len 主字符串的长度
+ * @param needle 要查找的子字符串
+ * @param needle_len 子字符串的长度
+ * @return bool 如果找到子字符串返回true，否则返回false
+ * 
+ * @note 此函数会检查输入参数的有效性，确保搜索安全进行
+ */
 static bool match_string_safe(const char *haystack, size_t haystack_len,
                              const char *needle, size_t needle_len) {
     const char *found;
@@ -509,7 +519,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         
         /* 计算有效载荷偏移量 */
         if (par->match->family == NFPROTO_IPV4) {
-            payload_offset = iph_const->ihl * 4 + tcph_const->doff * 4;
+            payload_offset = iph_const->ihl * 4 + (tcph_const->doff * 4);
         } else {
             payload_offset = sizeof(struct ipv6hdr) + tcph_const->doff * 4;
         }
@@ -518,7 +528,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
         
         /* 检查偏移量是否合理 */
         /* 严格验证payload_offset，这是导致崩溃的主要原因！ */
-        if (payload_offset >= skb->len || payload_offset + 6 > skb->len) {
+        if (payload_offset >= skb->len || payload_offset + 5 > skb->len) {
             DEBUGP("Invalid payload offset: %u, skb len: %u\n", 
                    payload_offset, skb->len);
             return false;
@@ -559,7 +569,7 @@ static bool xt_sni_match(const struct sk_buff *skb,
             }
             goto failed_packet;
         }
-    
+
         data_ptr = skb_header_pointer(skb, payload_offset + 5, 1, &handshake_type);
         if (!data_ptr) {
             DEBUGP("Failed to get handshake type on retry %d\n", retry_count);
@@ -610,14 +620,19 @@ static bool xt_sni_match(const struct sk_buff *skb,
     if (protocol == IPPROTO_TCP) {
         if (par->match->family == NFPROTO_IPV4) {
             iph = ip_hdr(skb);
-            
             tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
             if (!tcph) {
                 DEBUGP("Failed to get TCP header\n");
                 return false;
             }
-            
             payload_offset = iph->ihl * 4 + tcph->doff * 4;
+             /* 必须添加的边界检查 */
+            if (payload_offset >= skb->len) {
+                DEBUGP("Invalid payload offset after TCP calculation: %u, skb len: %u\n", 
+                    payload_offset, skb->len);
+                return false;
+            }
+
             data_len = ntohs(iph->tot_len) - payload_offset;
         } else {
             tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
@@ -625,11 +640,15 @@ static bool xt_sni_match(const struct sk_buff *skb,
                 DEBUGP("Failed to get TCP header\n");
                 return false;
             }
-            
             payload_offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
-            // 注意：对于IPv6，我们不能简单地从payload_len计算总长度
-            // 我们需要从skb中获取实际数据长度
             data_len = skb->len - payload_offset;
+        }
+        
+        /* 添加紧急修复：验证payload_offset有效性 */
+        if (payload_offset >= skb->len || payload_offset + 5 > skb->len) {
+            DEBUGP("Invalid payload offset after recalculation: %u, skb len: %u\n", 
+                payload_offset, skb->len);
+            return false;
         }
     } else if (protocol == IPPROTO_UDP) {
         if (par->match->family == NFPROTO_IPV4) {
@@ -758,11 +777,19 @@ failed_packet:
                     tcph = skb_header_pointer(skb, iph->ihl * 4, sizeof(_tcph), &_tcph);
                     if (tcph) {
                         offset = iph->ihl * 4 + tcph->doff * 4;
+                        if (offset > skb->len) {
+                            DEBUGP("Invalid offset in failed packet handling: %u, skb len: %u\n", offset, skb->len);
+                            offset = 0; // 重置为安全值
+                        }
                     }
                 } else {
                     tcph = skb_header_pointer(skb, sizeof(struct ipv6hdr), sizeof(_tcph), &_tcph);
                     if (tcph) {
                         offset = sizeof(struct ipv6hdr) + tcph->doff * 4;
+                        if (offset > skb->len) {
+                            DEBUGP("Invalid offset in failed packet handling (IPv6): %u, skb len: %u\n", offset, skb->len);
+                            offset = 0; // 重置为安全值
+                        }
                     }
                 }
             }
@@ -780,8 +807,8 @@ failed_packet:
         }
     }
     
-    // 返回info->invert而不是false，确保非规则流量默认放行
-    return info->invert;
+    // 返回false，确保非规则流量默认放行
+    return false;
 }
 
 static struct xt_match sni_match[] = {
