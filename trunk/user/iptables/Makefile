@@ -12,14 +12,23 @@ SRC_DIR=./iptables-1.8.7
 
 CONFIGURE_ARGS += \
 	--enable-static \
-	--disable-shared \
+	--enable-shared \
 	--disable-nftables \
 	--disable-connlabel \
 	--with-xtlibdir=/usr/lib/xtables \
 	--with-kernel=$(ROOTDIR)/$(LINUXDIR) \
-	--with-xt-lock-name="/var/lock/xtables.lock"
+	--with-xt-lock-name="/var/lock/xtables.lock" \
+	--with-pic
 
-# 使用默认编译，避免环境污染
+# 修复扩展库编译选项
+define Fix/Extensions
+	@echo "修复扩展库编译选项..."
+	@cd $(PKG_BUILD_DIR)/extensions && \
+		sed -i 's/CFLAGS = /CFLAGS = -fPIC /g' Makefile && \
+		sed -i 's/CPPFLAGS = /CPPFLAGS = -fPIC /g' Makefile
+endef
+
+Hooks/Compile/Pre += Fix/Extensions
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
