@@ -29,6 +29,9 @@ $(eval $(call BuildPackage,iptables))
 romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
 	$(INSTALL_DIR) $(ROMFSDIR)/bin
+	# 添加以下两行，确保库文件被安装到固件中
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/iptables/xtables-legacy-multi $(ROMFSDIR)/bin/xtables-multi
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-restore
