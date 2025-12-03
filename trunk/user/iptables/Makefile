@@ -11,13 +11,23 @@ include $(INCLUDE_DIR)/package.mk
 SRC_DIR=./iptables-1.8.7
 
 CONFIGURE_ARGS += \
-	--enable-static \
-	--disable-shared \
+	--disable-static \
+	--enable-shared \
 	--disable-nftables \
 	--disable-connlabel \
 	--with-xtlibdir=/usr/lib/xtables \
 	--with-kernel=$(ROOTDIR)/$(LINUXDIR) \
 	--with-xt-lock-name="/var/lock/xtables.lock"
+
+# 确保自定义扩展库被编译
+define Build/Compile/Extensions
+	$(MAKE_VARS) \
+	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/extensions \
+		$(MAKE_FLAGS) \
+		libxt_sni.so libxt_webstr.so
+endef
+
+Hooks/Compile/Post += Build/Compile/Extensions
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
@@ -29,6 +39,8 @@ $(eval $(call BuildPackage,iptables))
 romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
 	$(INSTALL_DIR) $(ROMFSDIR)/bin
+	# 确保扩展库已编译
+	$(MAKE) -C $(PKG_BUILD_DIR)/extensions libxt_sni.so libxt_webstr.so
 	# 添加以下两行，确保库文件被安装到固件中
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/
