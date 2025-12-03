@@ -116,10 +116,13 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
     const struct xt_sni_info *conf = par->matchinfo;
     bool invert;
+    bool found;
 
     invert = conf->u.v1.flags & XT_SNI_FLAG_INVERT;
 
-    return extract_sni_from_packet(skb, conf->config) ^ invert;
+    found = extract_sni_from_packet(skb, conf->config);
+    
+    return found ^ invert;
 }
 
 /* 检查函数 - 参照string_mt_check */
