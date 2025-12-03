@@ -11,23 +11,15 @@ include $(INCLUDE_DIR)/package.mk
 SRC_DIR=./iptables-1.8.7
 
 CONFIGURE_ARGS += \
-	--disable-static \
-	--enable-shared \
+	--enable-static \
+	--disable-shared \
 	--disable-nftables \
 	--disable-connlabel \
 	--with-xtlibdir=/usr/lib/xtables \
 	--with-kernel=$(ROOTDIR)/$(LINUXDIR) \
 	--with-xt-lock-name="/var/lock/xtables.lock"
 
-# 简化的编译流程
-define Build/Compile
-	$(call Build/Compile/Default)
-	# 编译扩展库
-	$(MAKE_VARS) \
-	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/extensions \
-		$(MAKE_FLAGS) \
-		libxt_sni.so libxt_webstr.so
-endef
+# 使用默认编译，避免环境污染
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
