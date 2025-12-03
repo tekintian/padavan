@@ -27,7 +27,16 @@ define Build/Compile/Extensions
 		libxt_sni.so libxt_webstr.so
 endef
 
+# 修复运行时环境问题
+define Fix/Environment
+	@echo "清理编译环境变量..."
+	@sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c
+	@sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c
+	@sed -i 's|/usr/bin/sed|/bin/sed|g' $(PKG_BUILD_DIR)/iptables/iptables.c
+endef
+
 Hooks/Compile/Post += Build/Compile/Extensions
+Hooks/PreCompile += Fix/Environment
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
@@ -53,3 +62,11 @@ ifdef CONFIG_IPV6
 	$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables-restore
 	$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables-save
 endif
+# 修复运行时环境问题
+define Fix/Environment
+	@echo "清理编译环境变量..."
+	@sed -i 's|/home/runner/work/padavan/padavan/trunk|/opt|g' $(PKG_BUILD_DIR)/iptables/iptables.c
+	@sed -i 's|ccache||g' $(PKG_BUILD_DIR)/iptables/iptables.c
+endef
+
+Hooks/PreCompile += Fix/Environment
