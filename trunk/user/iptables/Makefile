@@ -19,10 +19,9 @@ CONFIGURE_ARGS += \
 	--with-kernel=$(ROOTDIR)/$(LINUXDIR) \
 	--with-xt-lock-name="/var/lock/xtables.lock"
 
-after_install:
-	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/
+# after_install:
+# 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
+# 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
 
 $(eval $(call BuildPackage,iptables))
 
