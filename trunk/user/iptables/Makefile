@@ -22,7 +22,6 @@ CONFIGURE_ARGS += \
 
 # 简化的编译环境清理
 define Fix/Environment
-	$(shell echo "清理编译环境...")
 endef
 
 Hooks/Configure/Pre += Fix/Environment
