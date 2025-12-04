@@ -1701,14 +1701,12 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// // 统一使用nvram配置进行条件判断
-	// if (nvram_match("url_enable_x", "1")) {
-	// 	if (!module_smart_load("xt_webstr", NULL))
-	// 		logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
-		
-	// 	if (!module_smart_load("xt_sni_filter", NULL))
-	// 		logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
-	// }
+	// 统一使用nvram配置进行条件判断
+	if (nvram_match("url_enable_x", "1")) {
+		if (!module_smart_load("xt_string", NULL)) {
+			logmessage("Firewall", "ERROR: Failed to load xt_string module");
+		}	
+	}
 
 	doSystem("iptables-restore %s", ipt_file);
 	
@@ -2251,14 +2249,12 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// // 统一使用nvram配置进行条件判断
-	// if (nvram_match("url_enable_x", "1")) {
-	// 	if (!module_smart_load("xt_webstr", NULL))
-	// 		logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
-		
-	// 	if (!module_smart_load("xt_sni_filter", NULL))
-	// 		logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
-	// }
+	// 统一使用nvram配置进行条件判断
+	if (nvram_match("url_enable_x", "1")) {
+		if (!module_smart_load("xt_string", NULL)) {
+			logmessage("Firewall", "ERROR: Failed to load xt_string module");
+		}	
+	}
 
 	doSystem("ip6tables-restore %s", ipt_file);
 
@@ -2836,11 +2832,11 @@ start_firewall_ex(void)
 		{doSystem("/usr/bin/detect.sh");}
 		
 	/* try unload unused iptables modules */
-	// module_smart_unload("xt_webstr", 0);
-	/* 只在未使用url_enable_x时卸载 */
+	//module_smart_unload("xt_webstr", 0);
+	
+	/* 在未使用url_enable_x时卸载 xt_string */
 	if (!nvram_match("url_enable_x", "1")) {
-		module_smart_unload("xt_webstr", 0);
-		// module_smart_unload("xt_sni_filter", 0);
+		module_smart_unload("xt_string", 0);
 	}
 	module_smart_unload("xt_HL", 0);
 	module_smart_unload("iptable_raw", 0);
