@@ -20,15 +20,15 @@ CONFIGURE_ARGS += \
 	--with-xt-lock-name="/var/lock/xtables.lock" \
 	--with-pic
 
-# 修复扩展库编译选项
-define Fix/Extensions
-	@echo "修复扩展库编译选项..."
-	@cd $(PKG_BUILD_DIR)/extensions && \
-		sed -i 's/CFLAGS = /CFLAGS = -fPIC /g' Makefile && \
-		sed -i 's/CPPFLAGS = /CPPFLAGS = -fPIC /g' Makefile
+# 简化的编译环境清理
+define Fix/Environment
+	@echo "清理编译环境..."
+	@export CCACHE_DISABLE=1
+	@unset CCACHE_DIR CCACHE_BASEDIR
+	@echo "✅ 编译环境清理完成"
 endef
 
-Hooks/Compile/Pre += Fix/Extensions
+Hooks/Configure/Pre += Fix/Environment
 
 after_install:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
@@ -40,11 +40,17 @@ $(eval $(call BuildPackage,iptables))
 romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
 	$(INSTALL_DIR) $(ROMFSDIR)/bin
-	# 确保扩展库已编译
-	$(MAKE) -C $(PKG_BUILD_DIR)/extensions libxt_sni.so libxt_webstr.so
+	# 使用标准扩展编译方法
+	$(MAKE) -C $(PKG_BUILD_DIR)/extensions
 	# 安装扩展库和二进制文件
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/
+	@if [ -f $(PKG_BUILD_DIR)/extensions/libxt_sni.so ]; then \
+		$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/; \
+		echo "✅ 安装 libxt_sni.so"; \
+	fi
+	@if [ -f $(PKG_BUILD_DIR)/extensions/libxt_webstr.so ]; then \
+		$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/; \
+		echo "✅ 安装 libxt_webstr.so"; \
+	fi
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/iptables/xtables-legacy-multi $(ROMFSDIR)/bin/xtables-multi
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-restore
