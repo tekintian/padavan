@@ -22,10 +22,7 @@ CONFIGURE_ARGS += \
 
 # 简化的编译环境清理
 define Fix/Environment
-	echo "清理编译环境..."
-	export CCACHE_DISABLE=1
-	unset CCACHE_DIR CCACHE_BASEDIR
-	echo "✅ 编译环境清理完成"
+	$(shell echo "清理编译环境...")
 endef
 
 Hooks/Configure/Pre += Fix/Environment
@@ -43,13 +40,13 @@ romfs:
 	# 使用标准扩展编译方法
 	$(MAKE) -C $(PKG_BUILD_DIR)/extensions
 	# 安装扩展库和二进制文件
-@if [ -f $(PKG_BUILD_DIR)/extensions/libxt_sni.so ]; then \
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/; \
-	echo "安装 libxt_sni.so"; \
+	@if [ -f $(PKG_BUILD_DIR)/extensions/libxt_sni.so ]; then \
+		$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/; \
+		echo "安装 libxt_sni.so"; \
 	fi
 	@if [ -f $(PKG_BUILD_DIR)/extensions/libxt_webstr.so ]; then \
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/; \
-	echo "安装 libxt_webstr.so"; \
+		$(INSTALL_BIN) $(PKG_BUILD_DIR)/extensions/libxt_webstr.so $(ROMFSDIR)/usr/lib/xtables/; \
+		echo "安装 libxt_webstr.so"; \
 	fi
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/iptables/xtables-legacy-multi $(ROMFSDIR)/bin/xtables-multi
 	$(LN) xtables-multi $(ROMFSDIR)/bin/iptables
