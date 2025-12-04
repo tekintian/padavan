@@ -38,7 +38,7 @@ romfs:
 		$(LN) xtables-multi $(ROMFSDIR)/bin/iptables; \
 		$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-restore; \
 		$(LN) xtables-multi $(ROMFSDIR)/bin/iptables-save; \
-	endif
+	fi
 ifdef CONFIG_IPV6
 	@if [ -f $(PKG_BUILD_DIR)/iptables/xtables-legacy-multi ]; then \
 		$(LN) xtables-multi $(ROMFSDIR)/bin/ip6tables; \
