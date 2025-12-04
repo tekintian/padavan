@@ -5,3 +5,6 @@ toolchain/toolchain-*/
 /mipsel-linux-musl_4.4.x.tar.xz
 /tdebug
 *.log
+/files
+/trunk/user/iptables/Makefile.bak
+/trunk/user/iptables/temp.txt
