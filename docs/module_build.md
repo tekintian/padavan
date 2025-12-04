@@ -1,4 +1,5 @@
-
+构建流程确认
+源码 → 自动复制 → build/ → 编译扩展 → 生成so → 安装到romfs
 
 cd /Volumes/csdisk/padavan
 
@@ -11,6 +12,14 @@ docker run --rm -v $(pwd):/workspace padavan-compiler bash -c "cd /workspace/tru
 
 
 mipsel-linux-musl-gcc -I../include -I../../linux-4.4.x/include/uapi -I../../linux-4.4.x/include -I../../user/iproute2/iproute2-5.12.0/include -I../../build/iptables-1.8.7/include -DINIT=libxt_sni_init -DPIC -fPIC -c libxt_sni.c -o libxt_sni.o
+
+
+cd /Volumes/csdisk/padavan && docker run --rm -v $(pwd):/workspace padavan-compiler bash -c "cd /workspace/trunk && make user_only 2>&1 | grep -A 5 -B 5 sni"
+
+
+
+用户空间构建测试
+cd /Volumes/csdisk/padavan && docker run --rm -v $(pwd):/workspace padavan-compiler bash -c "cd /workspace/trunk && make -C user 2>&1 | grep sni"
 
 
 
