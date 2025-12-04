@@ -133,10 +133,10 @@ echo ""
 
 # 定义下载列表 (文件名, 期望大小(字节), URL列表)
 declare -a downloads=(
-    "mipsel-linux-musl.tar.xz|31457280|\
-https://github.com/tekintian/padavan/releases/download/toolchain/mipsel-linux-musl.tar.xz|\
-https://cdn.jsdelivr.net/gh/tekintian/padavan@toolchain/mipsel-linux-musl.tar.xz|\
-https://github.com/tekintian/padavan/releases/download/toolchain/mipsel-linux-uclibc.tar.xz"
+    "mipsel-linux-musl_4.4.x.tar.xz|31457280|\
+https://github.com/tekintian/padavan/releases/download/toolchain/mipsel-linux-musl_4.4.x.tar.xz|\
+https://cdn.jsdelivr.net/gh/tekintian/padavan@toolchain/mipsel-linux-musl_4.4.x.tar.xz|\
+https://github.com/tekintian/padavan/releases/download/toolchain/mipsel-linux-uclibc_4.4.x.tar.xz"
 
     "go1.20.14.linux-amd64.tar.gz|102760000|\
 https://go.dev/dl/go1.20.14.linux-amd64.tar.gz|\
@@ -205,7 +205,7 @@ echo -e "${BLUE}=== 文件验证 ===${NC}"
 
 # 验证必需文件
 required_files=(
-    "mipsel-linux-musl.tar.xz"
+    "mipsel-linux-musl_4.4.x.tar.xz"
     "go1.20.14.linux-amd64.tar.gz"
     "node-v18.19.0-linux-x64.tar.xz"
 )
