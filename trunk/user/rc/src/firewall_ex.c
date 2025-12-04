@@ -770,8 +770,7 @@ include_webstr_filter(FILE *fp)
         /* 生成SNI过滤规则 - 针对HTTPS流量 */
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的SNI规则 */
-            int mac_idx;
-            for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
                 fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\"%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
@@ -799,8 +798,7 @@ include_webstr_filter(FILE *fp)
             if (url_total > 0) {
                 if (need_mac_condition) {
                     /* 为每个MAC地址生成单独的webstr规则 */
-                    int mac_idx;
-                    for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                    for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
                         fprintf(fp, "-A %s -p tcp --dport 80 -m webstr --url \"%s\"%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                         webstr_items++;
@@ -1703,14 +1701,14 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// 统一使用nvram配置进行条件判断
-	if (nvram_match("url_enable_x", "1")) {
-		if (!module_smart_load("xt_webstr", NULL))
-			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
+	// // 统一使用nvram配置进行条件判断
+	// if (nvram_match("url_enable_x", "1")) {
+	// 	if (!module_smart_load("xt_webstr", NULL))
+	// 		logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
 		
-		if (!module_smart_load("xt_sni_filter", NULL))
-			logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
-	}
+	// 	if (!module_smart_load("xt_sni_filter", NULL))
+	// 		logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
+	// }
 
 	doSystem("iptables-restore %s", ipt_file);
 	
@@ -2253,14 +2251,14 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// 统一使用nvram配置进行条件判断
-	if (nvram_match("url_enable_x", "1")) {
-		if (!module_smart_load("xt_webstr", NULL))
-			logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
+	// // 统一使用nvram配置进行条件判断
+	// if (nvram_match("url_enable_x", "1")) {
+	// 	if (!module_smart_load("xt_webstr", NULL))
+	// 		logmessage("Firewall", "ERROR: Failed to load xt_webstr module");
 		
-		if (!module_smart_load("xt_sni_filter", NULL))
-			logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
-	}
+	// 	if (!module_smart_load("xt_sni_filter", NULL))
+	// 		logmessage("Firewall", "ERROR: Failed to load xt_sni_filter module");
+	// }
 
 	doSystem("ip6tables-restore %s", ipt_file);
 
@@ -2842,7 +2840,7 @@ start_firewall_ex(void)
 	/* 只在未使用url_enable_x时卸载 */
 	if (!nvram_match("url_enable_x", "1")) {
 		module_smart_unload("xt_webstr", 0);
-		module_smart_unload("xt_sni_filter", 0);
+		// module_smart_unload("xt_sni_filter", 0);
 	}
 	module_smart_unload("xt_HL", 0);
 	module_smart_unload("iptable_raw", 0);
