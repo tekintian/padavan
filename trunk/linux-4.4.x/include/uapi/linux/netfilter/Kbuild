@@ -81,6 +81,7 @@ header-y += xt_socket.h
 header-y += xt_state.h
 header-y += xt_statistic.h
 header-y += xt_string.h
+header-y += xt_sni.h
 header-y += xt_tcpmss.h
 header-y += xt_tcpudp.h
 header-y += xt_time.h
