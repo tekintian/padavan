@@ -1703,8 +1703,9 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 
 	// 统一使用nvram配置进行条件判断
 	if (nvram_match("url_enable_x", "1")) {
-		if (!module_smart_load("xt_string", NULL)) {
-			logmessage("Firewall", "ERROR: Failed to load xt_string module");
+		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
+		if (!module_smart_load("xt_sni", NULL)) {
+			logmessage("Firewall", "ERROR: Failed to load xt_sni module");
 		}	
 	}
 
@@ -2251,8 +2252,9 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 
 	// 统一使用nvram配置进行条件判断
 	if (nvram_match("url_enable_x", "1")) {
-		if (!module_smart_load("xt_string", NULL)) {
-			logmessage("Firewall", "ERROR: Failed to load xt_string module");
+		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
+		if (!module_smart_load("xt_sni", NULL)) {
+			logmessage("Firewall", "ERROR: Failed to load xt_sni module");
 		}	
 	}
 
@@ -2834,9 +2836,9 @@ start_firewall_ex(void)
 	/* try unload unused iptables modules */
 	//module_smart_unload("xt_webstr", 0);
 	
-	/* 在未使用url_enable_x时卸载 xt_string */
+	/* 在未使用url_enable_x 时卸载 xt_sni */
 	if (!nvram_match("url_enable_x", "1")) {
-		module_smart_unload("xt_string", 0);
+		module_smart_unload("xt_sni", 0);
 	}
 	module_smart_unload("xt_HL", 0);
 	module_smart_unload("iptable_raw", 0);
