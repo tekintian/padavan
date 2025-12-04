@@ -1,30 +1,68 @@
 include ../../.config
 include ../../rules.mk
 
-# 调整CFLAGS，确保头文件路径正确
-CFLAGS += -I../../include -I../../linux-4.4.x/include -I../../linux-4.4.x/user_headers/include -I../../build/iptables-1.8.7/include
+# SNI模块Makefile - 基于STRING模块改进
 
-# 源文件和目标文件定义
-SRCS = libxt_sni.c
-OBJS = $(SRCS:.c=.o)
-TARGET = libxt_sni.so
+# 定义目标名称
+TARGET := libxt_sni.so
 
-# 主目标
+# 定义源文件
+SRCS := libxt_sni.c
+OBJS := $(SRCS:.c=.o)
+
+# 添加必要的包含目录
+CFLAGS += -I$(TOPDIR)/trunk/linux-4.4.x/include/uapi
+CFLAGS += -I$(TOPDIR)/trunk/user/iptables/iptables-1.8.7/include
+CFLAGS += -I$(TOPDIR)/trunk/user/iptables/iptables-1.8.7/libiptc
+CFLAGS += -I$(TOPDIR)/trunk/user/iptables/iptables-1.8.7/libxtables
+CFLAGS += -fPIC -shared
+
+# 构建规则
 all: $(TARGET)
 
-# 确保在build目录中也能找到源文件
-$(BUILD_DIR)/sni/%.c:
-	cp -f $(CURDIR)/$*.c $@
+# 编译目标文件
+$(OBJS): %.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-# 动态库构建规则
+# 链接共享库
 $(TARGET): $(OBJS)
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) $(LDFLAGS) -shared -o $@ $^ -lxtables
+
+# 确保构建目录中有源代码
+$(SRCS):
+	@echo "确保源文件存在: $@"
+	@if [ -f "$@" ]; then \
+	    echo "源文件 $@ 已存在"; \
+	else \
+	    echo "错误: 源文件 $@ 不存在"; \
+	    exit 1; \
+	fi
+
+# 安装规则 - 与STRING模块保持一致
+romfs: $(TARGET)
+	$(ROMFSINST) -d $(TARGET) /usr/lib/xtables/
 
 # 清理规则
 clean:
-	rm -f *.o *.so
+	rm -f $(OBJS) $(TARGET)
 
-# 安装规则
-romfs:
-	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
-	$(INSTALL_BIN) $(TARGET) $(ROMFSDIR)/usr/lib/xtables/
+# 辅助目标 - 检查编译环境
+check-env:
+	@echo "检查编译环境..."
+	@if [ -z "$(TOPDIR)" ]; then \
+	    echo "警告: TOPDIR环境变量未设置，可能导致编译失败"; \
+	    echo "建议设置: export TOPDIR=/Volumes/csdisk/padavan"; \
+	fi
+	@echo "包含目录: $(CFLAGS)"
+
+# 依赖文件检查
+check-deps:
+	@echo "检查依赖文件..."
+	@if [ ! -f "$(TOPDIR)/trunk/linux-4.4.x/include/uapi/linux/netfilter/xt_sni.h" ]; then \
+	    echo "错误: 缺少头文件 xt_sni.h"; \
+	    exit 1; \
+	fi
+	@echo "依赖文件检查通过"
+
+# 伪目标
+.PHONY: all clean romfs check-env check-deps
