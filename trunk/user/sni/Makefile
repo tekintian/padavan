@@ -1,12 +1,16 @@
-include $(ROOTDIR)/rules.mk
+include ../../.config
+include ../../rules.mk
 
-PKG_NAME:=sni
-PKG_INSTALL:=1
+CFLAGS	+= -I../../include -I../../linux-4.4.x/include -I../../linux-4.4.x/user_headers/include -I../../build/iptables-1.8.7/include
 
-include $(INCLUDE_DIR)/package.mk
+OBJS = libxt_sni.o
 
-$(eval $(call BuildPackage,sni))
+all: $(OBJS)
+	$(CC) -shared -o libxt_sni.so $(OBJS) $(LDFLAGS)
 
 romfs:
 	$(INSTALL_DIR) $(ROMFSDIR)/usr/lib/xtables
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
+	$(INSTALL_BIN) libxt_sni.so $(ROMFSDIR)/usr/lib/xtables/
+
+clean:
+	rm -f *.o *.so
