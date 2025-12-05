@@ -4,6 +4,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <xtables.h>
 #include <linux/netfilter/xt_sni.h>
 #include <string.h>
@@ -106,7 +107,7 @@ static bool validate_url_pattern(const char *pattern)
 
 /* 解析命令行参数 */
 static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
-                    void *entry, struct xt_entry_match **match)
+                    const void *entry, struct xt_entry_match **match)
 {
     struct xt_sni_info *info = (struct xt_sni_info *)(*match)->data;
     
@@ -240,7 +241,7 @@ static struct xtables_match sni_match = {
 };
 
 /* 初始化函数 */
-static void _init(void)
+void _init(void)
 {
     xtables_register_match(&sni_match);
 }
