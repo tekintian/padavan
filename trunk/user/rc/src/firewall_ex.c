@@ -932,9 +932,9 @@ include_webstr_filter(FILE *fp)
 
     /* 调试：记录URL数量 */
     int url_count = nvram_get_int("url_num_x");
-    // logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
-    // logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
-    // logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
+    logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
+    logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
+    logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
 
     /* 🔥 修复：准备MAC地址信息，用于URL过滤规则 */
     /* 注意：多个MAC地址需要为每个MAC生成单独的URL规则，因为iptables的mac模块不支持OR操作 */
@@ -995,13 +995,13 @@ include_webstr_filter(FILE *fp)
             logmessage("URL Filter", "DEBUG: MAC %d: %s", mac_idx, mac_addresses[mac_idx]);
         }
     } else {
-        // logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
+        logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
         mac_count = 0;
     }
 
     logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
     foreach_x("url_num_x") {
-        // logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
+        logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
@@ -1106,7 +1106,7 @@ include_webstr_filter(FILE *fp)
         logmessage("URL Filter", "DEBUG: Added protocol-optimized rule: %s (protocol: %d)", url_path, protocol);
     }
 
-    //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
+    logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     
     /* 🔥 修复：添加默认RETURN规则，确保不匹配URL规则的流量能正常通过 */
     if (webstr_items > 0) {
@@ -1114,7 +1114,7 @@ include_webstr_filter(FILE *fp)
         logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
     }
     
-    // logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
+    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int

@@ -117,38 +117,22 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
         
-        info->patlen = strlen(info->pattern);
-        
-        /* 清空algo字段，让内核模块填充"bm" */
-        memset(info->algo, 0, sizeof(info->algo));
+        /* 设置默认值 */
+        info->wildcard_type = XT_SNI_MATCH_EXACT;
+        info->reserved[0] = 0;
+        info->reserved[1] = 0;
+        info->invert = invert ? 1 : 0;
         
         *flags |= 0x01;
         break;
         
-    case '2':  /* --from */
-        if (*flags & 0x02)
-            xtables_error(PARAMETER_PROBLEM, "Cannot specify --from twice");
-        
-        if (!argv[optind])
-            xtables_error(PARAMETER_PROBLEM, "--from requires an argument");
-        
-        info->from_offset = strtoul(argv[optind], NULL, 0);
-        *flags |= 0x02;
-        break;
-        
-    case '3':  /* --to */
-        if (*flags & 0x04)
-            xtables_error(PARAMETER_PROBLEM, "Cannot specify --to twice");
-        
-        if (!argv[optind])
-            xtables_error(PARAMETER_PROBLEM, "--to requires an argument");
-        
-        info->to_offset = strtoul(argv[optind], NULL, 0);
-        *flags |= 0x04;
+    case '2':  /* --from - 已废弃，保留兼容性 */
+    case '3':  /* --to   - 已废弃，保留兼容性 */
+        xtables_error(PARAMETER_PROBLEM, "--from/--to options are not supported in URL filter mode");
         break;
         
     case '4':  /* --invert */
-        info->u.v1.flags |= 0x01;  /* 设置反转标志 */
+        info->invert = 1;
         break;
         
     default:
@@ -164,11 +148,7 @@ static void sni_check(unsigned int flags)
     if (!(flags & 0x01))
         xtables_error(PARAMETER_PROBLEM, "URL filter SNI match requires --string");
     
-    /* 检查from/to参数 */
-    if ((flags & 0x06) == 0x06) {
-        /* 如果同时指定了from和to，检查是否有效 */
-        /* 这里会在内核模块中进一步检查 */
-    }
+    /* URL过滤模式不需要额外的参数检查 */
 }
 
 /* 打印匹配规则 */
@@ -179,20 +159,16 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     
     printf(" URL-SNI ");
     
-    if (info->u.v1.flags & 0x01)  /* 反转标志 */
+    if (info->invert)
         printf("!");
     
     /* 显示匹配模式类型 */
-    if (info->patlen >= 3 && info->pattern[0] == '*' && info->pattern[1] == '.') {
+    if (strlen(info->pattern) >= 3 && info->pattern[0] == '*' && info->pattern[1] == '.') {
         printf("subdomain:%s", info->pattern + 2);
-    } else if (info->patlen >= 2 && info->pattern[0] == '*' && info->pattern[1] != '.') {
+    } else if (strlen(info->pattern) >= 2 && info->pattern[0] == '*' && info->pattern[1] != '.') {
         printf("contains:%s", info->pattern + 1);
     } else {
         printf("exact:%s", info->pattern);
-    }
-    
-    if (info->from_offset || info->to_offset) {
-        printf(" %u:%u", info->from_offset, info->to_offset);
     }
 }
 
@@ -203,11 +179,7 @@ static void sni_save(const void *entry, const struct xt_entry_match *match)
     
     printf(" --string \"%s\"", info->pattern);
     
-    if (info->from_offset || info->to_offset) {
-        printf(" --from %u --to %u", info->from_offset, info->to_offset);
-    }
-    
-    if (info->u.v1.flags & 0x01) {  /* 反转标志 */
+    if (info->invert) {
         printf(" --invert");
     }
 }

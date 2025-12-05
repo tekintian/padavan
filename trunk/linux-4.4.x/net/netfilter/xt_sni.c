@@ -89,23 +89,30 @@ static int convert_wildcard_to_pattern(const char *wildcard,
  * analyze_wildcard_pattern - 🔥 使用textsearch分析通配符模式
  * @info: SNI匹配信息
  */
-static int analyze_wildcard_pattern(struct xt_sni_url_info *info)
+static int analyze_wildcard_pattern(struct xt_sni_info *info)
 {
     int ret;
+    char search_pattern[XT_SNI_MAX_PATTERN_SIZE];
+    enum xt_sni_wildcard_type wildcard_type;
     
     /* 转换通配符为textsearch模式 */
     ret = convert_wildcard_to_pattern(info->pattern, 
-                                     info->search_pattern, 
-                                     sizeof(info->search_pattern),
-                                     &info->wildcard_type);
+                                     search_pattern, 
+                                     sizeof(search_pattern),
+                                     &wildcard_type);
     if (ret < 0)
         return ret;
     
-    /* 计算转换后的模式长度 */
-    info->pattern_len = strlen(info->search_pattern);
+    /* 保存转换后的模式 */
+    strcpy(info->search_pattern, search_pattern);
+    info->wildcard_type = wildcard_type;
+    info->pattern_len = strlen(search_pattern);
     
     /* 固定使用Boyer-Moore算法（最高效） */
-    strcpy(info->algo, "bm");
+
+    
+    printk(KERN_DEBUG "xt_sni: Analyzed pattern '%s' -> '%s' (type=%d, len=%u)\n",
+           info->pattern, info->search_pattern, info->wildcard_type, info->pattern_len);
     
     return 0;
 }
@@ -303,7 +310,7 @@ static unsigned int extract_sni_from_tls(const struct sk_buff *skb,
  * 返回: true表示匹配
  */
 static bool sni_match_with_textsearch(const char *sni_name, 
-                                     const struct xt_sni_url_info *info)
+                                     const struct xt_sni_info *info)
 {
     struct ts_config *ts_conf = info->ts_config;
     struct ts_state ts_state;
@@ -350,25 +357,25 @@ static bool sni_match_with_textsearch(const char *sni_name,
  */
 static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
-    const struct xt_sni_url_info *info = (const struct xt_sni_url_info *)par->matchinfo;
+    const struct xt_sni_info *info = (const struct xt_sni_info *)par->matchinfo;
     char url_buffer[256];
     unsigned int url_len;
     bool match_result;
     
-    /* 智能协议检测 */
-    enum protocol_type protocol = detect_protocol_type(skb, info->from_offset);
+    /* 智能协议检测 - 从包开始检测 */
+    enum protocol_type protocol = detect_protocol_type(skb, 0);
     
     switch (protocol) {
     case PROTOCOL_HTTPS:
         /* HTTPS/TLS协议：提取SNI */
-        url_len = extract_sni_from_tls(skb, info->from_offset, info->to_offset,
+        url_len = extract_sni_from_tls(skb, 0, 65535,
                                        url_buffer, sizeof(url_buffer));
         break;
         
     case PROTOCOL_HTTP:
     case PROTOCOL_HTTP2:
         /* HTTP协议：提取URL路径 */
-        url_len = extract_http_url(skb, info->from_offset, info->to_offset,
+        url_len = extract_http_url(skb, 0, 65535,
                                    url_buffer, sizeof(url_buffer));
         break;
         
@@ -379,7 +386,7 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         
         {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                           info->from_offset, info->to_offset, 
+                                           0, 65535, 
                                            info->ts_config);
             match_result = (pos != UINT_MAX);
         }
@@ -393,7 +400,7 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         /* 提取失败，回退到全文搜索 */
         if (info->ts_config) {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                           info->from_offset, info->to_offset, 
+                                           0, 65535, 
                                            info->ts_config);
             match_result = (pos != UINT_MAX);
         } else {
@@ -413,16 +420,12 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
  */
 static int sni_mt_check(const struct xt_mtchk_param *par)
 {
-    struct xt_sni_url_info *info = (struct xt_sni_url_info *)par->matchinfo;
+    struct xt_sni_info *info = (struct xt_sni_info *)par->matchinfo;
     int ret;
     int flags = 0;
     
     /* 基础参数检查 */
-    if (info->from_offset > info->to_offset)
-        return -EINVAL;
-    if (info->patlen > XT_SNI_MAX_PATTERN_SIZE)
-        return -EINVAL;
-    if (info->patlen == 0)
+    if (strlen(info->pattern) == 0 || strlen(info->pattern) >= XT_SNI_MAX_PATTERN_SIZE)
         return -EINVAL;
     
     /* 🔥 使用textsearch分析通配符模式 */
@@ -459,7 +462,7 @@ static int sni_mt_check(const struct xt_mtchk_param *par)
  */
 static void sni_mt_destroy(const struct xt_mtdtor_param *par)
 {
-    struct xt_sni_url_info *info = (struct xt_sni_url_info *)par->matchinfo;
+    struct xt_sni_info *info = (struct xt_sni_info *)par->matchinfo;
     
     if (info->ts_config) {
         textsearch_destroy(info->ts_config);
@@ -480,7 +483,7 @@ static struct xt_match sni_mt_reg __read_mostly = {
     .checkentry = sni_mt_check,
     .match      = sni_mt,
     .destroy    = sni_mt_destroy,
-    .matchsize  = sizeof(struct xt_sni_url_info),
+    .matchsize  = sizeof(struct xt_sni_info),
     .me         = THIS_MODULE,
 };
 
