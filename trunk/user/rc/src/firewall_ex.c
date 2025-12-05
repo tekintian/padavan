@@ -260,7 +260,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 		}
 	}
 	
-	return rules_added;
+	return;
 }
 
 static void
@@ -679,7 +679,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 		}
 	}
 	
-	return rules_added;
+	return;
 }
 
 // WAN, MAN, LAN
@@ -1068,7 +1068,7 @@ include_webstr_filter(FILE *fp)
                         fprintf(fp, "-A %s -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, ip_addr, url_timematch, mac_addresses[mac_idx]);
                     }
-                    rules_added++;
+                    webstr_items++;
                     logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (MAC: %s)", ip_addr, ip_mask, mac_addresses[mac_idx]);
                 }
             } else {
@@ -1082,7 +1082,7 @@ include_webstr_filter(FILE *fp)
                     fprintf(fp, "-A %s -d %s%s -j REJECT --reject-with tcp-reset\n",
                         dtype, ip_addr, url_timematch);
                 }
-                rules_added++;
+                webstr_items++;
                 logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (all MAC)", ip_addr, ip_mask);
             }
             
@@ -1229,7 +1229,7 @@ include_vts_filter(FILE *fp, char *lan_ip, char *logaccept, int forward_chain)
 		}
 	}
 	
-	return rules_added;
+	return;
 }
 
 static void
@@ -1279,7 +1279,7 @@ include_vts_nat(FILE *fp)
 		}
 	}
 	
-	return rules_added;
+	return;
 }
 
 static void
