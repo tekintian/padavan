@@ -259,6 +259,8 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 			}
 		}
 	}
+	
+	return rules_added;
 }
 
 static void
@@ -607,11 +609,12 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
  * @param mac_count MAC地址数量
  * @param need_mac_condition 是否需要MAC条件
  */
-static void
+static int
 generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url, 
                                protocol_type_t protocol, const char *timematch,
-                               char mac_addresses[][32], int mac_count, int need_mac_condition)
+                               char mac_addresses[][18], int mac_count, int need_mac_condition)
 {
+	int rules_added = 0;
 	logmessage("URL Filter", "DEBUG: Generating kernel-optimized rule for protocol %d", protocol);
 	
 	if (need_mac_condition) {
@@ -623,7 +626,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 					// 使用string模块直接搜索Host字段，跳过SNI模块的协议检测
 					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], url);
-					webstr_items++;
+					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
 					
@@ -632,7 +635,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 					// 添加端口限制进一步优化性能
 					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], url);
-					webstr_items++;
+					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
 					
@@ -641,7 +644,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 					// 通用模式：使用SNI模块的智能检测（兼容性最好）
 					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], url);
-					webstr_items++;
+					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added universal rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
 			}
@@ -653,7 +656,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				// 🔥 内核优化：HTTP专用规则，使用string模块避免SNI协议检测
 				fprintf(fp, "-A %s -p tcp%s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, url);
-				webstr_items++;
+				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (all MAC)", url);
 				break;
 				
@@ -661,7 +664,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				// 🔥 内核优化：HTTPS专用规则，移除端口限制支持任意端口
 				fprintf(fp, "-A %s -p tcp%s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, url);
-				webstr_items++;
+				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (all MAC)", url);
 				break;
 				
@@ -670,11 +673,13 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				// 通用模式：使用SNI模块
 				fprintf(fp, "-A %s -p tcp%s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, url);
-				webstr_items++;
+				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added universal rule: %s (all MAC)", url);
 				break;
 		}
 	}
+	
+	return rules_added;
 }
 
 // WAN, MAN, LAN
@@ -1063,7 +1068,7 @@ include_webstr_filter(FILE *fp)
                         fprintf(fp, "-A %s -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, ip_addr, url_timematch, mac_addresses[mac_idx]);
                     }
-                    webstr_items++;
+                    rules_added++;
                     logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (MAC: %s)", ip_addr, ip_mask, mac_addresses[mac_idx]);
                 }
             } else {
@@ -1077,7 +1082,7 @@ include_webstr_filter(FILE *fp)
                     fprintf(fp, "-A %s -d %s%s -j REJECT --reject-with tcp-reset\n",
                         dtype, ip_addr, url_timematch);
                 }
-                webstr_items++;
+                rules_added++;
                 logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (all MAC)", ip_addr, ip_mask);
             }
             
@@ -1095,7 +1100,7 @@ include_webstr_filter(FILE *fp)
         }
         
         /* 生成基于协议优化的高效过滤规则 */
-        generate_protocol_optimized_rule(fp, dtype, url_path, protocol, 
+        webstr_items += generate_protocol_optimized_rule(fp, dtype, url_path, protocol, 
                                        url_timematch, mac_addresses, mac_count, need_mac_condition);
         
         logmessage("URL Filter", "DEBUG: Added protocol-optimized rule: %s (protocol: %d)", url_path, protocol);
@@ -1223,6 +1228,8 @@ include_vts_filter(FILE *fp, char *lan_ip, char *logaccept, int forward_chain)
 				fprintf(fp, "-A %s -p %s%s -d %s -j %s\n", dtype, protono, srcaddrs, dstip, logaccept);
 		}
 	}
+	
+	return rules_added;
 }
 
 static void
@@ -1271,6 +1278,8 @@ include_vts_nat(FILE *fp)
 				fprintf(fp, "-A %s -p %s%s -j DNAT --to %s\n", dtype, protono, srcaddrs, dstip);
 		}
 	}
+	
+	return rules_added;
 }
 
 static void
