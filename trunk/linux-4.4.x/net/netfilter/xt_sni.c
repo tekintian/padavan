@@ -42,6 +42,13 @@ enum protocol_type {
     PROTOCOL_HTTP2 = 3
 };
 
+/* 通配符匹配类型 */
+enum wildcard_match_type {
+    MATCH_EXACT = 0,      /* qq.com - 精确匹配 */
+    MATCH_SUFFIX = 1,     /* *.qq.com - 后缀匹配 */
+    MATCH_CONTAINS = 2    /* *qq.com - 包含匹配 */
+};
+
 /* 扩展原有结构，保持兼容性 */
 struct xt_sni_url_info {
     /* 基础配置（保持与原版兼容） */
@@ -52,13 +59,13 @@ struct xt_sni_url_info {
     __u8 patlen;
     __u8 invert;
     
-    /* URL过滤优化配置 */
-    enum url_match_type match_type;  /* 匹配类型 */
-    char search_key[64];             /* 搜索关键字 */
-    unsigned int key_len;             /* 关键字长度 */
+    /* 🔥 新增：textsearch高效通配符匹配配置 */
+    enum wildcard_match_type wildcard_type;  /* 通配符类型 */
+    char search_pattern[XT_SNI_MAX_PATTERN_SIZE]; /* 转换后的搜索模式 */
+    unsigned int pattern_len;                 /* 模式长度 */
     
-    /* Boyer-Moore配置缓存 */
-    struct ts_config *bm_config;     /* BM算法配置 */
+    /* textsearch配置缓存 */
+    struct ts_config *ts_config;      /* textsearch算法配置 */
 };
 
 /* ========================================
@@ -66,57 +73,71 @@ struct xt_sni_url_info {
  * ======================================== */
 
 /**
- * analyze_url_pattern - 分析URL模式并提取搜索关键字
+ * convert_wildcard_to_pattern - 🔥 将通配符转换为textsearch模式
+ * @wildcard: 通配符字符串，如 "*.qq.com"
+ * @pattern: 输出的转换后模式
+ * @pattern_size: 模式缓冲区大小
+ * @wildcard_type: 输出通配符类型
+ * 
+ * 转换示例：
+ * *.qq.com -> qq.com (后缀匹配)
+ * *qq.com -> qq.com (包含匹配)
+ * qq.com -> qq.com (精确匹配)
+ * 
+ * 返回: 成功返回0，失败返回负数
+ */
+static int convert_wildcard_to_pattern(const char *wildcard, 
+                                       char *pattern, 
+                                       size_t pattern_size,
+                                       enum wildcard_match_type *wildcard_type)
+{
+    size_t wild_len = strlen(wildcard);
+    
+    if (wild_len == 0 || wild_len >= pattern_size)
+        return -EINVAL;
+    
+    if (wild_len >= 3 && wildcard[0] == '*' && wildcard[1] == '.') {
+        /* *.domain.com -> 后缀匹配 */
+        strcpy(pattern, wildcard + 2);
+        *wildcard_type = MATCH_SUFFIX;
+        return 0;
+    } else if (wild_len >= 2 && wildcard[0] == '*' && 
+               (wild_len == 1 || wildcard[1] != '.')) {
+        /* *domain -> 包含匹配 */
+        strcpy(pattern, wildcard + 1);
+        *wildcard_type = MATCH_CONTAINS;
+        return 0;
+    } else {
+        /* 普通域名 -> 精确匹配 */
+        strcpy(pattern, wildcard);
+        *wildcard_type = MATCH_EXACT;
+        return 0;
+    }
+}
+
+/**
+ * analyze_wildcard_pattern - 🔥 使用textsearch分析通配符模式
  * @info: SNI匹配信息
  */
-static void analyze_url_pattern(struct xt_sni_url_info *info)
+static int analyze_wildcard_pattern(struct xt_sni_url_info *info)
 {
-    const char *pattern = info->pattern;
-    unsigned int patlen = info->patlen;
-    const char *domain;
-    unsigned int domain_len;
-    const char *search;
-    unsigned int search_len;
-    unsigned int key_len;
+    int ret;
     
-    /* 检查匹配模式 */
-    if (patlen >= 3 && pattern[0] == '*' && pattern[1] == '.') {
-        /* *.domain.com -> 子域名匹配 */
-        info->match_type = URL_MATCH_SUBDOMAIN;
-        
-        /* 提取域名作为搜索关键字 */
-        domain = pattern + 2;
-        domain_len = patlen - 2;
-        
-        if (domain_len < sizeof(info->search_key)) {
-            memcpy(info->search_key, domain, domain_len);
-            info->search_key[domain_len] = '\0';
-            info->key_len = domain_len;
-        }
-    } else if (patlen >= 2 && pattern[0] == '*' && pattern[1] != '.') {
-        /* *domain -> 包含匹配 */
-        info->match_type = URL_MATCH_CONTAINS;
-        
-        /* 提取*后的字符串作为搜索关键字 */
-        search = pattern + 1;
-        search_len = patlen - 1;
-        
-        if (search_len < sizeof(info->search_key)) {
-            memcpy(info->search_key, search, search_len);
-            info->search_key[search_len] = '\0';
-            info->key_len = search_len;
-        }
-    } else {
-        /* 精确匹配 */
-        info->match_type = URL_MATCH_EXACT;
-        
-        /* 使用整个模式作为搜索关键字 */
-        key_len = patlen < sizeof(info->search_key) ? 
-                 patlen : sizeof(info->search_key) - 1;
-        memcpy(info->search_key, pattern, key_len);
-        info->search_key[key_len] = '\0';
-        info->key_len = key_len;
-    }
+    /* 转换通配符为textsearch模式 */
+    ret = convert_wildcard_to_pattern(info->pattern, 
+                                     info->search_pattern, 
+                                     sizeof(info->search_pattern),
+                                     &info->wildcard_type);
+    if (ret < 0)
+        return ret;
+    
+    /* 计算转换后的模式长度 */
+    info->pattern_len = strlen(info->search_pattern);
+    
+    /* 固定使用Boyer-Moore算法（最高效） */
+    strcpy(info->algo, "bm");
+    
+    return 0;
 }
 
 /* ========================================
@@ -307,54 +328,50 @@ static unsigned int extract_sni_from_tls(const struct sk_buff *skb,
 }
 
 /**
- * match_url_pattern - 匹配URL模式
+ * sni_match_with_textsearch - 🔥 使用textsearch进行高效通配符匹配
  * @sni_name: 提取的SNI域名
  * @info: 匹配信息
  * 
  * 返回: true表示匹配
  */
-static bool match_url_pattern(const char *sni_name, const struct xt_sni_url_info *info)
+static bool sni_match_with_textsearch(const char *sni_name, 
+                                     const struct xt_sni_url_info *info)
 {
-    const char *pattern = info->pattern;
-    unsigned int patlen = info->patlen;
-    unsigned int sni_len = strlen(sni_name);
-    const char *sni_end;
-    unsigned int i;
+    struct ts_config *ts_conf = info->ts_config;
+    struct ts_state ts_state;
+    unsigned int pos;
+    size_t sni_len = strlen(sni_name);
     
-    switch (info->match_type) {
-    case URL_MATCH_EXACT:
-        /* 精确匹配 */
-        if (sni_len != patlen)
-            return false;
-        return (strncmp(sni_name, pattern, patlen) == 0);
-        
-    case URL_MATCH_SUBDOMAIN:
-        /* 子域名匹配 *.domain.com */
-        if (sni_len < info->key_len)
-            return false;
-        
-        /* 检查是否以domain.com结尾 */
-        sni_end = sni_name + sni_len - info->key_len;
-        if (strncmp(sni_end, info->search_key, info->key_len) != 0)
-            return false;
-        
-        /* 确保是子域名（前面有.或者是完整域名） */
-        if (sni_len == info->key_len)
-            return true;  /* 完整匹配 */
-        
-        return (*(sni_end - 1) == '.');
-        
-    case URL_MATCH_CONTAINS:
-        /* 包含匹配 *domain */
-        if (sni_len < info->key_len)
-            return false;
-        
-        /* 搜索包含关键字 */
-        for (i = 0; i <= sni_len - info->key_len; i++) {
-            if (strncmp(sni_name + i, info->search_key, info->key_len) == 0)
-                return true;
-        }
+    if (!ts_conf || sni_len == 0)
         return false;
+    
+    switch (info->wildcard_type) {
+    case MATCH_EXACT:
+        /* 精确匹配：长度和内容都必须完全匹配 */
+        if (sni_len != info->pattern_len)
+            return false;
+        
+        /* 使用textsearch进行精确匹配 */
+        pos = textsearch_find_continuous(ts_conf, &ts_state, 
+                                       sni_name, sni_len);
+        return (pos == 0);
+        
+    case MATCH_SUFFIX:
+        /* 后缀匹配：*.domain.com，检查是否以模式结尾 */
+        if (sni_len < info->pattern_len)
+            return false;
+        
+        /* 在可能的起始位置搜索模式（使用Boyer-Moore的高效搜索） */
+        ts_state.offset = sni_len - info->pattern_len;
+        pos = textsearch_find_continuous(ts_conf, &ts_state, 
+                                       sni_name, sni_len);
+        return (pos != UINT_MAX);
+        
+    case MATCH_CONTAINS:
+        /* 包含匹配：*domain，全文搜索任意位置 */
+        pos = textsearch_find_continuous(ts_conf, &ts_state, 
+                                       sni_name, sni_len);
+        return (pos != UINT_MAX);
     }
     
     return false;
@@ -401,16 +418,18 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         return match_result ^ info->invert;
     }
     
-    /* 精确匹配提取的域名 */
+    /* 🔥 使用textsearch进行高效匹配 */
     if (url_len > 0) {
-        match_result = match_url_pattern(url_buffer, info);
+        match_result = sni_match_with_textsearch(url_buffer, info);
     } else {
-        /* 提取失败，回退到Boyer-Moore */
-        {
+        /* 提取失败，回退到全文搜索 */
+        if (info->ts_config) {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
                                            info->from_offset, info->to_offset, 
-                                           info->bm_config);
+                                           info->ts_config);
             match_result = (pos != UINT_MAX);
+        } else {
+            match_result = false;
         }
     }
     
@@ -422,11 +441,13 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
  * ======================================== */
 
 /**
- * sni_mt_check - 参数检查和初始化
+ * sni_mt_check - 🔥 增强版参数检查和textsearch初始化
  */
 static int sni_mt_check(const struct xt_mtchk_param *par)
 {
     struct xt_sni_url_info *info = (struct xt_sni_url_info *)par->matchinfo;
+    int ret;
+    int flags = 0;
     
     /* 基础参数检查 */
     if (info->from_offset > info->to_offset)
@@ -436,31 +457,47 @@ static int sni_mt_check(const struct xt_mtchk_param *par)
     if (info->patlen == 0)
         return -EINVAL;
     
-    /* 分析URL模式 */
-    analyze_url_pattern(info);
+    /* 🔥 使用textsearch分析通配符模式 */
+    ret = analyze_wildcard_pattern(info);
+    if (ret < 0)
+        return ret;
     
-    /* 固定使用Boyer-Moore算法 */
-    strcpy(info->algo, "bm");
+    /* 🔥 配置textsearch标志 */
+    if (info->wildcard_type == MATCH_EXACT) {
+        /* 精确匹配：大小写敏感 */
+        flags = 0;
+    } else {
+        /* 通配符匹配：通常大小写不敏感（URL过滤标准） */
+        flags = TS_IGNORECASE;
+    }
     
-    /* 预配置Boyer-Moore算法（回退用） */
-    info->bm_config = textsearch_prepare("bm", info->search_key, 
-                                        info->key_len, GFP_KERNEL, TS_IGNORECASE);
-    if (IS_ERR(info->bm_config))
-        info->bm_config = NULL;
+    /* 🔥 预配置textsearch算法（使用Boyer-Moore） */
+    info->ts_config = textsearch_prepare("bm", info->search_pattern, 
+                                        info->pattern_len, GFP_KERNEL, flags);
+    if (IS_ERR(info->ts_config)) {
+        printk(KERN_ERR "xt_sni: textsearch_prepare failed: %ld\n", 
+               PTR_ERR(info->ts_config));
+        return PTR_ERR(info->ts_config);
+    }
+    
+    printk(KERN_INFO "xt_sni: Loaded pattern '%s' -> '%s' (type=%d, len=%u)\n",
+           info->pattern, info->search_pattern, info->wildcard_type, info->pattern_len);
     
     return 0;
 }
 
 /**
- * sni_mt_destroy - 资源清理
+ * sni_mt_destroy - 🔥 textsearch资源清理
  */
 static void sni_mt_destroy(const struct xt_mtdtor_param *par)
 {
     struct xt_sni_url_info *info = (struct xt_sni_url_info *)par->matchinfo;
     
-    if (info->bm_config) {
-        textsearch_destroy(info->bm_config);
-        info->bm_config = NULL;
+    if (info->ts_config) {
+        textsearch_destroy(info->ts_config);
+        info->ts_config = NULL;
+        printk(KERN_DEBUG "xt_sni: Destroyed textsearch config for pattern '%s'\n", 
+               info->pattern);
     }
 }
 

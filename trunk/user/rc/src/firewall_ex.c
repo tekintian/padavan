@@ -518,7 +518,7 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 	temp_url[sizeof(temp_url) - 1] = '\0';
 	
 	// 🔥 优化逻辑：根据URL格式智能选择处理方式
-	if (strncasecmp(temp_url, "https://", 8) == 0) {
+	if (strncmp(temp_url, "https://", 8) == 0) {
 		// HTTPS协议：忽略端口和路径，只匹配域名（SNI处理）
 		*protocol = PROTOCOL_HTTPS_ONLY;
 		path_start = temp_url + 8;
@@ -537,7 +537,7 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 		}
 		
 		logmessage("URL Filter", "DEBUG: HTTPS-only mode, domain only: %s", path_start);
-	} else if (strncasecmp(temp_url, "http://", 7) == 0) {
+	} else if (strncmp(temp_url, "http://", 7) == 0) {
 		// HTTP协议：检查是否包含URI部分
 		*protocol = PROTOCOL_HTTP_ONLY;
 		path_start = temp_url + 7;
@@ -1008,9 +1008,9 @@ include_webstr_filter(FILE *fp)
         url_buf[sizeof(url_buf) - 1] = 0;
         
         /* 清理URL前缀 */
-        if (strncasecmp(url_buf, "http://", 7) == 0)
+        if (strncmp(url_buf, "http://", 7) == 0)
             filterstr = url_buf + 7;
-        else if (strncasecmp(url_buf, "https://", 8) == 0)
+        else if (strncmp(url_buf, "https://", 8) == 0)
             filterstr = url_buf + 8;
         else
             filterstr = url_buf;
