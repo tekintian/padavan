@@ -26,14 +26,8 @@ MODULE_ALIAS("ipt_sni");
 MODULE_ALIAS("ip6t_sni");
 
 /* ========================================
- * 简化的URL过滤数据结构
+ * URL匹配模式分析
  * ======================================== */
-
-enum url_match_type {
-    URL_MATCH_EXACT,      /* qq.com - 精确匹配 */
-    URL_MATCH_SUBDOMAIN,  /* *.qq.com - 子域名匹配 */
-    URL_MATCH_CONTAINS    /* *qq.com - 包含匹配 */
-};
 
 enum protocol_type {
     PROTOCOL_UNKNOWN = 0,
@@ -42,31 +36,7 @@ enum protocol_type {
     PROTOCOL_HTTP2 = 3
 };
 
-/* 通配符匹配类型 */
-enum wildcard_match_type {
-    MATCH_EXACT = 0,      /* qq.com - 精确匹配 */
-    MATCH_SUFFIX = 1,     /* *.qq.com - 后缀匹配 */
-    MATCH_CONTAINS = 2    /* *qq.com - 包含匹配 */
-};
-
-/* 扩展原有结构，保持兼容性 */
-struct xt_sni_url_info {
-    /* 基础配置（保持与原版兼容） */
-    __u16 from_offset;
-    __u16 to_offset;
-    char algo[XT_SNI_MAX_ALGO_NAME_SIZE];
-    char pattern[XT_SNI_MAX_PATTERN_SIZE];
-    __u8 patlen;
-    __u8 invert;
-    
-    /* 🔥 新增：textsearch高效通配符匹配配置 */
-    enum wildcard_match_type wildcard_type;  /* 通配符类型 */
-    char search_pattern[XT_SNI_MAX_PATTERN_SIZE]; /* 转换后的搜索模式 */
-    unsigned int pattern_len;                 /* 模式长度 */
-    
-    /* textsearch配置缓存 */
-    struct ts_config *ts_config;      /* textsearch算法配置 */
-};
+/* 使用头文件中定义的结构体，避免重复定义 */
 
 /* ========================================
  * URL匹配模式分析
@@ -89,7 +59,7 @@ struct xt_sni_url_info {
 static int convert_wildcard_to_pattern(const char *wildcard, 
                                        char *pattern, 
                                        size_t pattern_size,
-                                       enum wildcard_match_type *wildcard_type)
+                                       enum xt_sni_wildcard_type *wildcard_type)
 {
     size_t wild_len = strlen(wildcard);
     
@@ -99,18 +69,18 @@ static int convert_wildcard_to_pattern(const char *wildcard,
     if (wild_len >= 3 && wildcard[0] == '*' && wildcard[1] == '.') {
         /* *.domain.com -> 后缀匹配 */
         strcpy(pattern, wildcard + 2);
-        *wildcard_type = MATCH_SUFFIX;
+        *wildcard_type = XT_SNI_MATCH_SUFFIX;
         return 0;
     } else if (wild_len >= 2 && wildcard[0] == '*' && 
                (wild_len == 1 || wildcard[1] != '.')) {
         /* *domain -> 包含匹配 */
         strcpy(pattern, wildcard + 1);
-        *wildcard_type = MATCH_CONTAINS;
+        *wildcard_type = XT_SNI_MATCH_CONTAINS;
         return 0;
     } else {
         /* 普通域名 -> 精确匹配 */
         strcpy(pattern, wildcard);
-        *wildcard_type = MATCH_EXACT;
+        *wildcard_type = XT_SNI_MATCH_EXACT;
         return 0;
     }
 }
@@ -304,8 +274,6 @@ static unsigned int extract_sni_from_tls(const struct sk_buff *skb,
         if (data[i] == 0x00 && data[i+1] == 0x00) {
             /* 找到SNI扩展，解析长度 */
             unsigned int sni_name_len = (data[i+11] << 8) | data[i+12];
-            unsigned int sni_ext_len = (data[i+2] << 8) | data[i+3];     /* 避免未使用警告 */
-            unsigned int sni_list_len = (data[i+9] << 8) | data[i+10];  /* 避免未使用警告 */
             
             if (sni_name_len > 0 && sni_name_len < buffer_size - 1 && 
                 i + 13 + sni_name_len < data_len) {
@@ -346,7 +314,7 @@ static bool sni_match_with_textsearch(const char *sni_name,
         return false;
     
     switch (info->wildcard_type) {
-    case MATCH_EXACT:
+    case XT_SNI_MATCH_EXACT:
         /* 精确匹配：长度和内容都必须完全匹配 */
         if (sni_len != info->pattern_len)
             return false;
@@ -356,7 +324,7 @@ static bool sni_match_with_textsearch(const char *sni_name,
                                        sni_name, sni_len);
         return (pos == 0);
         
-    case MATCH_SUFFIX:
+    case XT_SNI_MATCH_SUFFIX:
         /* 后缀匹配：*.domain.com，检查是否以模式结尾 */
         if (sni_len < info->pattern_len)
             return false;
@@ -367,7 +335,7 @@ static bool sni_match_with_textsearch(const char *sni_name,
                                        sni_name, sni_len);
         return (pos != UINT_MAX);
         
-    case MATCH_CONTAINS:
+    case XT_SNI_MATCH_CONTAINS:
         /* 包含匹配：*domain，全文搜索任意位置 */
         pos = textsearch_find_continuous(ts_conf, &ts_state, 
                                        sni_name, sni_len);
@@ -405,14 +373,14 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         break;
         
     default:  // PROTOCOL_UNKNOWN
-        /* 通用回退：Boyer-Moore全文搜索 */
-        if (!info->bm_config)
+        /* 通用回退：textsearch全文搜索 */
+        if (!info->ts_config)
             return false ^ info->invert;
         
         {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
                                            info->from_offset, info->to_offset, 
-                                           info->bm_config);
+                                           info->ts_config);
             match_result = (pos != UINT_MAX);
         }
         return match_result ^ info->invert;
@@ -463,7 +431,7 @@ static int sni_mt_check(const struct xt_mtchk_param *par)
         return ret;
     
     /* 🔥 配置textsearch标志 */
-    if (info->wildcard_type == MATCH_EXACT) {
+    if (info->wildcard_type == XT_SNI_MATCH_EXACT) {
         /* 精确匹配：大小写敏感 */
         flags = 0;
     } else {
