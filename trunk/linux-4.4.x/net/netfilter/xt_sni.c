@@ -73,6 +73,11 @@ static void analyze_url_pattern(struct xt_sni_url_info *info)
 {
     const char *pattern = info->pattern;
     unsigned int patlen = info->patlen;
+    const char *domain;
+    unsigned int domain_len;
+    const char *search;
+    unsigned int search_len;
+    unsigned int key_len;
     
     /* 检查匹配模式 */
     if (patlen >= 3 && pattern[0] == '*' && pattern[1] == '.') {
@@ -80,8 +85,8 @@ static void analyze_url_pattern(struct xt_sni_url_info *info)
         info->match_type = URL_MATCH_SUBDOMAIN;
         
         /* 提取域名作为搜索关键字 */
-        const char *domain = pattern + 2;
-        unsigned int domain_len = patlen - 2;
+        domain = pattern + 2;
+        domain_len = patlen - 2;
         
         if (domain_len < sizeof(info->search_key)) {
             memcpy(info->search_key, domain, domain_len);
@@ -93,8 +98,8 @@ static void analyze_url_pattern(struct xt_sni_url_info *info)
         info->match_type = URL_MATCH_CONTAINS;
         
         /* 提取*后的字符串作为搜索关键字 */
-        const char *search = pattern + 1;
-        unsigned int search_len = patlen - 1;
+        search = pattern + 1;
+        search_len = patlen - 1;
         
         if (search_len < sizeof(info->search_key)) {
             memcpy(info->search_key, search, search_len);
@@ -106,8 +111,8 @@ static void analyze_url_pattern(struct xt_sni_url_info *info)
         info->match_type = URL_MATCH_EXACT;
         
         /* 使用整个模式作为搜索关键字 */
-        unsigned int key_len = patlen < sizeof(info->search_key) ? 
-                              patlen : sizeof(info->search_key) - 1;
+        key_len = patlen < sizeof(info->search_key) ? 
+                 patlen : sizeof(info->search_key) - 1;
         memcpy(info->search_key, pattern, key_len);
         info->search_key[key_len] = '\0';
         info->key_len = key_len;
@@ -277,9 +282,9 @@ static unsigned int extract_sni_from_tls(const struct sk_buff *skb,
     for (i = 43; i < data_len - 10; i++) {
         if (data[i] == 0x00 && data[i+1] == 0x00) {
             /* 找到SNI扩展，解析长度 */
-            unsigned int sni_ext_len = (data[i+2] << 8) | data[i+3];
-            unsigned int sni_list_len = (data[i+9] << 8) | data[i+10];
             unsigned int sni_name_len = (data[i+11] << 8) | data[i+12];
+            unsigned int sni_ext_len = (data[i+2] << 8) | data[i+3];     /* 避免未使用警告 */
+            unsigned int sni_list_len = (data[i+9] << 8) | data[i+10];  /* 避免未使用警告 */
             
             if (sni_name_len > 0 && sni_name_len < buffer_size - 1 && 
                 i + 13 + sni_name_len < data_len) {
@@ -313,6 +318,8 @@ static bool match_url_pattern(const char *sni_name, const struct xt_sni_url_info
     const char *pattern = info->pattern;
     unsigned int patlen = info->patlen;
     unsigned int sni_len = strlen(sni_name);
+    const char *sni_end;
+    unsigned int i;
     
     switch (info->match_type) {
     case URL_MATCH_EXACT:
@@ -327,7 +334,7 @@ static bool match_url_pattern(const char *sni_name, const struct xt_sni_url_info
             return false;
         
         /* 检查是否以domain.com结尾 */
-        const char *sni_end = sni_name + sni_len - info->key_len;
+        sni_end = sni_name + sni_len - info->key_len;
         if (strncmp(sni_end, info->search_key, info->key_len) != 0)
             return false;
         
@@ -343,7 +350,7 @@ static bool match_url_pattern(const char *sni_name, const struct xt_sni_url_info
             return false;
         
         /* 搜索包含关键字 */
-        for (unsigned int i = 0; i <= sni_len - info->key_len; i++) {
+        for (i = 0; i <= sni_len - info->key_len; i++) {
             if (strncmp(sni_name + i, info->search_key, info->key_len) == 0)
                 return true;
         }
@@ -385,11 +392,12 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         if (!info->bm_config)
             return false ^ info->invert;
         
-        struct ts_state state;
-        unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                       info->from_offset, info->to_offset, 
-                                       info->bm_config);
-        match_result = (pos != UINT_MAX);
+        {
+            unsigned int pos = skb_find_text((struct sk_buff *)skb, 
+                                           info->from_offset, info->to_offset, 
+                                           info->bm_config);
+            match_result = (pos != UINT_MAX);
+        }
         return match_result ^ info->invert;
     }
     
@@ -398,11 +406,12 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         match_result = match_url_pattern(url_buffer, info);
     } else {
         /* 提取失败，回退到Boyer-Moore */
-        struct ts_state state;
-        unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                       info->from_offset, info->to_offset, 
-                                       info->bm_config);
-        match_result = (pos != UINT_MAX);
+        {
+            unsigned int pos = skb_find_text((struct sk_buff *)skb, 
+                                           info->from_offset, info->to_offset, 
+                                           info->bm_config);
+            match_result = (pos != UINT_MAX);
+        }
     }
     
     return match_result ^ info->invert;
