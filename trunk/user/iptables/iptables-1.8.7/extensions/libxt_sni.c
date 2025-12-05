@@ -54,15 +54,6 @@ static const struct option sni_opts[] = {
     XT_GETOPT_TABLEEND,
 };
 
-/* 转换为小写（URL过滤标准） */
-static void to_lower_case(char *str)
-{
-    while (*str) {
-        *str = tolower(*str);
-        str++;
-    }
-}
-
 /* 检查URL模式格式 */
 static bool validate_url_pattern(const char *pattern)
 {
@@ -125,9 +116,6 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         /* 复制模式串 */
         strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
-        
-        /* 转换为小写（URL过滤标准） */
-        to_lower_case(info->pattern);
         
         info->patlen = strlen(info->pattern);
         
