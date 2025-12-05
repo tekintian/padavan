@@ -505,27 +505,85 @@ static int
 parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, size_t url_path_size)
 {
 	const char *path_start;
+	char *slash_pos;
+	char *colon_pos;
+	char temp_url[512];
 	
 	if (!url || strlen(url) == 0 || !url_path || !protocol) {
 		return 0;
 	}
 	
-	// 检测协议前缀并提取路径部分
-	if (strncasecmp(url, "https://", 8) == 0) {
+	// 复制到临时缓冲区进行处理
+	strncpy(temp_url, url, sizeof(temp_url) - 1);
+	temp_url[sizeof(temp_url) - 1] = '\0';
+	
+	// 🔥 优化逻辑：根据URL格式智能选择处理方式
+	if (strncasecmp(temp_url, "https://", 8) == 0) {
+		// HTTPS协议：忽略端口和路径，只匹配域名（SNI处理）
 		*protocol = PROTOCOL_HTTPS_ONLY;
-		path_start = url + 8;
-		logmessage("URL Filter", "DEBUG: HTTPS-only mode detected");
-	} else if (strncasecmp(url, "http://", 7) == 0) {
+		path_start = temp_url + 8;
+		
+		// 查找域名结束位置
+		slash_pos = strchr(path_start, '/');
+		colon_pos = strchr(path_start, ':');
+		
+		// 取域名部分，忽略端口和路径
+		if (colon_pos && (!slash_pos || colon_pos < slash_pos)) {
+			// 有端口的情况，截断到域名
+			*colon_pos = '\0';
+		} else if (slash_pos) {
+			// 有路径的情况，截断到域名
+			*slash_pos = '\0';
+		}
+		
+		logmessage("URL Filter", "DEBUG: HTTPS-only mode, domain only: %s", path_start);
+	} else if (strncasecmp(temp_url, "http://", 7) == 0) {
+		// HTTP协议：检查是否包含URI部分
 		*protocol = PROTOCOL_HTTP_ONLY;
-		path_start = url + 7;
-		logmessage("URL Filter", "DEBUG: HTTP-only mode detected");
+		path_start = temp_url + 7;
+		
+		// 查找路径分隔符
+		slash_pos = strchr(path_start, '/');
+		if (slash_pos && slash_pos != path_start && *(slash_pos + 1) != '\0') {
+			// 包含URI部分，使用完整路径进行textsearch匹配
+			logmessage("URL Filter", "DEBUG: HTTP with URI, using textsearch: %s", path_start);
+		} else {
+			// 纯域名，使用通用HTTP处理
+			logmessage("URL Filter", "DEBUG: HTTP domain only: %s", path_start);
+		}
 	} else {
-		*protocol = PROTOCOL_BOTH;
-		path_start = url;
-		logmessage("URL Filter", "DEBUG: Auto-detect mode (HTTP+HTTPS)");
+		// 无协议前缀：智能判断
+		slash_pos = strchr(temp_url, '/');
+		colon_pos = strchr(temp_url, ':');
+		
+		// 检查是否是带端口的域名格式
+		if (colon_pos && (!slash_pos || colon_pos < slash_pos)) {
+			// 带端口的域名：news.qq.com:8080
+			if (slash_pos && slash_pos > colon_pos) {
+				// 有路径：news.qq.com:8080/xxx → 使用textsearch处理完整URI
+				*protocol = PROTOCOL_HTTP_ONLY;
+				path_start = temp_url;
+				logmessage("URL Filter", "DEBUG: Domain with port and path, using textsearch: %s", path_start);
+			} else {
+				// 只有端口无路径：news.qq.com:8080 → 使用通用处理
+				*protocol = PROTOCOL_BOTH;
+				path_start = temp_url;
+				logmessage("URL Filter", "DEBUG: Domain with port only: %s", path_start);
+			}
+		} else if (slash_pos && slash_pos != temp_url && *(slash_pos + 1) != '\0') {
+			// 有路径：news.qq.com/xxx → 使用textsearch处理
+			*protocol = PROTOCOL_HTTP_ONLY;
+			path_start = temp_url;
+			logmessage("URL Filter", "DEBUG: Domain with path, using textsearch: %s", path_start);
+		} else {
+			// 纯域名：qq.com → 使用SNI处理
+			*protocol = PROTOCOL_BOTH;
+			path_start = temp_url;
+			logmessage("URL Filter", "DEBUG: Pure domain, using SNI: %s", path_start);
+		}
 	}
 	
-	// 复制完整的URL路径（域名+端口+路径）
+	// 复制处理后的URL路径
 	strncpy(url_path, path_start, url_path_size - 1);
 	url_path[url_path_size - 1] = '\0';
 	
@@ -563,7 +621,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				case PROTOCOL_HTTP_ONLY:
 					// 🔥 内核优化：指定HTTP协议，避免内核协议检测开销
 					// 使用string模块直接搜索Host字段，跳过SNI模块的协议检测
-					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m string --string \"Host: \" --algo bm -m string --string \"%s\" -j REJECT --reject-with tcp-reset\n",
+					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], url);
 					webstr_items++;
 					logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
@@ -593,7 +651,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 		switch (protocol) {
 			case PROTOCOL_HTTP_ONLY:
 				// 🔥 内核优化：HTTP专用规则，使用string模块避免SNI协议检测
-				fprintf(fp, "-A %s -p tcp%s -m string --string \"Host: \" --algo bm -m string --string \"%s\" -j REJECT --reject-with tcp-reset\n",
+				fprintf(fp, "-A %s -p tcp%s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, url);
 				webstr_items++;
 				logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (all MAC)", url);

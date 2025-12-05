@@ -174,22 +174,27 @@ static enum protocol_type detect_protocol_type(const struct sk_buff *skb, unsign
  * ======================================== */
 
 /**
- * extract_http_host - 从HTTP请求中提取Host字段
+ * extract_http_url - 从HTTP请求中提取URL路径
  * @skb: 网络数据包
  * @from: 搜索起始位置
  * @to: 搜索结束位置
- * @host_buffer: Host输出缓冲区
+ * @url_buffer: URL输出缓冲区
  * @buffer_size: 缓冲区大小
  * 
- * 返回: 提取的Host长度，0表示失败
+ * 返回: 提取的URL长度，0表示失败
+ * 
+ * 解析示例：
+ * GET /rain/a/UTR2025112005617000 HTTP/1.1
+ * Host: news.qq.com
  */
-static unsigned int extract_http_host(const struct sk_buff *skb,
-                                      unsigned int from, unsigned int to,
-                                      char *host_buffer, unsigned int buffer_size)
+static unsigned int extract_http_url(const struct sk_buff *skb,
+                                     unsigned int from, unsigned int to,
+                                     char *url_buffer, unsigned int buffer_size)
 {
     unsigned char *data;
     unsigned int data_len = to - from;
     unsigned int i, j;
+    unsigned int method_len;
     
     if (data_len < 20 || buffer_size < 64)
         return 0;
@@ -199,53 +204,48 @@ static unsigned int extract_http_host(const struct sk_buff *skb,
     if (!data)
         return 0;
     
-    /* 查找HTTP方法 (GET, POST, HEAD, etc.) */
-    if (data_len < 4 || 
-        !(strncmp(data, "GET ", 4) == 0 || 
-          strncmp(data, "POST ", 5) == 0 ||
-          strncmp(data, "HEAD ", 5) == 0 ||
-          strncmp(data, "PUT ", 4) == 0 ||
-          strncmp(data, "DELETE ", 7) == 0)) {
+    /* 查找HTTP方法并提取URL路径 */
+    if (data_len < 8)
+        return 0;
+    
+    /* 检查HTTP方法 */
+    method_len = 0;
+    if (strncmp(data, "GET ", 4) == 0) {
+        method_len = 4;
+    } else if (strncmp(data, "POST ", 5) == 0) {
+        method_len = 5;
+    } else if (strncmp(data, "HEAD ", 5) == 0) {
+        method_len = 5;
+    } else if (strncmp(data, "PUT ", 4) == 0) {
+        method_len = 4;
+    } else if (strncmp(data, "DELETE ", 7) == 0) {
+        method_len = 7;
+    } else {
         return 0;  /* 不是HTTP请求 */
     }
     
-    /* 查找Host头部 */
-    for (i = 0; i < data_len - 6; i++) {
-        if (data[i] == '\r' && data[i+1] == '\n' &&
-            (data[i+2] == 'H' || data[i+2] == 'h') &&
-            (data[i+3] == 'o' || data[i+3] == 'O') &&
-            (data[i+4] == 's' || data[i+4] == 'S') &&
-            (data[i+5] == 't' || data[i+5] == 'T') &&
-            data[i+6] == ':') {
-            
-            /* 找到Host头部，提取值 */
-            i += 8;  /* 跳过 "Host: " */
-            
-            /* 跳过空格 */
-            while (i < data_len && data[i] == ' ')
-                i++;
-            
-            /* 提取Host值 */
-            for (j = 0; i + j < data_len && j < buffer_size - 1; j++) {
-                char c = data[i + j];
-                
-                /* 遇到\r或\n结束 */
-                if (c == '\r' || c == '\n')
-                    break;
-                
-                /* 转换为小写 */
-                if (c >= 'A' && c <= 'Z')
-                    c += 32;
-                
-                host_buffer[j] = c;
-            }
-            
-            host_buffer[j] = '\0';
-            return j;  /* 返回Host长度 */
-        }
-    }
+    /* 跳过方法后的空格，开始提取URL路径 */
+    i = method_len;
     
-    return 0;  /* 未找到Host */
+    /* 提取URL路径 (从 / 开始到 HTTP/1.x) */
+    for (j = 0; i + j < data_len && j < buffer_size - 1; j++) {
+        char c = data[i + j];
+        
+        /* 遇到空格表示URL结束 */
+        if (c == ' ')
+            break;
+        
+        /* 转换为小写 */
+        if (c >= 'A' && c <= 'Z')
+            c += 32;
+        
+        url_buffer[j] = c;
+    }
+    url_buffer[j] = '\0';
+    return j;
+    
+    
+    return 0;  /* 未找到URL */
 }
 
 /**
@@ -382,8 +382,8 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         
     case PROTOCOL_HTTP:
     case PROTOCOL_HTTP2:
-        /* HTTP协议：提取Host */
-        url_len = extract_http_host(skb, info->from_offset, info->to_offset,
+        /* HTTP协议：提取URL路径 */
+        url_len = extract_http_url(skb, info->from_offset, info->to_offset,
                                    url_buffer, sizeof(url_buffer));
         break;
         
