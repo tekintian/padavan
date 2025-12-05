@@ -38,10 +38,10 @@ trunk/linux-4.4.x/include/uapi/linux/netfilter/
 ## 使用示例
 ```bash
 # 匹配特定域名
-iptables -A INPUT -p tcp --dport 443 -m sni --algo bm --sni 'example.com' -j LOG
+iptables -A INPUT -p tcp --dport 443 -m sni --algo bm --sni 'minecraft.net' -j LOG
 
 # 十六进制匹配
-iptables -A INPUT -p tcp --dport 443 -m sni --algo bm --hex-sni '|03|www|09|example|03|com|00|' -j LOG
+iptables -A INPUT -p tcp --dport 443 -m sni --algo bm --hex-sni '|03|www|09|minecraft|03|net|00|' -j LOG
 ```
 
 ## 下一步
