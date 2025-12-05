@@ -314,7 +314,7 @@ apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, cons
 	} else {
 		// 🔥 修复：当没有MAC地址配置时，也要生成基础的流量引导规则
 		// 这样可以确保URL过滤在没有MAC地址限制的情况下也能工作
-		logmessage("URL Filter", "DEBUG: No MAC addresses configured, generating basic traffic diversion rule");
+		// logmessage("URL Filter", "DEBUG: No MAC addresses configured, generating basic traffic diversion rule");
 		fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, chain_name);
 		logmessage("URL Filter", "DEBUG: Added basic FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, chain_name);
 	}
@@ -672,9 +672,9 @@ include_webstr_filter(FILE *fp)
 
     /* 调试：记录URL数量 */
     int url_count = nvram_get_int("url_num_x");
-    logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
-    logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
-    logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
+    // logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
+    // logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
+    // logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
 
     /* 🔥 修复：准备MAC地址信息，用于URL过滤规则 */
     /* 注意：多个MAC地址需要为每个MAC生成单独的URL规则，因为iptables的mac模块不支持OR操作 */
@@ -735,13 +735,13 @@ include_webstr_filter(FILE *fp)
             logmessage("URL Filter", "DEBUG: MAC %d: %s", mac_idx, mac_addresses[mac_idx]);
         }
     } else {
-        logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
+        // logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
         mac_count = 0;
     }
 
     logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
     foreach_x("url_num_x") {
-        logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
+        // logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
@@ -767,18 +767,18 @@ include_webstr_filter(FILE *fp)
             continue;
         }
         
-        /* 生成基于string模块的HTTPS流量过滤规则 - 替换原来的SNI规则 */
+        /* 生成基于sni模块的HTTPS流量过滤规则 - 替换原来的SNI规则 */
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -p tcp --dport 443 -m sni --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
                 logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-            fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+            fprintf(fp, "-A %s -p tcp --dport 443 -m sni --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                 dtype, filterstr, url_timematch);
             webstr_items++;
             logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (all MAC)", filterstr, url_timematch);
@@ -799,14 +799,14 @@ include_webstr_filter(FILE *fp)
                 if (need_mac_condition) {
                     /* 为每个MAC地址生成单独的string规则 */
                     for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                        fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                        fprintf(fp, "-A %s -p tcp --dport 80 -m sni --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                         webstr_items++;
                         logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
                     }
                 } else {
                     /* 没有MAC限制，应用到所有流量 */
-                    fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                    fprintf(fp, "-A %s -p tcp --dport 80 -m sni --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                         dtype, url_list, url_timematch);
                     webstr_items++;
                     logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
@@ -824,14 +824,14 @@ include_webstr_filter(FILE *fp)
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -p tcp --dport 80 -m sni --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
                 logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-             fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+             fprintf(fp, "-A %s -p tcp --dport 80 -m sni --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
             dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
         	webstr_items++;
             logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s (all MAC)", url_list);
