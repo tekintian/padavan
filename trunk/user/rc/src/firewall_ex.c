@@ -1342,8 +1342,6 @@ include_vts_nat(FILE *fp)
 				fprintf(fp, "-A %s -p %s%s -j DNAT --to %s\n", dtype, protono, srcaddrs, dstip);
 		}
 	}
-	
-	return rules_added;
 }
 
 static void
