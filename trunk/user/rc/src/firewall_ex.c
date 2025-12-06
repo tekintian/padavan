@@ -640,6 +640,8 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				break;
 		}
 	}
+	
+	return rules_added;
 }
 
 // WAN, MAN, LAN
@@ -905,8 +907,9 @@ include_webstr_filter(FILE *fp)
     /* 初始化MAC地址数组 */
     memset(mac_addresses, 0, sizeof(mac_addresses));
     
+    /* 只检查 MAC Group 模式 */
     if (nvram_match("url_mac_group_x", "1")) {
-        /* MAC Group 模式 */
+        /* MAC Group 模式 - 使用 MAC 过滤中的地址作为 URL 规则的 MAC 限制条件 */
         mac_count = nvram_get_int("macfilter_num_x");
         if (mac_count > 0) {
             char mac_buf[24] = {0};
@@ -1060,10 +1063,11 @@ include_webstr_filter(FILE *fp)
         }
         
         /* 生成基于协议优化的高效过滤规则 */
-        webstr_items += generate_protocol_optimized_rule(fp, dtype, url_path, protocol, 
+        int rules_added = generate_protocol_optimized_rule(fp, dtype, url_path, protocol, 
                                        url_timematch, mac_addresses, mac_count, need_mac_condition);
+        webstr_items += rules_added;
         
-        logmessage("URL Filter", "DEBUG: Added protocol-optimized rule: %s (protocol: %d)", url_path, protocol);
+        logmessage("URL Filter", "DEBUG: Added protocol-optimized rule: %s (protocol: %d, rules_added: %d)", url_path, protocol, rules_added);
     }
 
     logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
@@ -1236,6 +1240,8 @@ include_vts_nat(FILE *fp)
 				fprintf(fp, "-A %s -p %s%s -j DNAT --to %s\n", dtype, protono, srcaddrs, dstip);
 		}
 	}
+	
+	return rules_added;
 }
 
 static void
@@ -1648,7 +1654,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式
+					// MAC地址组模式 - URL过滤只对指定MAC地址生效
+					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 添加MAC条件以提高效率
@@ -1660,6 +1667,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 						strcat(url_timematch, " --mac-source ");
 						strcat(url_timematch, mac_buf);
 					}
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -1689,15 +1697,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
-					mac_conv("url_mac_x", -1, mac_buf);
-					if (strlen(mac_buf) == 17) {
-						strcat(url_timematch, " -m mac");
-						if (nvram_match("url_inv_x", "1"))
-							strcat(url_timematch, " !");
-						strcat(url_timematch, " --mac-source ");
-						strcat(url_timematch, mac_buf);
-					}
+					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -1716,18 +1717,12 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式
+					// MAC地址组模式 - URL过滤只对指定MAC地址生效
+					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 单个MAC地址模式
-					mac_conv("url_mac_x", -1, mac_buf);
-					if (strlen(mac_buf) == 17) {
-						strcat(url_timematch, " -m mac");
-						if (nvram_match("url_inv_x", "1"))
-							strcat(url_timematch, " !");
-						strcat(url_timematch, " --mac-source ");
-						strcat(url_timematch, mac_buf);
-					}
+					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2297,18 +2292,12 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式
+					// MAC地址组模式 - URL过滤只对指定MAC地址生效
+					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 单个MAC地址模式 - 添加MAC条件以提高效率
-					mac_conv("url_mac_x", -1, mac_buf);
-					if (strlen(mac_buf) == 17) {
-						strcat(url_timematch, " -m mac");
-						if (nvram_match("url_inv_x", "1"))
-							strcat(url_timematch, " !");
-						strcat(url_timematch, " --mac-source ");
-						strcat(url_timematch, mac_buf);
-					}
+					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2343,15 +2332,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
-					mac_conv("url_mac_x", -1, mac_buf);
-					if (strlen(mac_buf) == 17) {
-						strcat(url_timematch, " -m mac");
-						if (nvram_match("url_inv_x", "1"))
-							strcat(url_timematch, " !");
-						strcat(url_timematch, " --mac-source ");
-						strcat(url_timematch, mac_buf);
-					}
+					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2370,18 +2352,12 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式
+					// MAC地址组模式 - URL过滤只对指定MAC地址生效
+					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 单个MAC地址模式
-					mac_conv("url_mac_x", -1, mac_buf);
-					if (strlen(mac_buf) == 17) {
-						strcat(url_timematch, " -m mac");
-						if (nvram_match("url_inv_x", "1"))
-							strcat(url_timematch, " !");
-						strcat(url_timematch, " --mac-source ");
-						strcat(url_timematch, mac_buf);
-					}
+					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
+					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;

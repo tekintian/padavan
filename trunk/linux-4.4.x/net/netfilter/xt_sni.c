@@ -237,9 +237,7 @@ static unsigned int extract_http_url(const struct sk_buff *skb,
     }
     url_buffer[j] = '\0';
     return j;
-    
-    
-    return 0;  /* 未找到URL */
+}
 }
 
 /**
