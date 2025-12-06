@@ -259,8 +259,6 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 			}
 		}
 	}
-	
-	return rules_added;
 }
 
 static void
@@ -642,8 +640,6 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				break;
 		}
 	}
-	
-	return rules_added;
 }
 
 // WAN, MAN, LAN
@@ -1192,8 +1188,6 @@ include_vts_filter(FILE *fp, char *lan_ip, char *logaccept, int forward_chain)
 				fprintf(fp, "-A %s -p %s%s -d %s -j %s\n", dtype, protono, srcaddrs, dstip, logaccept);
 		}
 	}
-	
-	return rules_added;
 }
 
 static void
@@ -1242,8 +1236,6 @@ include_vts_nat(FILE *fp)
 				fprintf(fp, "-A %s -p %s%s -j DNAT --to %s\n", dtype, protono, srcaddrs, dstip);
 		}
 	}
-	
-	return rules_added;
 }
 
 static void
