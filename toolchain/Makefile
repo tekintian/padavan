@@ -1,5 +1,5 @@
 TOPDIR        = ${CURDIR}
-CT_VERSION    := 1.28.0
+CT_VERSION    := 1.26.0
 CT_DIR        := $(TOPDIR)/crosstool-ng-$(CT_VERSION)
 CT_PREFIX     := $(TOPDIR)/toolchain-mipsel
 CT_TARGET     := mipsel-linux-musl
