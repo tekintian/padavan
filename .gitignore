@@ -8,3 +8,4 @@ toolchain/toolchain-*/
 /files
 /trunk/user/iptables/Makefile.bak
 /trunk/user/iptables/temp.txt
+*.xz
