@@ -95,18 +95,33 @@ static void sni_init(struct xt_entry_match *m)
    /* 初始化所有字段为默认值 */
 	memset(i, 0, sizeof(struct xt_sni_info));
 	
-	/* 设置默认值 */
-	i->invert = 0;
+	/* 用户态只需要设置公开的字段，内核内部字段由内核自行管理 */
 	i->wildcard_type = XT_SNI_MATCH_EXACT;
-	i->pattern_len = 0;
+	i->invert = 0;
 	
-	/* 确保字符串字段以NULL结尾 */
+	/* 确保模式字符串以NULL结尾 */
 	i->pattern[0] = '\0';
-	i->search_pattern[0] = '\0';
-	i->ts_config = NULL;
 }
 
 /* 解析命令行参数 */
+/**
+ * @brief 解析SNI匹配规则的命令行参数
+ * 
+ * @param c 当前解析的选项字符
+ * @param argv 命令行参数数组
+ * @param invert 是否反转匹配结果（由xtables的!符号设置）
+ * @param flags 标志位，用于跟踪已解析的选项
+ * @param entry 未使用的条目参数
+ * @param match 指向xt_entry_match结构的指针，用于存储解析结果
+ * @return int 返回1表示成功处理当前选项，0表示未处理当前选项
+ * 
+ * @throws PARAMETER_PROBLEM 当参数格式错误或重复指定选项时抛出
+ * 
+ * @note 选项处理优先级：--invert选项 > xtables的!符号
+ * @note 支持的选项：
+ *   - '1' (--str): 指定要匹配的URL模式
+ *   - '2' (--invert): 反转匹配逻辑
+ */
 static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
                     const void *entry, struct xt_entry_match **match)
 {
@@ -126,7 +141,6 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         /* 复制模式串 */
         strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
-        info->pattern_len = strlen(info->pattern);
         
         /* 设置反转标志 - 优先级：--invert选项 > xtables的!符号 */
         if (*flags & 0x02) {
@@ -192,11 +206,10 @@ static void sni_save(const void *entry, const struct xt_entry_match *match)
 {
     const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
     
-    printf(" --str \"%s\"", info->pattern);
-    
-    if (info->invert) {
-        printf(" --invert");
-    }
+    // printf(" --str \"%s\"", info->pattern);
+    printf("%s --str", (info->invert) ? " !": "");
+	print_string(info->pattern, info->pattern_len);
+
 }
 
 

@@ -798,11 +798,6 @@ doSystem("/usr/sbin/skipd -d /etc/storage/db");
 		system("modprobe xt_TPROXY");
 	}
 	
-	// 加载xt_sni模块条件：防火墙和URL匹配功能都开启
-	if (nvram_match("fw_enable_x", "1") && nvram_match("url_enable_x", "1")) {
-		system("modprobe xt_sni");
-	}
-
 	system("/usr/bin/iappd.sh test");
 	return 0;
 }
