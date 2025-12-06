@@ -233,10 +233,6 @@ static unsigned int extract_http_url(const struct sk_buff *skb,
         if (c == ' ')
             break;
         
-        /* 转换为小写 */
-        if (c >= 'A' && c <= 'Z')
-            c += 32;
-        
         url_buffer[j] = c;
     }
     url_buffer[j] = '\0';
@@ -287,11 +283,7 @@ static unsigned int extract_sni_from_tls(const struct sk_buff *skb,
                 
                 /* 提取SNI域名 */
                 for (j = 0; j < sni_name_len; j++) {
-                    char c = data[i + 13 + j];
-                    /* 转换为小写（不区分大小写） */
-                    if (c >= 'A' && c <= 'Z')
-                        c += 32;
-                    sni_buffer[j] = c;
+                    sni_buffer[j] = data[i + 13 + j];
                 }
                 sni_buffer[j] = '\0';
                 return sni_name_len;
@@ -434,13 +426,8 @@ static int sni_mt_check(const struct xt_mtchk_param *par)
         return ret;
     
     /* 🔥 配置textsearch标志 */
-    if (info->wildcard_type == XT_SNI_MATCH_EXACT) {
-        /* 精确匹配：大小写敏感 */
-        flags = 0;
-    } else {
-        /* 通配符匹配：通常大小写不敏感（URL过滤标准） */
-        flags = TS_IGNORECASE;
-    }
+    /* URL过滤默认不区分大小写 */
+    flags = TS_IGNORECASE;
     
     /* 🔥 预配置textsearch算法（使用Boyer-Moore） */
     info->ts_config = textsearch_prepare("bm", info->search_pattern, 
