@@ -508,6 +508,9 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 	char *slash_pos;
 	char *colon_pos;
 	char temp_url[512];
+	int is_exact = 0;
+	int is_subdomain = 0;
+	int is_contains = 0;
 	
 	if (!url || strlen(url) == 0 || !url_path || !protocol) {
 		return 0;
@@ -517,8 +520,17 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 	strncpy(temp_url, url, sizeof(temp_url) - 1);
 	temp_url[sizeof(temp_url) - 1] = '\0';
 	
-	// 🔥 修复：简化逻辑，直接使用原始URL进行SNI匹配
-	// 对于URL过滤，我们直接使用域名部分，不需要复杂的协议解析
+	// 检查URL过滤规则类型标记
+	if (temp_url[0] == '^' && temp_url[strlen(temp_url) - 1] == '$') {
+		is_exact = 1;
+		logmessage("URL Filter", "DEBUG: Detected exact match pattern: %s", temp_url);
+	} else if (temp_url[0] == '.') {
+		is_subdomain = 1;
+		logmessage("URL Filter", "DEBUG: Detected subdomain match pattern: %s", temp_url);
+	} else if (strchr(temp_url, '*')) {
+		is_contains = 1;
+		logmessage("URL Filter", "DEBUG: Detected contains match pattern: %s", temp_url);
+	}
 	
 	// 移除协议前缀
 	if (strncmp(temp_url, "https://", 8) == 0) {
@@ -544,11 +556,30 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 		*colon_pos = '\0';
 	}
 	
-	logmessage("URL Filter", "DEBUG: Parsed URL - Original: %s, Domain: %s, Protocol: %d", url, path_start, *protocol);
-	
 	// 复制处理后的域名到输出缓冲区
-	strncpy(url_path, path_start, url_path_size - 1);
-	url_path[url_path_size - 1] = '\0';
+	// 根据匹配类型添加相应的标记
+	if (is_exact) {
+		// 精确匹配：添加^和$标记
+		snprintf(url_path, url_path_size, "^%s$", path_start);
+	} else if (is_subdomain) {
+		// 子域名过滤：确保以.开头
+		if (path_start[0] != '.') {
+			snprintf(url_path, url_path_size, ".%s", path_start);
+		} else {
+			strncpy(url_path, path_start, url_path_size - 1);
+			url_path[url_path_size - 1] = '\0';
+		}
+	} else if (is_contains) {
+		// 包含匹配：保留原始字符串（可能包含*）
+		strncpy(url_path, path_start, url_path_size - 1);
+		url_path[url_path_size - 1] = '\0';
+	} else {
+		// 默认处理：直接复制
+		strncpy(url_path, path_start, url_path_size - 1);
+		url_path[url_path_size - 1] = '\0';
+	}
+	
+	logmessage("URL Filter", "DEBUG: Parsed URL - Original: %s, Processed: %s, Protocol: %d", url, url_path, *protocol);
 	
 	// 验证提取的URL路径不为空
 	if (strlen(url_path) == 0) {
@@ -559,7 +590,6 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 	logmessage("URL Filter", "DEBUG: Parsed - Protocol: %d, Domain: %s", *protocol, url_path);
 	return 1;
 }
-
 /**
  * @brief 根据协议类型生成内核优化规则
  * @param fp 文件指针
@@ -577,35 +607,85 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
                                char mac_addresses[][18], int mac_count, int need_mac_condition)
 {
 	int rules_added = 0;
-	logmessage("URL Filter", "DEBUG: Generating kernel-optimized rule for protocol %d", protocol);
+	int is_exact_match = 0;
+	int is_subdomain_match = 0;
+	int is_contains_match = 0;
+	char processed_url[512];
+	
+	// 检查URL过滤规则类型
+	if (url[0] == '^' && url[strlen(url) - 1] == '$') {
+		is_exact_match = 1;
+		// 移除精确匹配标记，只保留域名部分
+		strncpy(processed_url, url + 1, sizeof(processed_url) - 2);
+		processed_url[sizeof(processed_url) - 2] = '\0';
+	} else if (url[0] == '.') {
+		is_subdomain_match = 1;
+		// 子域名匹配模式，准备用于SNI的*.domain.com格式
+		snprintf(processed_url, sizeof(processed_url), "*.%s", url + 1);
+	} else if (strchr(url, '*')) {
+		is_contains_match = 1;
+		// 包含匹配模式，直接使用原始URL
+		strncpy(processed_url, url, sizeof(processed_url) - 1);
+		processed_url[sizeof(processed_url) - 1] = '\0';
+	} else {
+		// 默认精确匹配
+		strncpy(processed_url, url, sizeof(processed_url) - 1);
+		processed_url[sizeof(processed_url) - 1] = '\0';
+	}
+	
+	logmessage("URL Filter", "DEBUG: Generating kernel-optimized rule for URL: %s, Protocol: %d, Type: E:%d, S:%d, C:%d", 
+			url, protocol, is_exact_match, is_subdomain_match, is_contains_match);
 	
 	if (need_mac_condition) {
 		// 有MAC限制的规则生成
 		for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
 			switch (protocol) {
 				case PROTOCOL_HTTP_ONLY:
-					// 🔥 内核优化：指定HTTP协议，避免内核协议检测开销
-					// 使用string模块直接搜索Host字段，跳过SNI模块的协议检测
-					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, mac_addresses[mac_idx], url);
+					// 🔥 修复：正确匹配HTTP Host头，添加80端口限制
+					if (is_subdomain_match) {
+						// 子域名匹配：匹配任意位置包含域名的Host头
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], url + 1);
+					} else if (is_exact_match) {
+						// 精确匹配：精确匹配Host头
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], processed_url);
+					} else {
+						// 包含匹配或默认：匹配包含URL的Host头
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], processed_url);
+					}
 					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
 					
 				case PROTOCOL_HTTPS_ONLY:
-					// 🔥 内核优化：指定HTTPS协议，使用SNI模块但跳过HTTP检测
-					// 添加端口限制进一步优化性能
-					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, mac_addresses[mac_idx], url);
+					// 🔥 修复：将--str参数改为--sni参数，添加443端口限制
+					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, mac_addresses[mac_idx], processed_url);
 					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
 					
 				case PROTOCOL_BOTH:
 				default:
-					// 通用模式：使用SNI模块的智能检测（兼容性最好）
-					fprintf(fp, "-A %s -p tcp%s -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, mac_addresses[mac_idx], url);
+					// 通用模式：同时处理HTTP和HTTPS
+					// HTTP部分
+					if (is_subdomain_match) {
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], url + 1);
+					} else if (is_exact_match) {
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], processed_url);
+					} else {
+						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+							dtype, timematch, mac_addresses[mac_idx], processed_url);
+					}
+					rules_added++;
+					
+					// HTTPS部分
+					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, mac_addresses[mac_idx], processed_url);
 					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added universal rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
 					break;
@@ -615,26 +695,48 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 		// 无MAC限制的规则生成
 		switch (protocol) {
 			case PROTOCOL_HTTP_ONLY:
-				// 🔥 内核优化：HTTP专用规则，使用string模块避免SNI协议检测
-				fprintf(fp, "-A %s -p tcp%s -m string --string \"/%s\" --algo bm -j REJECT --reject-with tcp-reset\n",
-					dtype, timematch, url);
+				// 🔥 修复：正确匹配HTTP Host头，添加80端口限制
+				if (is_subdomain_match) {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, url + 1);
+				} else if (is_exact_match) {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, processed_url);
+				} else {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, processed_url);
+				}
 				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (all MAC)", url);
 				break;
 				
 			case PROTOCOL_HTTPS_ONLY:
-				// 🔥 内核优化：HTTPS专用规则，移除端口限制支持任意端口
-				fprintf(fp, "-A %s -p tcp%s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-					dtype, timematch, url);
+				// 🔥 修复：将--str参数改为--sni参数，添加443端口限制
+				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+					dtype, timematch, processed_url);
 				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (all MAC)", url);
 				break;
 				
 			case PROTOCOL_BOTH:
 			default:
-				// 通用模式：使用SNI模块
-				fprintf(fp, "-A %s -p tcp%s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-					dtype, timematch, url);
+				// 通用模式：同时处理HTTP和HTTPS
+				// HTTP部分
+				if (is_subdomain_match) {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, url + 1);
+				} else if (is_exact_match) {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, processed_url);
+				} else {
+					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
+						dtype, timematch, processed_url);
+				}
+				rules_added++;
+				
+				// HTTPS部分
+				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+					dtype, timematch, processed_url);
 				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added universal rule: %s (all MAC)", url);
 				break;
