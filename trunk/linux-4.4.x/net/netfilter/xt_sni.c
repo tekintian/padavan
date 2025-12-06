@@ -238,7 +238,6 @@ static unsigned int extract_http_url(const struct sk_buff *skb,
     url_buffer[j] = '\0';
     return j;
 }
-}
 
 /**
  * extract_sni_from_tls - 从TLS包中提取SNI字段
