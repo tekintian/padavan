@@ -229,9 +229,6 @@ restart_sshd(void)
 	is_run_after = is_sshd_run();
 
 	if ((is_run_after != is_run_before) && nvram_match("sshd_wopen", "1") && nvram_match("fw_enable_x", "1")) {
-		if (nvram_match("url_enable_x", "1")) {
-			system("modprobe xt_sni");
-		}
 		// 启动防火墙
 		restart_firewall();
 	}
@@ -628,9 +625,6 @@ start_httpd(int restart_fw)
 	nvram_set_int_temp("httpd_started", 1);
 
 	if (restart_fw && restart_fw_need && nvram_match("fw_enable_x", "1")) {
-		if (nvram_match("url_enable_x", "1")) {
-			system("modprobe xt_sni");
-		}
 		// 启动防火墙
 		restart_firewall();
 	}
@@ -802,6 +796,11 @@ doSystem("/usr/sbin/skipd -d /etc/storage/db");
 	int ss_tunnel_enable = nvram_get_int("ss-tunnel_enable");
 	if (ss_enable == 1 || ss_tunnel_enable == 1) {
 		system("modprobe xt_TPROXY");
+	}
+	
+	// 加载xt_sni模块条件：防火墙和URL匹配功能都开启
+	if (nvram_match("fw_enable_x", "1") && nvram_match("url_enable_x", "1")) {
+		system("modprobe xt_sni");
 	}
 
 	system("/usr/bin/iappd.sh test");
