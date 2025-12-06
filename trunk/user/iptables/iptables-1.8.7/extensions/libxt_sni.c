@@ -123,6 +123,7 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         info->reserved[1] = 0;
         info->invert = invert ? 1 : 0;
         
+        optind++;  /* 消费完参数后递增 optind */
         *flags |= 0x01;
         break;
         

@@ -260,7 +260,7 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 		}
 	}
 	
-	return;
+	return rules_added;
 }
 
 static void
@@ -519,82 +519,46 @@ parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, s
 	strncpy(temp_url, url, sizeof(temp_url) - 1);
 	temp_url[sizeof(temp_url) - 1] = '\0';
 	
-	// 🔥 优化逻辑：根据URL格式智能选择处理方式
+	// 🔥 修复：简化逻辑，直接使用原始URL进行SNI匹配
+	// 对于URL过滤，我们直接使用域名部分，不需要复杂的协议解析
+	
+	// 移除协议前缀
 	if (strncmp(temp_url, "https://", 8) == 0) {
-		// HTTPS协议：忽略端口和路径，只匹配域名（SNI处理）
-		*protocol = PROTOCOL_HTTPS_ONLY;
 		path_start = temp_url + 8;
-		
-		// 查找域名结束位置
-		slash_pos = strchr(path_start, '/');
-		colon_pos = strchr(path_start, ':');
-		
-		// 取域名部分，忽略端口和路径
-		if (colon_pos && (!slash_pos || colon_pos < slash_pos)) {
-			// 有端口的情况，截断到域名
-			*colon_pos = '\0';
-		} else if (slash_pos) {
-			// 有路径的情况，截断到域名
-			*slash_pos = '\0';
-		}
-		
-		logmessage("URL Filter", "DEBUG: HTTPS-only mode, domain only: %s", path_start);
+		*protocol = PROTOCOL_HTTPS_ONLY;
 	} else if (strncmp(temp_url, "http://", 7) == 0) {
-		// HTTP协议：检查是否包含URI部分
-		*protocol = PROTOCOL_HTTP_ONLY;
 		path_start = temp_url + 7;
-		
-		// 查找路径分隔符
-		slash_pos = strchr(path_start, '/');
-		if (slash_pos && slash_pos != path_start && *(slash_pos + 1) != '\0') {
-			// 包含URI部分，使用完整路径进行textsearch匹配
-			logmessage("URL Filter", "DEBUG: HTTP with URI, using textsearch: %s", path_start);
-		} else {
-			// 纯域名，使用通用HTTP处理
-			logmessage("URL Filter", "DEBUG: HTTP domain only: %s", path_start);
-		}
+		*protocol = PROTOCOL_HTTP_ONLY;
 	} else {
-		// 无协议前缀：智能判断
-		slash_pos = strchr(temp_url, '/');
-		colon_pos = strchr(temp_url, ':');
-		
-		// 检查是否是带端口的域名格式
-		if (colon_pos && (!slash_pos || colon_pos < slash_pos)) {
-			// 带端口的域名：news.qq.com:8080
-			if (slash_pos && slash_pos > colon_pos) {
-				// 有路径：news.qq.com:8080/xxx → 使用textsearch处理完整URI
-				*protocol = PROTOCOL_HTTP_ONLY;
-				path_start = temp_url;
-				logmessage("URL Filter", "DEBUG: Domain with port and path, using textsearch: %s", path_start);
-			} else {
-				// 只有端口无路径：news.qq.com:8080 → 使用通用处理
-				*protocol = PROTOCOL_BOTH;
-				path_start = temp_url;
-				logmessage("URL Filter", "DEBUG: Domain with port only: %s", path_start);
-			}
-		} else if (slash_pos && slash_pos != temp_url && *(slash_pos + 1) != '\0') {
-			// 有路径：news.qq.com/xxx → 使用textsearch处理
-			*protocol = PROTOCOL_HTTP_ONLY;
-			path_start = temp_url;
-			logmessage("URL Filter", "DEBUG: Domain with path, using textsearch: %s", path_start);
-		} else {
-			// 纯域名：qq.com → 使用SNI处理
-			*protocol = PROTOCOL_BOTH;
-			path_start = temp_url;
-			logmessage("URL Filter", "DEBUG: Pure domain, using SNI: %s", path_start);
-		}
+		path_start = temp_url;
+		*protocol = PROTOCOL_BOTH;
 	}
 	
-	// 复制处理后的URL路径
+	// 移除路径部分，只保留域名
+	slash_pos = strchr(path_start, '/');
+	if (slash_pos) {
+		*slash_pos = '\0';
+	}
+	
+	// 移除端口部分，只保留域名
+	colon_pos = strchr(path_start, ':');
+	if (colon_pos) {
+		*colon_pos = '\0';
+	}
+	
+	logmessage("URL Filter", "DEBUG: Parsed URL - Original: %s, Domain: %s, Protocol: %d", url, path_start, *protocol);
+	
+	// 复制处理后的域名到输出缓冲区
 	strncpy(url_path, path_start, url_path_size - 1);
 	url_path[url_path_size - 1] = '\0';
 	
 	// 验证提取的URL路径不为空
 	if (strlen(url_path) == 0) {
+		logmessage("URL Filter", "ERROR: Extracted domain is empty for URL: %s", url);
 		return 0;
 	}
 	
-	logmessage("URL Filter", "DEBUG: Parsed - Protocol: %d, URL Path: %s", *protocol, url_path);
+	logmessage("URL Filter", "DEBUG: Parsed - Protocol: %d, Domain: %s", *protocol, url_path);
 	return 1;
 }
 
@@ -679,7 +643,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 		}
 	}
 	
-	return;
+	return rules_added;
 }
 
 // WAN, MAN, LAN
@@ -1094,8 +1058,8 @@ include_webstr_filter(FILE *fp)
         protocol_type_t protocol;
         char url_path[256];
         
-        if (!parse_url_protocol(url_buf, &protocol, url_path, sizeof(url_path))) {
-            logmessage("URL Filter", "DEBUG: Failed to parse URL: %s", url_buf);
+        if (!parse_url_protocol(clean_filter, &protocol, url_path, sizeof(url_path))) {
+            logmessage("URL Filter", "DEBUG: Failed to parse URL: %s", clean_filter);
             continue;
         }
         
@@ -1229,7 +1193,7 @@ include_vts_filter(FILE *fp, char *lan_ip, char *logaccept, int forward_chain)
 		}
 	}
 	
-	return;
+	return rules_added;
 }
 
 static void
@@ -1279,7 +1243,7 @@ include_vts_nat(FILE *fp)
 		}
 	}
 	
-	return;
+	return rules_added;
 }
 
 static void
