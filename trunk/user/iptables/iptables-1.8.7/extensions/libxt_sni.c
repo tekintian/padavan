@@ -116,12 +116,11 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         /* 复制模式串 */
         strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
+        info->patlen = strlen(info->pattern);
         
         /* 设置默认值 */
-        info->wildcard_type = XT_SNI_MATCH_EXACT;
-        info->reserved[0] = 0;
-        info->reserved[1] = 0;
-        info->invert = invert ? 1 : 0;
+        strcpy(info->algo, "bm");  /* 使用 Boyer-Moore 算法 */
+        info->u.v0.invert = invert ? 1 : 0;
         
         optind++;  /* 消费完参数后递增 optind */
         *flags |= 0x01;
@@ -133,7 +132,7 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         break;
         
     case '4':  /* --invert */
-        info->invert = 1;
+        info->u.v0.invert = 1;
         break;
         
     default:
@@ -160,7 +159,7 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     
     printf(" URL-SNI ");
     
-    if (info->invert)
+    if (info->u.v0.invert)
         printf("!");
     
     /* 显示匹配模式类型 */
@@ -178,31 +177,49 @@ static void sni_save(const void *entry, const struct xt_entry_match *match)
 {
     const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
     
-    printf(" --string \"%s\"", info->pattern);
+    printf(" --sni \"%s\"", info->pattern);
     
-    if (info->invert) {
+    if (info->u.v0.invert) {
         printf(" --invert");
     }
 }
 
-/* 结构体定义 */
-static struct xtables_match sni_match = {
-    .family          = NFPROTO_UNSPEC,
-    .name            = "sni",
-    .version         = XTABLES_VERSION,
-    .revision        = 1,  /* 保持与内核模块一致 */
-    .size            = XT_ALIGN(sizeof(struct xt_sni_info)),
-    .userspacesize   = XT_ALIGN(sizeof(struct xt_sni_info)),
-    .help            = sni_help,
-    .parse           = sni_parse,
-    .final_check     = sni_check,
-    .print           = sni_print,
-    .save            = sni_save,
-    .extra_opts      = sni_opts,
+
+
+static struct xtables_match sni_mt_reg[] = {
+	{
+		.name          = "sni",
+		.revision      = 0,
+		.family        = NFPROTO_UNSPEC,
+		.version       = XTABLES_VERSION,
+		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
+		.userspacesize = offsetof(struct xt_sni_info, config),
+		.help          = sni_help,
+		.init          = sni_init,
+		.print         = sni_print,
+		.save          = sni_save,
+		.x6_parse      = sni_parse,
+		.x6_fcheck     = sni_check,
+		.x6_options    = sni_opts
+	},
+	{
+		.name          = "sni",
+		.revision      = 1,
+		.family        = NFPROTO_UNSPEC,
+		.version       = XTABLES_VERSION,
+		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
+		.userspacesize = offsetof(struct xt_sni_info, config),
+		.help          = sni_help,
+		.init          = sni_init,
+		.print         = sni_print,
+		.save          = sni_save,
+		.x6_parse      = sni_parse,
+		.x6_fcheck     = sni_check,
+		.x6_options    = sni_opts
+	}
 };
 
-/* 初始化函数 */
 void _init(void)
 {
-    xtables_register_match(&sni_match);
+	xtables_register_matches(sni_mt_reg, sizeof(sni_mt_reg)/sizeof(struct xtables_match));
 }
