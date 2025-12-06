@@ -228,8 +228,14 @@ restart_sshd(void)
 
 	is_run_after = is_sshd_run();
 
-	if ((is_run_after != is_run_before) && nvram_match("sshd_wopen", "1") && nvram_match("fw_enable_x", "1"))
+	if ((is_run_after != is_run_before) && nvram_match("sshd_wopen", "1") && nvram_match("fw_enable_x", "1")) {
+		if (nvram_match("url_enable_x", "1")) {
+			system("modprobe xt_sni");
+		}
+		// 启动防火墙
 		restart_firewall();
+	}
+
 }
 #endif
 
@@ -621,8 +627,13 @@ start_httpd(int restart_fw)
 
 	nvram_set_int_temp("httpd_started", 1);
 
-	if (restart_fw && restart_fw_need && nvram_match("fw_enable_x", "1"))
+	if (restart_fw && restart_fw_need && nvram_match("fw_enable_x", "1")) {
+		if (nvram_match("url_enable_x", "1")) {
+			system("modprobe xt_sni");
+		}
+		// 启动防火墙
 		restart_firewall();
+	}
 }
 
 void

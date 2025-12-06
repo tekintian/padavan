@@ -2024,21 +2024,6 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// 统一使用nvram配置进行条件判断
-	if (nvram_match("url_enable_x", "1")) {
-		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
-		if (!module_smart_load("xt_sni", NULL)) {
-			// 检查模块是否已经存在（可能是编译进内核或已经加载）
-			if (is_module_loaded("xt_sni")) {
-				logmessage("Firewall", "INFO: xt_sni module already loaded");
-			} else {
-				logmessage("Firewall", "ERROR: Failed to load xt_sni module");
-			}
-		} else {
-			logmessage("Firewall", "INFO: xt_sni module loaded successfully");
-		}
-	}
-
 	doSystem("iptables-restore %s", ipt_file);
 	
 	return ret;
@@ -2560,21 +2545,6 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
-
-	// 统一使用nvram配置进行条件判断
-	if (nvram_match("url_enable_x", "1")) {
-		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
-		if (!module_smart_load("xt_sni", NULL)) {
-			// 检查模块是否已经存在（可能是编译进内核或已经加载）
-			if (is_module_loaded("xt_sni")) {
-				logmessage("Firewall", "INFO: xt_sni module already loaded");
-			} else {
-				logmessage("Firewall", "ERROR: Failed to load xt_sni module");
-			}
-		} else {
-			logmessage("Firewall", "INFO: xt_sni module loaded successfully");
-		}
-	}
 
 	doSystem("ip6tables-restore %s", ipt_file);
 
