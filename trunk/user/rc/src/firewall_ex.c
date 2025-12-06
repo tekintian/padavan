@@ -1,20 +1,3 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -660,8 +643,8 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 					break;
 					
 				case PROTOCOL_HTTPS_ONLY:
-					// 🔥 修复：将--str参数改为--sni参数，添加443端口限制
-					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+					// 🔥 修复：将--str参数改为--str参数，添加443端口限制
+					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], processed_url);
 					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
@@ -684,7 +667,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 					rules_added++;
 					
 					// HTTPS部分
-					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 						dtype, timematch, mac_addresses[mac_idx], processed_url);
 					rules_added++;
 					logmessage("URL Filter", "DEBUG: Added universal rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
@@ -711,8 +694,8 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				break;
 				
 			case PROTOCOL_HTTPS_ONLY:
-				// 🔥 修复：将--str参数改为--sni参数，添加443端口限制
-				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+				// 🔥 修复：将--str参数改为--str参数，添加443端口限制
+				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, processed_url);
 				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (all MAC)", url);
@@ -735,7 +718,7 @@ generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url,
 				rules_added++;
 				
 				// HTTPS部分
-				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --sni \"%s\" -j REJECT --reject-with tcp-reset\n",
+				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
 					dtype, timematch, processed_url);
 				rules_added++;
 				logmessage("URL Filter", "DEBUG: Added universal rule: %s (all MAC)", url);

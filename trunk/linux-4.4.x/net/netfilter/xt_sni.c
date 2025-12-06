@@ -357,14 +357,14 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
     switch (protocol) {
     case PROTOCOL_HTTPS:
         /* HTTPS/TLS协议：提取SNI */
-        url_len = extract_sni_from_tls(skb, 0, 65535,
+        url_len = extract_sni_from_tls(skb, 0, 1500,
                                        url_buffer, sizeof(url_buffer));
         break;
         
     case PROTOCOL_HTTP:
     case PROTOCOL_HTTP2:
         /* HTTP协议：提取URL路径 */
-        url_len = extract_http_url(skb, 0, 65535,
+        url_len = extract_http_url(skb, 0, 1500,
                                    url_buffer, sizeof(url_buffer));
         break;
         
@@ -375,7 +375,7 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         
         {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                           0, 65535, 
+                                           0, 1500, 
                                            info->ts_config);
             match_result = (pos != UINT_MAX);
         }
@@ -389,7 +389,7 @@ static bool sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
         /* 提取失败，回退到全文搜索 */
         if (info->ts_config) {
             unsigned int pos = skb_find_text((struct sk_buff *)skb, 
-                                           0, 65535, 
+                                           0, 1500, 
                                            info->ts_config);
             match_result = (pos != UINT_MAX);
         } else {

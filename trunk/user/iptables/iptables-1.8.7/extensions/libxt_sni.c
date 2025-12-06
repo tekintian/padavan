@@ -18,13 +18,10 @@ static void sni_help(void)
     printf(
 "URL Filter SNI match options:\n"
 "  --str pattern             Match URL pattern (case-insensitive)\n"
-"  --string pattern          Same as --str (for compatibility)\n"
 "                            Pattern formats:\n"
 "                              qq.com         -> exact match\n"
 "                              *.qq.com       -> subdomain match\n"
 "                              *qq.com        -> contains match\n"
-"  --from offset             Start searching from offset (default: 0)\n"
-"  --to offset               Stop searching at offset (default: packet size)\n"
 "  --invert                  Invert the match\n"
 "\n"
 "Features:\n"
@@ -33,9 +30,9 @@ static void sni_help(void)
 "  * Zero configuration - no protocol selection needed\n"
 "\n"
 "Examples:\n"
-"  iptables -A OUTPUT -m sni --string qq.com -j DROP\n"
-"  iptables -A FORWARD -m sni --string *.youtube.com -j REJECT\n"
-"  iptables -A INPUT -m sni --string *facebook -j LOG\n"
+"  iptables -A OUTPUT -m sni --str qq.com -j DROP\n"
+"  iptables -A FORWARD -m sni --str *.youtube.com -j REJECT\n"
+"  iptables -A INPUT -m sni --str *facebook -j LOG\n"
 "\n"
 "Protocol Detection:\n"
 "  * HTTP  : GET, POST, HEAD, PUT, DELETE, OPTIONS methods\n"
@@ -47,10 +44,7 @@ static void sni_help(void)
 /* 命令行选项定义 */
 static const struct option sni_opts[] = {
     { .name = "str",      .has_arg = true,  .val = '1' },
-    { .name = "string",   .has_arg = true,  .val = '1' },  // 向后兼容
-    { .name = "from",     .has_arg = true,  .val = '2' },
-    { .name = "to",       .has_arg = true,  .val = '3' },
-    { .name = "invert",   .has_arg = false, .val = '4' },
+    { .name = "invert",   .has_arg = false, .val = '2' },
     XT_GETOPT_TABLEEND,
 };
 
@@ -95,6 +89,10 @@ static bool validate_url_pattern(const char *pattern)
     
     return true;
 }
+static void sni_init(struct xt_entry_match *m)
+{
+	struct xt_sni_info *i = (struct xt_sni_info *) m->data;
+}
 
 /* 解析命令行参数 */
 static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
@@ -103,12 +101,12 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
     struct xt_sni_info *info = (struct xt_sni_info *)(*match)->data;
     
     switch (c) {
-    case '1':  /* --string */
+    case '1':  /* --str */
         if (*flags & 0x01)
-            xtables_error(PARAMETER_PROBLEM, "Cannot specify --string twice");
+            xtables_error(PARAMETER_PROBLEM, "Cannot specify --str twice");
         
         if (!argv[optind])
-            xtables_error(PARAMETER_PROBLEM, "--string requires an argument");
+            xtables_error(PARAMETER_PROBLEM, "--str requires an argument");
         
         if (!validate_url_pattern(argv[optind]))
             xtables_error(PARAMETER_PROBLEM, "Invalid URL pattern format");
@@ -116,23 +114,15 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         /* 复制模式串 */
         strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
-        info->patlen = strlen(info->pattern);
+        info->pattern_len = strlen(info->pattern);
         
         /* 设置默认值 */
-        strcpy(info->algo, "bm");  /* 使用 Boyer-Moore 算法 */
-        info->u.v0.invert = invert ? 1 : 0;
+        info->invert = invert ? 1 : 0;
         
-        optind++;  /* 消费完参数后递增 optind */
         *flags |= 0x01;
         break;
-        
-    case '2':  /* --from - 已废弃，保留兼容性 */
-    case '3':  /* --to   - 已废弃，保留兼容性 */
-        xtables_error(PARAMETER_PROBLEM, "--from/--to options are not supported in URL filter mode");
-        break;
-        
-    case '4':  /* --invert */
-        info->u.v0.invert = 1;
+    case '2':  /* --invert */
+        info->invert = 1;
         break;
         
     default:
@@ -146,7 +136,7 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
 static void sni_check(unsigned int flags)
 {
     if (!(flags & 0x01))
-        xtables_error(PARAMETER_PROBLEM, "URL filter SNI match requires --string");
+        xtables_error(PARAMETER_PROBLEM, "URL filter SNI match requires --str");
     
     /* URL过滤模式不需要额外的参数检查 */
 }
@@ -159,7 +149,7 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     
     printf(" URL-SNI ");
     
-    if (info->u.v0.invert)
+    if (info->invert)
         printf("!");
     
     /* 显示匹配模式类型 */
@@ -177,9 +167,9 @@ static void sni_save(const void *entry, const struct xt_entry_match *match)
 {
     const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
     
-    printf(" --sni \"%s\"", info->pattern);
+    printf(" --str \"%s\"", info->pattern);
     
-    if (info->u.v0.invert) {
+    if (info->invert) {
         printf(" --invert");
     }
 }
@@ -189,26 +179,11 @@ static void sni_save(const void *entry, const struct xt_entry_match *match)
 static struct xtables_match sni_mt_reg[] = {
 	{
 		.name          = "sni",
-		.revision      = 0,
-		.family        = NFPROTO_UNSPEC,
-		.version       = XTABLES_VERSION,
-		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
-		.userspacesize = offsetof(struct xt_sni_info, config),
-		.help          = sni_help,
-		.init          = sni_init,
-		.print         = sni_print,
-		.save          = sni_save,
-		.x6_parse      = sni_parse,
-		.x6_fcheck     = sni_check,
-		.x6_options    = sni_opts
-	},
-	{
-		.name          = "sni",
 		.revision      = 1,
 		.family        = NFPROTO_UNSPEC,
 		.version       = XTABLES_VERSION,
 		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
-		.userspacesize = offsetof(struct xt_sni_info, config),
+		.userspacesize = offsetof(struct xt_sni_info, ts_config),
 		.help          = sni_help,
 		.init          = sni_init,
 		.print         = sni_print,
