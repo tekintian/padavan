@@ -49,8 +49,7 @@ static const struct option sni_opts[] = {
 };
 
 /* 检查URL模式格式 */
-static bool validate_url_pattern(const char *pattern)
-{
+static bool validate_url_pattern(const char *pattern) {
     unsigned int len = strlen(pattern);
     
     if (len == 0 || len >= XT_SNI_MAX_PATTERN_SIZE)
@@ -92,6 +91,19 @@ static bool validate_url_pattern(const char *pattern)
 static void sni_init(struct xt_entry_match *m)
 {
 	struct xt_sni_info *i = (struct xt_sni_info *) m->data;
+
+   /* 初始化所有字段为默认值 */
+	memset(i, 0, sizeof(struct xt_sni_info));
+	
+	/* 设置默认值 */
+	i->invert = 0;
+	i->wildcard_type = XT_SNI_MATCH_EXACT;
+	i->pattern_len = 0;
+	
+	/* 确保字符串字段以NULL结尾 */
+	i->pattern[0] = '\0';
+	i->search_pattern[0] = '\0';
+	i->ts_config = NULL;
 }
 
 /* 解析命令行参数 */
@@ -116,13 +128,21 @@ static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
         info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
         info->pattern_len = strlen(info->pattern);
         
-        /* 设置默认值 */
-        info->invert = invert ? 1 : 0;
+        /* 设置反转标志 - 优先级：--invert选项 > xtables的!符号 */
+        if (*flags & 0x02) {
+            /* 如果已经设置了--invert选项，则忽略!符号 */
+            info->invert = 1;
+        } else {
+            /* 否则使用!符号的值 */
+            info->invert = invert ? 1 : 0;
+        }
         
         *flags |= 0x01;
         break;
     case '2':  /* --invert */
+        /* 显式设置反转标志并记录标志位 */
         info->invert = 1;
+        *flags |= 0x02;
         break;
         
     default:
@@ -152,13 +172,18 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     if (info->invert)
         printf("!");
     
-    /* 显示匹配模式类型 */
-    if (strlen(info->pattern) >= 3 && info->pattern[0] == '*' && info->pattern[1] == '.') {
+    /* 使用已设置的wildcard_type字段显示匹配模式类型 */
+    switch (info->wildcard_type) {
+    case XT_SNI_MATCH_SUFFIX:
         printf("subdomain:%s", info->pattern + 2);
-    } else if (strlen(info->pattern) >= 2 && info->pattern[0] == '*' && info->pattern[1] != '.') {
+        break;
+    case XT_SNI_MATCH_CONTAINS:
         printf("contains:%s", info->pattern + 1);
-    } else {
+        break;
+    case XT_SNI_MATCH_EXACT:
+    default:
         printf("exact:%s", info->pattern);
+        break;
     }
 }
 
