@@ -71,10 +71,14 @@ static int convert_wildcard_to_pattern(const char *wildcard,
         strcpy(pattern, wildcard + 2);
         *wildcard_type = XT_SNI_MATCH_SUFFIX;
         return 0;
-    } else if (wild_len >= 2 && wildcard[0] == '*' && 
-               (wild_len == 1 || wildcard[1] != '.')) {
+    } else if (wild_len >= 2 && wildcard[0] == '*' && wildcard[1] != '.') {
         /* *domain -> 包含匹配 */
         strcpy(pattern, wildcard + 1);
+        *wildcard_type = XT_SNI_MATCH_CONTAINS;
+        return 0;
+    } else if (wild_len == 1 && wildcard[0] == '*') {
+        /* * -> 包含所有 */
+        *pattern = '\0';
         *wildcard_type = XT_SNI_MATCH_CONTAINS;
         return 0;
     } else {

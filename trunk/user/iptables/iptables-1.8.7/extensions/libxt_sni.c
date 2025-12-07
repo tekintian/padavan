@@ -186,18 +186,16 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     if (info->invert)
         printf("!");
     
-    /* 使用已设置的wildcard_type字段显示匹配模式类型 */
-    switch (info->wildcard_type) {
-    case XT_SNI_MATCH_SUFFIX:
+    /* 根据原始pattern字符串判断通配符类型 */
+    if (info->pattern_len >= 3 && info->pattern[0] == '*' && info->pattern[1] == '.') {
+        /* *.domain.com -> 后缀匹配 */
         printf("subdomain:%s", info->pattern + 2);
-        break;
-    case XT_SNI_MATCH_CONTAINS:
+    } else if (info->pattern_len >= 2 && info->pattern[0] == '*' && info->pattern[1] != '.') {
+        /* *domain -> 包含匹配 */
         printf("contains:%s", info->pattern + 1);
-        break;
-    case XT_SNI_MATCH_EXACT:
-    default:
+    } else {
+        /* 普通域名 -> 精确匹配 */
         printf("exact:%s", info->pattern);
-        break;
     }
 }
 
