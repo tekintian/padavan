@@ -2,7 +2,7 @@
  *
  * Based on xt_string.c by Pablo Neira Ayuso <pablo@eurodev.net>
  * Modified for SNI matching functionality
- * Conservative version with minimal changes for stability
+ * Conservative stable version with basic router algorithm support
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -58,19 +58,20 @@ static int sni_mt_check(const struct xt_mtchk_param *par)
 	if (conf->u.v1.flags & XT_SNI_FLAG_IGNORECASE)
 		flags |= TS_IGNORECASE;
 	
-	/* Handle router algorithm as special case of kmp */
+	/* Handle router algorithm - use bm for now (safer than kmp) */
 	if (strcmp(conf->algo, "router") == 0) {
-		/* Use kmp as fallback for now - safer than custom implementation */
-		ts_conf = textsearch_prepare("kmp", conf->pattern, conf->patlen,
+		/* Use bm as stable fallback */
+		ts_conf = textsearch_prepare("bm", conf->pattern, conf->patlen,
 					     GFP_KERNEL, flags);
+		if (IS_ERR(ts_conf))
+			return PTR_ERR(ts_conf);
 	} else {
 		/* Use standard textsearch algorithm */
 		ts_conf = textsearch_prepare(conf->algo, conf->pattern, conf->patlen,
 					     GFP_KERNEL, flags);
+		if (IS_ERR(ts_conf))
+			return PTR_ERR(ts_conf);
 	}
-	
-	if (IS_ERR(ts_conf))
-		return PTR_ERR(ts_conf);
 
 	conf->config = ts_conf;
 	return 0;
@@ -94,7 +95,17 @@ static struct xt_match xt_sni_mt_reg __read_mostly = {
 
 static int __init sni_mt_init(void)
 {
-	return xt_register_match(&xt_sni_mt_reg);
+	int ret;
+	
+	/* Register SNI match */
+	ret = xt_register_match(&xt_sni_mt_reg);
+	if (ret) {
+		pr_err("Failed to register SNI match: %d\n", ret);
+		return ret;
+	}
+	
+	pr_info("SNI match module registered (stable version)\n");
+	return 0;
 }
 
 static void __exit sni_mt_exit(void)
