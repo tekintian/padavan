@@ -46,10 +46,17 @@ static void sni_help(void)
 "sni match options:\n"
 "--from                       Offset to start searching from\n"
 "--to                         Offset to stop searching\n"
-"--algo                       Algorithm\n"
+"--algo                       Algorithm (bm, kmp, router)\n"
 "--icase                      Ignore case (default: 0)\n"
 "[!] --sni string             Match a SNI string in a packet\n"
-"[!] --hex-sni string         Match a hex SNI string in a packet\n");
+"[!] --hex-sni string         Match a hex SNI string in a packet\n"
+"\n"
+"Router algorithm supports:\n"
+"  exact domain:     google.com\n"
+"  subdomain:        *.google.com\n"
+"  wildcard:         *.gov.cn\n"
+"  contains:         video\n"
+"  case-insensitive: use --icase flag\n");
 }
 
 #define s struct xt_sni_info
