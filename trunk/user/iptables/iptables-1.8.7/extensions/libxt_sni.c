@@ -1,245 +1,336 @@
-/*
- * URL Filter Optimized SNI userspace extension
- * 专注于URL过滤场景的简化版本
+/* Shared library add-on to iptables to add SNI matching support. 
+ * 
+ * Copyright (C) 2000 Emmanuel Roger  <winfield@freegates.be>
+ *
+ * 2005-08-05 Pablo Neira Ayuso <pablo@eurodev.net>
+ * 	- reimplemented to use new string matching iptables match
+ * 	- add functionality to match packets by using window offsets
+ * 	- add functionality to select the string matching algorithm
+ *
+ * ChangeLog
+ *     29.12.2003: Michael Rash <mbr@cipherdyne.org>
+ *             Fixed iptables save/restore for ascii strings
+ *             that contain space chars, and hex strings that
+ *             contain embedded NULL chars.  Updated to print
+ *             strings in hex mode if any non-printable char
+ *             is contained within the string.
+ *
+ *     27.01.2001: Gianni Tedesco <gianni@ecsc.co.uk>
+ *             Changed --tos to --sni in save(). Also
+ *             updated to work with slightly modified
+ *             ipt_sni_info.
  */
-
+#define _GNU_SOURCE 1 /* strnlen for older glibcs */
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <xtables.h>
 #include <linux/netfilter/xt_sni.h>
-#include <string.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <getopt.h>
 
-/* 帮助信息 */
-static void sni_help(void)
-{
-    printf(
-"URL Filter SNI match options:\n"
-"  --str pattern             Match URL pattern (case-insensitive)\n"
-"                            Pattern formats:\n"
-"                              qq.com         -> exact match\n"
-"                              *.qq.com       -> subdomain match\n"
-"                              *qq.com        -> contains match\n"
-"  --invert                  Invert the match\n"
-"\n"
-"Features:\n"
-"  * Automatic protocol detection (HTTP/HTTPS/HTTP/2)\n"
-"  * Supports non-standard ports (8080, 8443, etc.)\n"
-"  * Zero configuration - no protocol selection needed\n"
-"\n"
-"Examples:\n"
-"  iptables -A OUTPUT -m sni --str qq.com -j DROP\n"
-"  iptables -A FORWARD -m sni --str *.youtube.com -j REJECT\n"
-"  iptables -A INPUT -m sni --str *facebook -j LOG\n"
-"\n"
-"Protocol Detection:\n"
-"  * HTTP  : GET, POST, HEAD, PUT, DELETE, OPTIONS methods\n"
-"  * HTTPS : TLS/SSL ClientHello packets (port 443, 8443, etc.)\n"
-"  * HTTP/2: PRI * HTTP/2.0 connection preface\n"
-"  * Fallback: Boyer-Moore text search for unknown protocols\n");
-}
-
-/* 命令行选项定义 */
-static const struct option sni_opts[] = {
-    { .name = "str",      .has_arg = true,  .val = '1' },
-    { .name = "invert",   .has_arg = false, .val = '2' },
-    XT_GETOPT_TABLEEND,
+enum {
+	O_FROM = 0,
+	O_TO,
+	O_ALGO,
+	O_ICASE,
+	O_STRING,
+	O_HEX_STRING,
+	F_STRING     = 1 << O_STRING,
+	F_HEX_STRING = 1 << O_HEX_STRING,
+	F_OP_ANY     = F_STRING | F_HEX_STRING,
 };
 
-/* 检查URL模式格式 */
-static bool validate_url_pattern(const char *pattern) {
-    unsigned int len = strlen(pattern);
-    
-    if (len == 0 || len >= XT_SNI_MAX_PATTERN_SIZE)
-        return false;
-    
-    /* 检查模式格式 */
-    if (len >= 2 && pattern[0] == '*') {
-        if (len == 1)  /* 只有*，无效 */
-            return false;
-        
-        if (pattern[1] == '.') {
-            /* *.domain.com 格式 */
-            if (len < 4)  /* 至少 *.a.b */
-                return false;
-        } else {
-            /* *domain 格式 */
-            /* 不允许连续通配符 */
-            if (len >= 2 && pattern[1] == '*')
-                return false;
-        }
-    }
-    
-    /* 检查字符有效性 */
-    for (unsigned int i = 0; i < len; i++) {
-        char c = pattern[i];
-        
-        if (c == '*')
-            continue;
-        
-        /* 域名字符检查 */
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
-              (c >= '0' && c <= '9') || c == '.' || c == '-')) {
-            return false;
-        }
-    }
-    
-    return true;
+static void sni_help(void)
+{
+	printf(
+"sni match options:\n"
+"--from                       Offset to start searching from\n"
+"--to                         Offset to stop searching\n"
+"--algo                       Algorithm\n"
+"--icase                      Ignore case (default: 0)\n"
+"[!] --sni string             Match a SNI string in a packet\n"
+"[!] --hex-sni string         Match a hex SNI string in a packet\n");
 }
+
+#define s struct xt_sni_info
+static const struct xt_option_entry sni_opts[] = {
+	{.name = "from", .id = O_FROM, .type = XTTYPE_UINT16,
+	 .flags = XTOPT_PUT, XTOPT_POINTER(s, from_offset)},
+	{.name = "to", .id = O_TO, .type = XTTYPE_UINT16,
+	 .flags = XTOPT_PUT, XTOPT_POINTER(s, to_offset)},
+	{.name = "algo", .id = O_ALGO, .type = XTTYPE_STRING,
+	 .flags = XTOPT_MAND | XTOPT_PUT, XTOPT_POINTER(s, algo)},
+	{.name = "sni", .id = O_STRING, .type = XTTYPE_STRING,
+	 .flags = XTOPT_INVERT, .excl = F_HEX_STRING},
+	{.name = "hex-sni", .id = O_HEX_STRING, .type = XTTYPE_STRING,
+	 .flags = XTOPT_INVERT, .excl = F_STRING},
+	{.name = "icase", .id = O_ICASE, .type = XTTYPE_NONE},
+	XTOPT_TABLEEND,
+};
+#undef s
+
 static void sni_init(struct xt_entry_match *m)
 {
 	struct xt_sni_info *i = (struct xt_sni_info *) m->data;
 
-   /* 初始化所有字段为默认值 */
-	memset(i, 0, sizeof(struct xt_sni_info));
-	
-	/* 用户态只需要设置公开的字段，内核内部字段由内核自行管理 */
-	i->wildcard_type = XT_SNI_MATCH_EXACT;
-	i->invert = 0;
-	
-	/* 确保模式字符串以NULL结尾 */
-	i->pattern[0] = '\0';
+	i->to_offset = UINT16_MAX;
 }
 
-/* 解析命令行参数 */
-/**
- * @brief 解析SNI匹配规则的命令行参数
- * 
- * @param c 当前解析的选项字符
- * @param argv 命令行参数数组
- * @param invert 是否反转匹配结果（由xtables的!符号设置）
- * @param flags 标志位，用于跟踪已解析的选项
- * @param entry 未使用的条目参数
- * @param match 指向xt_entry_match结构的指针，用于存储解析结果
- * @return int 返回1表示成功处理当前选项，0表示未处理当前选项
- * 
- * @throws PARAMETER_PROBLEM 当参数格式错误或重复指定选项时抛出
- * 
- * @note 选项处理优先级：--invert选项 > xtables的!符号
- * @note 支持的选项：
- *   - '1' (--str): 指定要匹配的URL模式
- *   - '2' (--invert): 反转匹配逻辑
- */
-static int sni_parse(int c, char **argv, int invert, unsigned int *flags,
-                    const void *entry, struct xt_entry_match **match)
+static void
+parse_string(const char *s, struct xt_sni_info *info)
+{	
+	/* xt_sni does not need \0 at the end of the pattern */
+	if (strlen(s) <= XT_SNI_MAX_PATTERN_SIZE) {
+		strncpy(info->pattern, s, XT_SNI_MAX_PATTERN_SIZE);
+		info->patlen = strnlen(s, XT_SNI_MAX_PATTERN_SIZE);
+		return;
+	}
+	xtables_error(PARAMETER_PROBLEM, "SNI too long \"%s\"", s);
+}
+
+static void
+parse_hex_string(const char *s, struct xt_sni_info *info)
 {
-    struct xt_sni_info *info = (struct xt_sni_info *)(*match)->data;
-    
-    switch (c) {
-    case '1':  /* --str */
-        if (*flags & 0x01)
-            xtables_error(PARAMETER_PROBLEM, "Cannot specify --str twice");
-        
-        if (!argv[optind])
-            xtables_error(PARAMETER_PROBLEM, "--str requires an argument");
-        
-        if (!validate_url_pattern(argv[optind]))
-            xtables_error(PARAMETER_PROBLEM, "Invalid URL pattern format");
-        
-        /* 复制模式串 */
-        strncpy(info->pattern, argv[optind], XT_SNI_MAX_PATTERN_SIZE - 1);
-        info->pattern[XT_SNI_MAX_PATTERN_SIZE - 1] = '\0';
-        
-        /* 设置反转标志 - 优先级：--invert选项 > xtables的!符号 */
-        if (*flags & 0x02) {
-            /* 如果已经设置了--invert选项，则忽略!符号 */
-            info->invert = 1;
-        } else {
-            /* 否则使用!符号的值 */
-            info->invert = invert ? 1 : 0;
-        }
-        
-        *flags |= 0x01;
-        break;
-    case '2':  /* --invert */
-        /* 显式设置反转标志并记录标志位 */
-        info->invert = 1;
-        *flags |= 0x02;
-        break;
-        
-    default:
-        return 0;
-    }
-    
-    return 1;
+	int i=0, slen, sindex=0, schar;
+	short hex_f = 0, literal_f = 0;
+	char hextmp[3];
+
+	slen = strlen(s);
+
+	if (slen == 0) {
+		xtables_error(PARAMETER_PROBLEM,
+			"SNI must contain at least one char");
+	}
+
+	while (i < slen) {
+		if (sindex >= XT_SNI_MAX_PATTERN_SIZE)
+			xtables_error(PARAMETER_PROBLEM,
+				      "SNI too long \"%s\"", s);
+		if (s[i] == '\\' && !hex_f) {
+			literal_f = 1;
+		} else if (s[i] == '\\') {
+			xtables_error(PARAMETER_PROBLEM,
+				"Cannot include literals in hex data");
+		} else if (s[i] == '|') {
+			if (hex_f)
+				hex_f = 0;
+			else {
+				hex_f = 1;
+				/* get past any initial whitespace just after the '|' */
+				while (s[i+1] == ' ')
+					i++;
+			}
+			if (i+1 >= slen)
+				break;
+			else
+				i++;  /* advance to the next character */
+		}
+
+		if (literal_f) {
+			if (i+1 >= slen) {
+				xtables_error(PARAMETER_PROBLEM,
+					"Bad literal placement at end of string");
+			}
+			info->pattern[sindex] = s[i+1];
+			i += 2;  /* skip over literal char */
+			literal_f = 0;
+		} else if (hex_f) {
+			if (i+1 >= slen) {
+				xtables_error(PARAMETER_PROBLEM,
+					"Odd number of hex digits");
+			}
+			if (i+2 >= slen) {
+				/* must end with a "|" */
+				xtables_error(PARAMETER_PROBLEM, "Invalid hex block");
+			}
+			if (! isxdigit(s[i])) /* check for valid hex char */
+				xtables_error(PARAMETER_PROBLEM, "Invalid hex char '%c'", s[i]);
+			if (! isxdigit(s[i+1])) /* check for valid hex char */
+				xtables_error(PARAMETER_PROBLEM, "Invalid hex char '%c'", s[i+1]);
+			hextmp[0] = s[i];
+			hextmp[1] = s[i+1];
+			hextmp[2] = '\0';
+			if (! sscanf(hextmp, "%x", &schar))
+				xtables_error(PARAMETER_PROBLEM,
+					"Invalid hex char `%c'", s[i]);
+			info->pattern[sindex] = (char) schar;
+			if (s[i+2] == ' ')
+				i += 3;  /* spaces included in the hex block */
+			else
+				i += 2;
+		} else {  /* char is not part of hex data, so just copy */
+			info->pattern[sindex] = s[i];
+			i++;
+		}
+		sindex++;
+	}
+	info->patlen = sindex;
 }
 
-/* 参数检查 */
-static void sni_check(unsigned int flags)
+static void sni_parse(struct xt_option_call *cb)
 {
-    if (!(flags & 0x01))
-        xtables_error(PARAMETER_PROBLEM, "URL filter SNI match requires --str");
-    
-    /* URL过滤模式不需要额外的参数检查 */
+	struct xt_sni_info *sniinfo = cb->data;
+	const unsigned int revision = (*cb->match)->u.user.revision;
+
+	xtables_option_parse(cb);
+	switch (cb->entry->id) {
+	case O_STRING:
+		parse_string(cb->arg, sniinfo);
+		if (cb->invert) {
+			if (revision == 0)
+				sniinfo->u.v0.invert = 1;
+			else
+				sniinfo->u.v1.flags |= XT_SNI_FLAG_INVERT;
+		}
+		break;
+	case O_HEX_STRING:
+		parse_hex_string(cb->arg, sniinfo);  /* sets length */
+		if (cb->invert) {
+			if (revision == 0)
+				sniinfo->u.v0.invert = 1;
+			else
+				sniinfo->u.v1.flags |= XT_SNI_FLAG_INVERT;
+		}
+		break;
+	case O_ICASE:
+		if (revision == 0)
+			xtables_error(VERSION_PROBLEM,
+				   "Kernel doesn't support --icase");
+
+		sniinfo->u.v1.flags |= XT_SNI_FLAG_IGNORECASE;
+		break;
+	}
 }
 
-/* 打印匹配规则 */
-static void sni_print(const void *entry, const struct xt_entry_match *match,
-                     int numeric)
+static void sni_check(struct xt_fcheck_call *cb)
 {
-    const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
-    
-    printf(" URL-SNI ");
-    
-    if (info->invert)
-        printf("!");
-    
-    /* 根据原始pattern字符串判断通配符类型 */
-    if (info->pattern_len >= 3 && info->pattern[0] == '*' && info->pattern[1] == '.') {
-        /* *.domain.com -> 后缀匹配 */
-        printf("subdomain:%s", info->pattern + 2);
-    } else if (info->pattern_len >= 2 && info->pattern[0] == '*' && info->pattern[1] != '.') {
-        /* *domain -> 包含匹配 */
-        printf("contains:%s", info->pattern + 1);
-    } else {
-        /* 普通域名 -> 精确匹配 */
-        printf("exact:%s", info->pattern);
-    }
+	if (!(cb->xflags & F_OP_ANY))
+		xtables_error(PARAMETER_PROBLEM,
+			   "SNI match: You must specify `--sni' or "
+			   "`--hex-sni'");
 }
 
-/* 打印字符串工具函数 */
+/* Test to see if the string contains non-printable chars or quotes */
+static unsigned short int
+is_hex_string(const char *str, const unsigned short int len)
+{
+	unsigned int i;
+	for (i=0; i < len; i++)
+		if (! isprint(str[i]))
+			return 1;  /* string contains at least one non-printable char */
+	/* use hex output if last char is a "\" */
+	if (str[len-1] == '\\')
+		return 1;
+	return 0;
+}
+
+/* Print string with "|" chars included as one would pass to --hex-sni */
+static void
+print_hex_string(const char *str, const unsigned short int len)
+{
+	unsigned int i;
+	/* start hex block */
+	printf(" \"|");
+	for (i=0; i < len; i++)
+		printf("%02x", (unsigned char)str[i]);
+	/* close hex block */
+	printf("|\"");
+}
+
 static void
 print_string(const char *str, const unsigned short int len)
 {
 	unsigned int i;
 	printf(" \"");
 	for (i=0; i < len; i++) {
-		if (str[i] == '"' || str[i] == '\\')
+		if (str[i] == '\"' || str[i] == '\\')
 			putchar('\\');
 		printf("%c", (unsigned char) str[i]);
 	}
 	printf("\"");  /* closing quote */
 }
 
-/* 保存规则 */
-static void sni_save(const void *entry, const struct xt_entry_match *match)
+static void
+sni_print(const void *ip, const struct xt_entry_match *match, int numeric)
 {
-    const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
-    
-    printf("%s --str", (info->invert) ? " !": "");
-	print_string(info->pattern, info->pattern_len);
+	const struct xt_sni_info *info =
+	    (const struct xt_sni_info*) match->data;
+	const int revision = match->u.user.revision;
+	int invert = (revision == 0 ? info->u.v0.invert :
+			    info->u.v1.flags & XT_SNI_FLAG_INVERT);
+
+	if (is_hex_string(info->pattern, info->patlen)) {
+		printf(" SNI match %s", invert ? "!" : "");
+		print_hex_string(info->pattern, info->patlen);
+	} else {
+		printf(" SNI match %s", invert ? "!" : "");
+		print_string(info->pattern, info->patlen);
+	}
+	printf(" ALGO name %s", info->algo);
+	if (info->from_offset != 0)
+		printf(" FROM %u", info->from_offset);
+	if (info->to_offset != 0)
+		printf(" TO %u", info->to_offset);
+	if (revision > 0 && info->u.v1.flags & XT_SNI_FLAG_IGNORECASE)
+		printf(" ICASE");
 }
 
+static void sni_save(const void *ip, const struct xt_entry_match *match)
+{
+	const struct xt_sni_info *info =
+	    (const struct xt_sni_info*) match->data;
+	const int revision = match->u.user.revision;
+	int invert = (revision == 0 ? info->u.v0.invert :
+			    info->u.v1.flags & XT_SNI_FLAG_INVERT);
+
+	if (is_hex_string(info->pattern, info->patlen)) {
+		printf("%s --hex-sni", (invert) ? " !" : "");
+		print_hex_string(info->pattern, info->patlen);
+	} else {
+		printf("%s --sni", (invert) ? " !": "");
+		print_string(info->pattern, info->patlen);
+	}
+	printf(" --algo %s", info->algo);
+	if (info->from_offset != 0)
+		printf(" --from %u", info->from_offset);
+	if (info->to_offset != 0)
+		printf(" --to %u", info->to_offset);
+	if (revision > 0 && info->u.v1.flags & XT_SNI_FLAG_IGNORECASE)
+		printf(" --icase");
+}
 
 
 static struct xtables_match sni_mt_reg[] = {
 	{
 		.name          = "sni",
-		.revision      = 1,
+		.revision      = 0,
 		.family        = NFPROTO_UNSPEC,
 		.version       = XTABLES_VERSION,
 		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
-		.userspacesize = offsetof(struct xt_sni_info, ts_config),
+		.userspacesize = offsetof(struct xt_sni_info, config),
 		.help          = sni_help,
 		.init          = sni_init,
 		.print         = sni_print,
 		.save          = sni_save,
 		.x6_parse      = sni_parse,
 		.x6_fcheck     = sni_check,
-		.x6_options    = sni_opts
-	}
+		.x6_options    = sni_opts,
+	},
+	{
+		.name          = "sni",
+		.revision      = 1,
+		.family        = NFPROTO_UNSPEC,
+		.version       = XTABLES_VERSION,
+		.size          = XT_ALIGN(sizeof(struct xt_sni_info)),
+		.userspacesize = offsetof(struct xt_sni_info, config),
+		.help          = sni_help,
+		.init          = sni_init,
+		.print         = sni_print,
+		.save          = sni_save,
+		.x6_parse      = sni_parse,
+		.x6_fcheck     = sni_check,
+		.x6_options    = sni_opts,
+	},
 };
 
 void _init(void)

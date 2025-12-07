@@ -1,3 +1,20 @@
+/*
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA 02111-1307 USA
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +24,6 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <regex.h>
 
 #include "rc.h"
 
@@ -406,329 +422,6 @@ ip2class(const char *addr, const char *mask, char *out_buf, size_t out_len)
 	snprintf(out_buf, out_len, "%s/%d", inet_ntoa(in), i);
 }
 
-/**
- * @brief 检测字符串是否为有效的IP地址或IP网段
- * @param str 要检测的字符串
- * @param is_ip 返回是否为IP地址
- * @param is_cidr 返回是否为CIDR格式
- * @param ip_buf 输出IP地址部分
- * @param mask_buf 输出子网掩码部分（CIDR时为数字）
- * @return 1-有效IP/CIDR，0-域名或其他
- */
-static int
-is_ip_address(const char *str, int *is_ip, int *is_cidr, char *ip_buf, char *mask_buf)
-{
-	struct in_addr addr;
-	char *slash;
-	char temp_str[64];
-	int cidr_num;
-	
-	if (!str || strlen(str) == 0) {
-		*is_ip = 0;
-		*is_cidr = 0;
-		return 0;
-	}
-	
-	// 检查是否包含斜杠（CIDR格式）
-	slash = strchr(str, '/');
-	if (slash) {
-		// CIDR格式检测
-		int slash_pos = slash - str;
-		
-		// 复制IP部分
-		strncpy(temp_str, str, slash_pos);
-		temp_str[slash_pos] = '\0';
-		
-		// 验证IP部分
-		if (inet_aton(temp_str, &addr)) {
-			// 验证CIDR数字部分
-			cidr_num = atoi(slash + 1);
-			if (cidr_num >= 0 && cidr_num <= 32) {
-				*is_ip = 1;
-				*is_cidr = 1;
-				strcpy(ip_buf, temp_str);
-				sprintf(mask_buf, "%d", cidr_num);
-				return 1;
-			}
-		}
-	} else {
-		// 单个IP地址检测
-		if (inet_aton(str, &addr)) {
-			*is_ip = 1;
-			*is_cidr = 0;
-			strcpy(ip_buf, str);
-			strcpy(mask_buf, "32"); // 单个IP等效于/32
-			return 1;
-		}
-	}
-	
-	*is_ip = 0;
-	*is_cidr = 0;
-	return 0;
-}
-
-/**
- * @brief 协议类型枚举
- */
-typedef enum {
-	PROTOCOL_HTTP_ONLY = 1,    // 仅HTTP
-	PROTOCOL_HTTPS_ONLY = 2,   // 仅HTTPS  
-	PROTOCOL_BOTH = 3          // HTTP和HTTPS（当前模式）
-} protocol_type_t;
-
-/**
- * @brief 检测URL的协议偏好并提取完整URL路径
- * @param url 原始URL字符串
- * @param protocol 输出协议类型
- * @param url_path 输出完整URL路径（域名+端口+路径）
- * @param url_path_size URL路径缓冲区大小
- * @return 1-成功解析，0-解析失败
- */
-static int
-parse_url_protocol(const char *url, protocol_type_t *protocol, char *url_path, size_t url_path_size)
-{
-	const char *path_start;
-	char *slash_pos;
-	char *colon_pos;
-	char temp_url[512];
-	int is_exact = 0;
-	int is_subdomain = 0;
-	int is_contains = 0;
-	
-	if (!url || strlen(url) == 0 || !url_path || !protocol) {
-		return 0;
-	}
-	
-	// 复制到临时缓冲区进行处理
-	strncpy(temp_url, url, sizeof(temp_url) - 1);
-	temp_url[sizeof(temp_url) - 1] = '\0';
-	
-	// 检查URL过滤规则类型标记
-	if (temp_url[0] == '^' && temp_url[strlen(temp_url) - 1] == '$') {
-		is_exact = 1;
-		logmessage("URL Filter", "DEBUG: Detected exact match pattern: %s", temp_url);
-	} else if (temp_url[0] == '.') {
-		is_subdomain = 1;
-		logmessage("URL Filter", "DEBUG: Detected subdomain match pattern: %s", temp_url);
-	} else if (strchr(temp_url, '*')) {
-		is_contains = 1;
-		logmessage("URL Filter", "DEBUG: Detected contains match pattern: %s", temp_url);
-	}
-	
-	// 移除协议前缀
-	if (strncmp(temp_url, "https://", 8) == 0) {
-		path_start = temp_url + 8;
-		*protocol = PROTOCOL_HTTPS_ONLY;
-	} else if (strncmp(temp_url, "http://", 7) == 0) {
-		path_start = temp_url + 7;
-		*protocol = PROTOCOL_HTTP_ONLY;
-	} else {
-		path_start = temp_url;
-		*protocol = PROTOCOL_BOTH;
-	}
-	
-	// 移除路径部分，只保留域名
-	slash_pos = strchr(path_start, '/');
-	if (slash_pos) {
-		*slash_pos = '\0';
-	}
-	
-	// 移除端口部分，只保留域名
-	colon_pos = strchr(path_start, ':');
-	if (colon_pos) {
-		*colon_pos = '\0';
-	}
-	
-	// 复制处理后的域名到输出缓冲区
-	// 根据匹配类型添加相应的标记
-	if (is_exact) {
-		// 精确匹配：添加^和$标记
-		snprintf(url_path, url_path_size, "^%s$", path_start);
-	} else if (is_subdomain) {
-		// 子域名过滤：确保以.开头
-		if (path_start[0] != '.') {
-			snprintf(url_path, url_path_size, ".%s", path_start);
-		} else {
-			strncpy(url_path, path_start, url_path_size - 1);
-			url_path[url_path_size - 1] = '\0';
-		}
-	} else if (is_contains) {
-		// 包含匹配：保留原始字符串（可能包含*）
-		strncpy(url_path, path_start, url_path_size - 1);
-		url_path[url_path_size - 1] = '\0';
-	} else {
-		// 默认处理：直接复制
-		strncpy(url_path, path_start, url_path_size - 1);
-		url_path[url_path_size - 1] = '\0';
-	}
-	
-	logmessage("URL Filter", "DEBUG: Parsed URL - Original: %s, Processed: %s, Protocol: %d", url, url_path, *protocol);
-	
-	// 验证提取的URL路径不为空
-	if (strlen(url_path) == 0) {
-		logmessage("URL Filter", "ERROR: Extracted domain is empty for URL: %s", url);
-		return 0;
-	}
-	
-	logmessage("URL Filter", "DEBUG: Parsed - Protocol: %d, Domain: %s", *protocol, url_path);
-	return 1;
-}
-/**
- * @brief 根据协议类型生成内核优化规则
- * @param fp 文件指针
- * @param dtype 规则类型
- * @param url URL字符串（包含端口和路径）
- * @param protocol 协议类型
- * @param timematch 时间匹配条件
- * @param mac_addresses MAC地址数组
- * @param mac_count MAC地址数量
- * @param need_mac_condition 是否需要MAC条件
- */
-static int
-generate_protocol_optimized_rule(FILE *fp, const char *dtype, const char *url, 
-                               protocol_type_t protocol, const char *timematch,
-                               char mac_addresses[][18], int mac_count, int need_mac_condition)
-{
-	int rules_added = 0;
-	int is_exact_match = 0;
-	int is_subdomain_match = 0;
-	int is_contains_match = 0;
-	char processed_url[512];
-	
-	// 检查URL过滤规则类型
-	if (url[0] == '^' && url[strlen(url) - 1] == '$') {
-		is_exact_match = 1;
-		// 移除精确匹配标记，只保留域名部分
-		strncpy(processed_url, url + 1, sizeof(processed_url) - 2);
-		processed_url[sizeof(processed_url) - 2] = '\0';
-	} else if (url[0] == '.') {
-		is_subdomain_match = 1;
-		// 子域名匹配模式，准备用于SNI的*.domain.com格式
-		snprintf(processed_url, sizeof(processed_url), "*.%s", url + 1);
-	} else if (strchr(url, '*')) {
-		is_contains_match = 1;
-		// 包含匹配模式，直接使用原始URL
-		strncpy(processed_url, url, sizeof(processed_url) - 1);
-		processed_url[sizeof(processed_url) - 1] = '\0';
-	} else {
-		// 默认精确匹配
-		strncpy(processed_url, url, sizeof(processed_url) - 1);
-		processed_url[sizeof(processed_url) - 1] = '\0';
-	}
-	
-	logmessage("URL Filter", "DEBUG: Generating kernel-optimized rule for URL: %s, Protocol: %d, Type: E:%d, S:%d, C:%d", 
-			url, protocol, is_exact_match, is_subdomain_match, is_contains_match);
-	
-	if (need_mac_condition) {
-		// 有MAC限制的规则生成
-		for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-			switch (protocol) {
-				case PROTOCOL_HTTP_ONLY:
-					// 🔥 修复：正确匹配HTTP Host头，添加80端口限制
-					if (is_subdomain_match) {
-						// 子域名匹配：匹配任意位置包含域名的Host头
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], url + 1);
-					} else if (is_exact_match) {
-						// 精确匹配：精确匹配Host头
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], processed_url);
-					} else {
-						// 包含匹配或默认：匹配包含URL的Host头
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], processed_url);
-					}
-					rules_added++;
-					logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
-					break;
-					
-				case PROTOCOL_HTTPS_ONLY:
-					// 🔥 修复：将--str参数改为--str参数，添加443端口限制
-					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, mac_addresses[mac_idx], processed_url);
-					rules_added++;
-					logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
-					break;
-					
-				case PROTOCOL_BOTH:
-				default:
-					// 通用模式：同时处理HTTP和HTTPS
-					// HTTP部分
-					if (is_subdomain_match) {
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], url + 1);
-					} else if (is_exact_match) {
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], processed_url);
-					} else {
-						fprintf(fp, "-A %s -p tcp%s --dport 80 -m mac --mac-source %s -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-							dtype, timematch, mac_addresses[mac_idx], processed_url);
-					}
-					rules_added++;
-					
-					// HTTPS部分
-					fprintf(fp, "-A %s -p tcp%s --dport 443 -m mac --mac-source %s -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, mac_addresses[mac_idx], processed_url);
-					rules_added++;
-					logmessage("URL Filter", "DEBUG: Added universal rule: %s (MAC: %s)", url, mac_addresses[mac_idx]);
-					break;
-			}
-		}
-	} else {
-		// 无MAC限制的规则生成
-		switch (protocol) {
-			case PROTOCOL_HTTP_ONLY:
-				// 🔥 修复：正确匹配HTTP Host头，添加80端口限制
-				if (is_subdomain_match) {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, url + 1);
-				} else if (is_exact_match) {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, processed_url);
-				} else {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, processed_url);
-				}
-				rules_added++;
-				logmessage("URL Filter", "DEBUG: Added HTTP-optimized rule: %s (all MAC)", url);
-				break;
-				
-			case PROTOCOL_HTTPS_ONLY:
-				// 🔥 修复：将--str参数改为--str参数，添加443端口限制
-				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-					dtype, timematch, processed_url);
-				rules_added++;
-				logmessage("URL Filter", "DEBUG: Added HTTPS-optimized rule: %s (all MAC)", url);
-				break;
-				
-			case PROTOCOL_BOTH:
-			default:
-				// 通用模式：同时处理HTTP和HTTPS
-				// HTTP部分
-				if (is_subdomain_match) {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: .%s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, url + 1);
-				} else if (is_exact_match) {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, processed_url);
-				} else {
-					fprintf(fp, "-A %s -p tcp%s --dport 80 -m string --string \"Host: %s\" --algo bm --from 0 --to 400 -j REJECT --reject-with tcp-reset\n",
-						dtype, timematch, processed_url);
-				}
-				rules_added++;
-				
-				// HTTPS部分
-				fprintf(fp, "-A %s -p tcp%s --dport 443 -m sni --str \"%s\" -j REJECT --reject-with tcp-reset\n",
-					dtype, timematch, processed_url);
-				rules_added++;
-				logmessage("URL Filter", "DEBUG: Added universal rule: %s (all MAC)", url);
-				break;
-		}
-	}
-	
-	return rules_added;
-}
-
 // WAN, MAN, LAN
 void
 fill_static_routes(char *buf, int len, const char *ift)
@@ -979,9 +672,9 @@ include_webstr_filter(FILE *fp)
 
     /* 调试：记录URL数量 */
     int url_count = nvram_get_int("url_num_x");
-    logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
-    logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
-    logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
+    // logmessage("URL Filter", "DEBUG: url_num_x raw value = '%s'", nvram_safe_get("url_num_x"));
+    // logmessage("URL Filter", "DEBUG: url_num_x int value = %d", url_count);
+    // logmessage("URL Filter", "DEBUG: include_webstr_filter() started");
 
     /* 🔥 修复：准备MAC地址信息，用于URL过滤规则 */
     /* 注意：多个MAC地址需要为每个MAC生成单独的URL规则，因为iptables的mac模块不支持OR操作 */
@@ -992,9 +685,8 @@ include_webstr_filter(FILE *fp)
     /* 初始化MAC地址数组 */
     memset(mac_addresses, 0, sizeof(mac_addresses));
     
-    /* 只检查 MAC Group 模式 */
     if (nvram_match("url_mac_group_x", "1")) {
-        /* MAC Group 模式 - 使用 MAC 过滤中的地址作为 URL 规则的 MAC 限制条件 */
+        /* MAC Group 模式 */
         mac_count = nvram_get_int("macfilter_num_x");
         if (mac_count > 0) {
             char mac_buf[24] = {0};
@@ -1043,13 +735,13 @@ include_webstr_filter(FILE *fp)
             logmessage("URL Filter", "DEBUG: MAC %d: %s", mac_idx, mac_addresses[mac_idx]);
         }
     } else {
-        logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
+        // logmessage("URL Filter", "DEBUG: No MAC condition for URL rules - will apply to all traffic");
         mac_count = 0;
     }
 
     logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
     foreach_x("url_num_x") {
-        logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
+        // logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
@@ -1061,101 +753,92 @@ include_webstr_filter(FILE *fp)
         url_buf[sizeof(url_buf) - 1] = 0;
         
         /* 清理URL前缀 */
-        if (strncmp(url_buf, "http://", 7) == 0)
+        if (strncasecmp(url_buf, "http://", 7) == 0)
             filterstr = url_buf + 7;
-        else if (strncmp(url_buf, "https://", 8) == 0)
+        else if (strncasecmp(url_buf, "https://", 8) == 0)
             filterstr = url_buf + 8;
         else
             filterstr = url_buf;
         
-        /* 🔥 新增：进一步清理，提取纯IP或域名部分 */
-        char clean_filter[256];
-        char *slash_pos;
-        
-        /* 复制清理后的字符串 */
-        strncpy(clean_filter, filterstr, sizeof(clean_filter) - 1);
-        clean_filter[sizeof(clean_filter) - 1] = '\0';
-        
-        /* 移除路径部分（IP地址后的路径） */
-        slash_pos = strchr(clean_filter, '/');
-        if (slash_pos && slash_pos != clean_filter) {
-            /* 检查是否为CIDR格式（第一个斜杠后是数字） */
-            char *next_slash = strchr(slash_pos + 1, '/');
-            if (!next_slash) {
-                /* 只有一个斜杠，可能是CIDR格式，保留 */
-            } else {
-                /* 多个斜杠，是URL路径，截断 */
-                *slash_pos = '\0';
-            }
-        }
-        
         /* 检查过滤字符串是否有效 */
-        url_length = strlen(clean_filter);
+        url_length = strlen(filterstr);
         if (url_length < 1 || url_length >= sizeof(url_list)) {
             logmessage("URL Filter", "DEBUG: Skipping URL %d - length: %d", i, url_length);
             continue;
         }
         
-        /* 🔥 新增：检测是否为IP地址，如果是则使用更高效的IP匹配 */
-        int is_ip, is_cidr;
-        char ip_addr[64], ip_mask[16];
-        
-        if (is_ip_address(clean_filter, &is_ip, &is_cidr, ip_addr, ip_mask)) {
-            /* IP地址过滤：使用iptables的标准-d参数，更高效 */
-            logmessage("URL Filter", "DEBUG: Detected IP address: %s/%s", ip_addr, ip_mask);
-            
-            if (need_mac_condition) {
-                /* 为每个MAC地址生成IP过滤规则 */
-                for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                    if (is_cidr) {
-                        /* CIDR网段过滤 */
-                        fprintf(fp, "-A %s -d %s/%s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-                            dtype, ip_addr, ip_mask, url_timematch, mac_addresses[mac_idx]);
-                    } else {
-                        /* 单个IP过滤 */
-                        fprintf(fp, "-A %s -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-                            dtype, ip_addr, url_timematch, mac_addresses[mac_idx]);
-                    }
-                    webstr_items++;
-                    logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (MAC: %s)", ip_addr, ip_mask, mac_addresses[mac_idx]);
-                }
-            } else {
-                /* 没有MAC限制，应用到所有流量 */
-                if (is_cidr) {
-                    /* CIDR网段过滤 */
-                    fprintf(fp, "-A %s -d %s/%s%s -j REJECT --reject-with tcp-reset\n",
-                        dtype, ip_addr, ip_mask, url_timematch);
-                } else {
-                    /* 单个IP过滤 */
-                    fprintf(fp, "-A %s -d %s%s -j REJECT --reject-with tcp-reset\n",
-                        dtype, ip_addr, url_timematch);
-                }
+        /* 生成基于sni模块的HTTPS流量过滤规则 - 替换原来的SNI规则 */
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的string规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added IP rule: %s/%s (all MAC)", ip_addr, ip_mask);
+                logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+            }
+        } else {
+            /* 没有MAC限制，应用到所有流量 */
+            fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                dtype, filterstr, url_timematch);
+            webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (all MAC)", filterstr, url_timematch);
+        }
+        
+        /* 生成基于string模块的HTTP流量过滤规则 - 替换原来的webstr规则 */
+        if (url_total > 0)
+            url_length += strlen(split);
+        
+        if (url_total + url_length < sizeof(url_list)) {
+            if (url_total > 0)
+                strcat(url_list, split);
+            strcat(url_list, filterstr);
+            url_total += url_length;
+        } else {
+            /* flush merged url */
+            if (url_total > 0) {
+                if (need_mac_condition) {
+                    /* 为每个MAC地址生成单独的string规则 */
+                    for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                        fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                            dtype, url_list, url_timematch, mac_addresses[mac_idx]);
+                        webstr_items++;
+                        logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
+                    }
+                } else {
+                    /* 没有MAC限制，应用到所有流量 */
+                    fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                        dtype, url_list, url_timematch);
+                    webstr_items++;
+                    logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
+                }
             }
             
-            /* IP地址已处理，跳过域名处理逻辑 */
-            continue;
+            /* 开始新的URL列表 */
+            strcpy(url_list, filterstr);
+            url_total = strlen(filterstr);
         }
-        
-        /* 🔥 新增：最优协议处理模式 */
-        protocol_type_t protocol;
-        char url_path[256];
-        
-        if (!parse_url_protocol(clean_filter, &protocol, url_path, sizeof(url_path))) {
-            logmessage("URL Filter", "DEBUG: Failed to parse URL: %s", clean_filter);
-            continue;
-        }
-        
-        /* 生成基于协议优化的高效过滤规则 */
-        int rules_added = generate_protocol_optimized_rule(fp, dtype, url_path, protocol, 
-                                       url_timematch, mac_addresses, mac_count, need_mac_condition);
-        webstr_items += rules_added;
-        
-        logmessage("URL Filter", "DEBUG: Added protocol-optimized rule: %s (protocol: %d, rules_added: %d)", url_path, protocol, rules_added);
     }
 
-    logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
+    /* 处理剩余的合并URL */
+    if (url_total > 0) {
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的string规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, url_list, url_timematch, mac_addresses[mac_idx]);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
+            }
+        } else {
+            /* 没有MAC限制，应用到所有流量 */
+             fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+            dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
+        	webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s (all MAC)", url_list);
+        }
+    }
+
+    //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     
     /* 🔥 修复：添加默认RETURN规则，确保不匹配URL规则的流量能正常通过 */
     if (webstr_items > 0) {
@@ -1163,7 +846,7 @@ include_webstr_filter(FILE *fp)
         logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
     }
     
-    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
+    // logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int
@@ -1737,8 +1420,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - URL过滤只对指定MAC地址生效
-					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
+					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 添加MAC条件以提高效率
@@ -1750,7 +1432,6 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 						strcat(url_timematch, " --mac-source ");
 						strcat(url_timematch, mac_buf);
 					}
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -1780,8 +1461,15 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
+					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
+					mac_conv("url_mac_x", -1, mac_buf);
+					if (strlen(mac_buf) == 17) {
+						strcat(url_timematch, " -m mac");
+						if (nvram_match("url_inv_x", "1"))
+							strcat(url_timematch, " !");
+						strcat(url_timematch, " --mac-source ");
+						strcat(url_timematch, mac_buf);
+					}
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -1800,12 +1488,18 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - URL过滤只对指定MAC地址生效
-					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
+					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
+					// 单个MAC地址模式
+					mac_conv("url_mac_x", -1, mac_buf);
+					if (strlen(mac_buf) == 17) {
+						strcat(url_timematch, " -m mac");
+						if (nvram_match("url_inv_x", "1"))
+							strcat(url_timematch, " !");
+						strcat(url_timematch, " --mac-source ");
+						strcat(url_timematch, mac_buf);
+					}
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2375,12 +2069,18 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - URL过滤只对指定MAC地址生效
-					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
+					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
+					// 单个MAC地址模式 - 添加MAC条件以提高效率
+					mac_conv("url_mac_x", -1, mac_buf);
+					if (strlen(mac_buf) == 17) {
+						strcat(url_timematch, " -m mac");
+						if (nvram_match("url_inv_x", "1"))
+							strcat(url_timematch, " !");
+						strcat(url_timematch, " --mac-source ");
+						strcat(url_timematch, mac_buf);
+					}
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2415,8 +2115,15 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
+					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
+					mac_conv("url_mac_x", -1, mac_buf);
+					if (strlen(mac_buf) == 17) {
+						strcat(url_timematch, " -m mac");
+						if (nvram_match("url_inv_x", "1"))
+							strcat(url_timematch, " !");
+						strcat(url_timematch, " --mac-source ");
+						strcat(url_timematch, mac_buf);
+					}
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
@@ -2435,12 +2142,18 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - URL过滤只对指定MAC地址生效
-					logmessage("Firewall", "DEBUG: URL filter with MAC Group mode");
+					// MAC地址组模式
 					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
-					// 非MAC组模式 - URL过滤适用全部设备，不加MAC限制
-					logmessage("Firewall", "DEBUG: URL filter for all devices (no MAC restriction)");
+					// 单个MAC地址模式
+					mac_conv("url_mac_x", -1, mac_buf);
+					if (strlen(mac_buf) == 17) {
+						strcat(url_timematch, " -m mac");
+						if (nvram_match("url_inv_x", "1"))
+							strcat(url_timematch, " !");
+						strcat(url_timematch, " --mac-source ");
+						strcat(url_timematch, mac_buf);
+					}
 					fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				}
 				ret |= MODULE_WEBSTR_MASK;
