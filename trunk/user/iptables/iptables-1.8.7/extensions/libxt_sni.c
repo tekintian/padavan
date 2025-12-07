@@ -201,15 +201,27 @@ static void sni_print(const void *entry, const struct xt_entry_match *match,
     }
 }
 
+/* 打印字符串工具函数 */
+static void
+print_string(const char *str, const unsigned short int len)
+{
+	unsigned int i;
+	printf(" \"");
+	for (i=0; i < len; i++) {
+		if (str[i] == '"' || str[i] == '\\')
+			putchar('\\');
+		printf("%c", (unsigned char) str[i]);
+	}
+	printf("\"");  /* closing quote */
+}
+
 /* 保存规则 */
 static void sni_save(const void *entry, const struct xt_entry_match *match)
 {
     const struct xt_sni_info *info = (const struct xt_sni_info *)match->data;
     
-    // printf(" --str \"%s\"", info->pattern);
     printf("%s --str", (info->invert) ? " !": "");
 	print_string(info->pattern, info->pattern_len);
-
 }
 
 
