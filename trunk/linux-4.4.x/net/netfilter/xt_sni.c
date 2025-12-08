@@ -54,12 +54,12 @@ struct sni_cache_entry {
 	u8 flags;
 };
 
-/* Optimization statistics */
+/* Optimization statistics - simplified to avoid 64-bit issues */
 struct sni_stats {
-	u64 total_matches;
-	u64 cache_hits;
-	u64 fast_path_hits;
-	u64 fallback_hits;
+	u32 total_matches;
+	u32 cache_hits;
+	u32 fast_path_hits;
+	u32 fallback_hits;
 	u32 cache_entries;
 };
 
@@ -418,33 +418,37 @@ static struct xt_match xt_sni_mt_reg __read_mostly = {
 	.me         = THIS_MODULE,
 };
 
-/* Debug FS support for performance monitoring */
-#ifdef CONFIG_DEBUG_FS
-#include <linux/debugfs.h>
-
-static struct dentry *sni_debug_dir;
-static struct dentry *sni_stats_file;
+/* Debug FS support for performance monitoring - DISABLED to avoid 64-bit division */
+/* #ifdef CONFIG_DEBUG_FS */
+/* #include <linux/debugfs.h> */
 
 static int sni_stats_show(struct seq_file *m, void *v)
 {
-	u64 total = sni_opt.stats.total_matches;
+	u32 total = sni_opt.stats.total_matches;
 	u32 cache_percent, fast_percent, fallback_percent;
 	
 	seq_printf(m, "SNI Router Optimization Statistics:\n");
-	seq_printf(m, "Total Matches:     %llu\n", total);
+	seq_printf(m, "Total Matches:     %u\n", total);
 	
-	/* Safe division without 64-bit operations */
+/* Safe division without 64-bit operations */
 	if (total > 0) {
-		cache_percent = (u32)((sni_opt.stats.cache_hits * 100) / total);
-		fast_percent = (u32)((sni_opt.stats.fast_path_hits * 100) / total);
-		fallback_percent = (u32)((sni_opt.stats.fallback_hits * 100) / total);
+		/* Manual percentage calculation to avoid 64-bit division */
+		u32 cache_hits_u32 = (u32)sni_opt.stats.cache_hits;
+		u32 fast_hits_u32 = (u32)sni_opt.stats.fast_path_hits;
+		u32 fallback_hits_u32 = (u32)sni_opt.stats.fallback_hits;
+		u32 total_u32 = (u32)total;
+		
+		/* Simple integer division (may lose precision but safe) */
+		cache_percent = (cache_hits_u32 * 100) / total_u32;
+		fast_percent = (fast_hits_u32 * 100) / total_u32;
+		fallback_percent = (fallback_hits_u32 * 100) / total_u32;
 	} else {
 		cache_percent = fast_percent = fallback_percent = 0;
 	}
 	
-	seq_printf(m, "Cache Hits:        %llu (%u%%)\n", sni_opt.stats.cache_hits, cache_percent);
-	seq_printf(m, "Fast Path Hits:    %llu (%u%%)\n", sni_opt.stats.fast_path_hits, fast_percent);
-	seq_printf(m, "Fallback Hits:     %llu (%u%%)\n", sni_opt.stats.fallback_hits, fallback_percent);
+	seq_printf(m, "Cache Hits:        %u (%u%%)\n", sni_opt.stats.cache_hits, cache_percent);
+	seq_printf(m, "Fast Path Hits:    %u (%u%%)\n", sni_opt.stats.fast_path_hits, fast_percent);
+	seq_printf(m, "Fallback Hits:     %u (%u%%)\n", sni_opt.stats.fallback_hits, fallback_percent);
 	seq_printf(m, "Cache Entries:     %u/%u\n", sni_opt.stats.cache_entries, SNI_CACHE_SIZE);
 	return 0;
 }
@@ -510,7 +514,7 @@ static void __exit sni_mt_exit(void)
 	sni_debug_cleanup();
 	
 	pr_info("SNI match v3 with advanced optimizations unregistered\n");
-	pr_info("Final stats - Total: %llu, Cache hits: %llu, Fast path: %llu, Fallback: %llu\n",
+	pr_info("Final stats - Total: %u, Cache hits: %u, Fast path: %u, Fallback: %u\n",
 		sni_opt.stats.total_matches, sni_opt.stats.cache_hits,
 		sni_opt.stats.fast_path_hits, sni_opt.stats.fallback_hits);
 }
