@@ -129,8 +129,6 @@ endif
 dir_y						+= utils
 dir_y						+= lanauth
 dir_y						+= 802.1x
-# SNI is now integrated as iptables extension, not standalone module
-# dir_$(CONFIG_FIRMWARE_INCLUDE_SNI_FILTER)		+= sni
 dir_y						+= wpa_supplicant
 dir_y						+= pppd
 dir_y						+= pppoe

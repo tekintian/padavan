@@ -1508,10 +1508,7 @@ config NETFILTER_XT_MATCH_STRING
 
 	  To compile it as a module, choose M here.  If unsure, say N.
 
-config NETFILTER_XT_MATCH_SNI
-	tristate '"sni" match support'
-	depends on NETFILTER_ADVANCED
-	select TEXTSEARCH
+
 	select TEXTSEARCH_KMP
 	select TEXTSEARCH_BM
 	select TEXTSEARCH_FSM

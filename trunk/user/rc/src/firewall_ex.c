@@ -767,21 +767,21 @@ include_webstr_filter(FILE *fp)
             continue;
         }
         
-        /* 生成基于sni模块的HTTPS流量过滤规则 - 使用优化的router算法 */
+        /* 生成基于string模块的流量过滤规则 */
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" --algo router%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added router-optimized rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-            fprintf(fp, "-A %s -p tcp --dport 443 -m sni --sni \"%s\" --algo router%s -j REJECT --reject-with tcp-reset\n",
+            fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                 dtype, filterstr, url_timematch);
             webstr_items++;
-            logmessage("URL Filter", "DEBUG: Added router-optimized rule for HTTPS: %s%s (all MAC)", filterstr, url_timematch);
+            logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (all MAC)", filterstr, url_timematch);
         }
         
         /* 生成基于string模块的HTTP流量过滤规则 - 替换原来的webstr规则 */
@@ -799,17 +799,17 @@ include_webstr_filter(FILE *fp)
                 if (need_mac_condition) {
                     /* 为每个MAC地址生成单独的string规则 */
                     for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                        fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo router%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                        fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                             dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                         webstr_items++;
-                        logmessage("URL Filter", "DEBUG: Added router-optimized rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
+                        logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
                     }
                 } else {
                     /* 没有MAC限制，应用到所有流量 */
-                    fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo router%s -j REJECT --reject-with tcp-reset\n",
+                    fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                         dtype, url_list, url_timematch);
                     webstr_items++;
-                    logmessage("URL Filter", "DEBUG: Added router-optimized rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
+                    logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
                 }
             }
             
@@ -824,14 +824,14 @@ include_webstr_filter(FILE *fp)
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo router%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, url_list, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
                 logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-             fprintf(fp, "-A %s -p tcp --dport 80 -m sni --sni \"%s\" --algo router%s -j REJECT --reject-with tcp-reset\n",
+             fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
             dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
         	webstr_items++;
             logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s (all MAC)", url_list);
@@ -1703,17 +1703,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 
 	// 统一使用nvram配置进行条件判断
 	if (nvram_match("url_enable_x", "1")) {
-		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
-		if (!module_smart_load("xt_sni", NULL)) {
-			// 检查模块是否已经存在（可能是编译进内核或已经加载）
-			if (is_module_loaded("xt_sni")) {
-				logmessage("Firewall", "INFO: xt_sni module already loaded");
-			} else {
-				logmessage("Firewall", "ERROR: Failed to load xt_sni module");
-			}
-		} else {
-			logmessage("Firewall", "INFO: xt_sni module loaded successfully");
-		}
+		// 使用标准的xt_string模块，无需额外加载
+		logmessage("Firewall", "INFO: Using xt_string module for URL filtering");
 	}
 
 	doSystem("iptables-restore %s", ipt_file);
@@ -2259,13 +2250,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 
 	// 统一使用nvram配置进行条件判断
 	if (nvram_match("url_enable_x", "1")) {
-		// 注意这里仅需加载kernel-4.4.x.config中配置值为 m 可加载模块的模块, y 编译进内核
-		if (!module_smart_load("xt_sni", NULL)) {
-			// 检查模块是否已经存在（可能是编译进内核或已经加载）
-			if (!is_module_loaded("xt_sni")) {
-				logmessage("Firewall", "ERROR: Failed to load xt_sni module");
-			}
-		}
+		// 使用标准的xt_string模块，无需额外加载
+		logmessage("Firewall", "INFO: Using xt_string module for URL filtering");
 	}
 
 	doSystem("ip6tables-restore %s", ipt_file);
@@ -2846,10 +2832,7 @@ start_firewall_ex(void)
 	/* try unload unused iptables modules */
 	//module_smart_unload("xt_webstr", 0);
 	
-	/* 在未使用url_enable_x 时卸载 xt_sni */
-	if (!nvram_match("url_enable_x", "1")) {
-		module_smart_unload("xt_sni", 0);
-	}
+	/* 无需卸载xt_string模块，这是标准内核模块 */
 	module_smart_unload("xt_HL", 0);
 	module_smart_unload("iptable_raw", 0);
 	module_smart_unload("iptable_mangle", 0);
