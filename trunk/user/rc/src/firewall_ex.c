@@ -190,88 +190,88 @@ filter_conv(char *proto, char *flag, char *srcip, char *srcport, char *dstip, ch
 static int
 is_ip_address(const char *str)
 {
-	int octets[4];
-	int i;
-	char *slash_pos;
+	// int octets[4];
+	// int i;
+	// char *slash_pos;
 
-	/* 检查空字符串 */
-	if (!str || strlen(str) == 0) {
-		return 0;
-	}
+	// /* 检查空字符串 */
+	// if (!str || strlen(str) == 0) {
+	// 	return 0;
+	// }
 
-	/* 检查是否包含CIDR标记 */
-	slash_pos = strchr(str, '/');
-	if (slash_pos) {
-		/* 验证CIDR值 */
-		char *cidr_str = slash_pos + 1;
-		int cidr = atoi(cidr_str);
-		if (cidr < 0 || cidr > 32) {
-			return 0;
-		}
-	}
+	// /* 检查是否包含CIDR标记 */
+	// slash_pos = strchr(str, '/');
+	// if (slash_pos) {
+	// 	/* 验证CIDR值 */
+	// 	char *cidr_str = slash_pos + 1;
+	// 	int cidr = atoi(cidr_str);
+	// 	if (cidr < 0 || cidr > 32) {
+	// 		return 0;
+	// 	}
+	// }
 
-	/* 解析IP地址 - 使用简单的方法避免strtok问题 */
-	char temp_str[256];
-	strncpy(temp_str, str, sizeof(temp_str) - 1);
-	temp_str[sizeof(temp_str) - 1] = 0;
+	// /* 解析IP地址 - 使用简单的方法避免strtok问题 */
+	// char temp_str[256];
+	// strncpy(temp_str, str, sizeof(temp_str) - 1);
+	// temp_str[sizeof(temp_str) - 1] = 0;
 	
-	/* 如果有CIDR标记，截断字符串 */
-	slash_pos = strchr(temp_str, '/');
-	if (slash_pos) {
-		*slash_pos = 0;
-	}
+	// /* 如果有CIDR标记，截断字符串 */
+	// slash_pos = strchr(temp_str, '/');
+	// if (slash_pos) {
+	// 	*slash_pos = 0;
+	// }
 
-	/* 手动解析IP地址 */
-	char *start = temp_str;
-	char *dot_pos;
-	int dot_count = 0;
+	// /* 手动解析IP地址 */
+	// char *start = temp_str;
+	// char *dot_pos;
+	// int dot_count = 0;
 	
-	/* 首先检查点的数量，确保不多不少正好3个 */
-	char *temp_check = temp_str;
-	while ((dot_pos = strchr(temp_check, '.')) != NULL) {
-		dot_count++;
-		temp_check = dot_pos + 1;
-	}
+	// /* 首先检查点的数量，确保不多不少正好3个 */
+	// char *temp_check = temp_str;
+	// while ((dot_pos = strchr(temp_check, '.')) != NULL) {
+	// 	dot_count++;
+	// 	temp_check = dot_pos + 1;
+	// }
 	
-	if (dot_count != 3) {
-		return 0;
-	}
+	// if (dot_count != 3) {
+	// 	return 0;
+	// }
 	
-	/* 重新开始解析IP地址 */
-	start = temp_str;
-	for (i = 0; i < 4; i++) {
-		dot_pos = strchr(start, '.');
-		if (dot_pos) {
-			*dot_pos = 0;
-		}
+	// /* 重新开始解析IP地址 */
+	// start = temp_str;
+	// for (i = 0; i < 4; i++) {
+	// 	dot_pos = strchr(start, '.');
+	// 	if (dot_pos) {
+	// 		*dot_pos = 0;
+	// 	}
 		
-		/* 检查八位组是否为空 */
-		if (strlen(start) == 0) {
-			return 0;
-		}
+	// 	/* 检查八位组是否为空 */
+	// 	if (strlen(start) == 0) {
+	// 		return 0;
+	// 	}
 		
-		/* 检查八位组是否只包含数字 */
-		char *temp_octet = start;
-		while (*temp_octet) {
-			if (*temp_octet < '0' || *temp_octet > '9') {
-				return 0;
-			}
-			temp_octet++;
-		}
+	// 	/* 检查八位组是否只包含数字 */
+	// 	char *temp_octet = start;
+	// 	while (*temp_octet) {
+	// 		if (*temp_octet < '0' || *temp_octet > '9') {
+	// 			return 0;
+	// 		}
+	// 		temp_octet++;
+	// 	}
 		
-		/* 验证八位组数值 */
-		int octet = atoi(start);
-		if (octet < 0 || octet > 255) {
-			return 0;
-		}
+	// 	/* 验证八位组数值 */
+	// 	int octet = atoi(start);
+	// 	if (octet < 0 || octet > 255) {
+	// 		return 0;
+	// 	}
 		
-		if (dot_pos) {
-			start = dot_pos + 1;
-			*dot_pos = '.'; /* 恢复字符串 */
-		}
-	}
+	// 	if (dot_pos) {
+	// 		start = dot_pos + 1;
+	// 		*dot_pos = '.'; /* 恢复字符串 */
+	// 	}
+	// }
 
-	return 1;
+	return 0;
 }
 
 static void
