@@ -186,94 +186,6 @@ filter_conv(char *proto, char *flag, char *srcip, char *srcport, char *dstip, ch
 	return (g_buf_alloc(g_buf));
 }
 
-/* 检测是否为IP地址或网段 */
-static int
-is_ip_address(const char *str)
-{
-	int octets[4];
-	int i;
-	char *slash_pos;
-
-	/* 检查空字符串 */
-	if (!str || strlen(str) == 0) {
-		return 0;
-	}
-
-	/* 检查是否包含CIDR标记 */
-	slash_pos = strchr(str, '/');
-	if (slash_pos) {
-		/* 验证CIDR值 */
-		char *cidr_str = slash_pos + 1;
-		int cidr = atoi(cidr_str);
-		if (cidr < 0 || cidr > 32) {
-			return 0;
-		}
-	}
-
-	/* 解析IP地址 - 使用简单的方法避免strtok问题 */
-	char temp_str[256];
-	strncpy(temp_str, str, sizeof(temp_str) - 1);
-	temp_str[sizeof(temp_str) - 1] = 0;
-	
-	/* 如果有CIDR标记，截断字符串 */
-	slash_pos = strchr(temp_str, '/');
-	if (slash_pos) {
-		*slash_pos = 0;
-	}
-
-	/* 手动解析IP地址 */
-	char *start = temp_str;
-	char *dot_pos;
-	int dot_count = 0;
-	
-	/* 首先检查点的数量，确保不多不少正好3个 */
-	char *temp_check = temp_str;
-	while ((dot_pos = strchr(temp_check, '.')) != NULL) {
-		dot_count++;
-		temp_check = dot_pos + 1;
-	}
-	
-	if (dot_count != 3) {
-		return 0;
-	}
-	
-	/* 重新开始解析IP地址 */
-	start = temp_str;
-	for (i = 0; i < 4; i++) {
-		dot_pos = strchr(start, '.');
-		if (dot_pos) {
-			*dot_pos = 0;
-		}
-		
-		/* 检查八位组是否为空 */
-		if (strlen(start) == 0) {
-			return 0;
-		}
-		
-		/* 检查八位组是否只包含数字 */
-		char *temp_octet = start;
-		while (*temp_octet) {
-			if (*temp_octet < '0' || *temp_octet > '9') {
-				return 0;
-			}
-			temp_octet++;
-		}
-		
-		/* 验证八位组数值 */
-		int octet = atoi(start);
-		if (octet < 0 || octet > 255) {
-			return 0;
-		}
-		
-		if (dot_pos) {
-			start = dot_pos + 1;
-			*dot_pos = '.'; /* 恢复字符串 */
-		}
-	}
-
-	return 1;
-}
-
 static void
 timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 {
@@ -743,16 +655,19 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 static int
 include_webstr_filter(FILE *fp)
 {
-    int webstr_items, url_length;
-    char nv_name[32], url_buf[256], *filterstr;
+    int webstr_items, url_length, url_total;
+    char url_list[256], nv_name[32], url_buf[256], *filterstr;
     char url_timematch[256];  // 添加时间匹配字符串
     const char *dtype = IPT_CHAIN_NAME_URL_LIST;
+    const char *split = "<&nbsp;>";
 
     /* 获取URL过滤的时间设置 */
     timematch_conv(url_timematch, "url_date_x", "url_time_x");
     logmessage("URL Filter", "DEBUG: Time match condition: %s", url_timematch);
 
-    /* 初始化计数器 */
+    /* 原有的webstr逻辑 */
+    url_total = 0;
+    url_list[0] = 0;
     webstr_items = 0;
 
     /* 调试：记录URL数量 */
@@ -847,51 +762,81 @@ include_webstr_filter(FILE *fp)
         
         /* 检查过滤字符串是否有效 */
         url_length = strlen(filterstr);
-        if (url_length < 1 || url_length > 255) {
+        if (url_length < 1 || url_length >= sizeof(url_list)) {
             logmessage("URL Filter", "DEBUG: Skipping URL %d - length: %d", i, url_length);
             continue;
         }
         
-        /* 检测是否为IP地址或网段 */
-        if (is_ip_address(filterstr)) {
-            /* IP地址/网段使用高效的IP屏蔽规则 */
-            if (need_mac_condition) {
-                /* 为每个MAC地址生成单独的IP屏蔽规则 */
-                for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                    fprintf(fp, "-A %s -d %s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-                        dtype, filterstr, mac_addresses[mac_idx]);
-                    webstr_items++;
-                    logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
-                }
-            } else {
-                /* 没有MAC限制，应用到所有流量 */
-                fprintf(fp, "-A %s -d %s -j REJECT --reject-with tcp-reset\n",
-                    dtype, filterstr);
+        /* 生成基于string模块的流量过滤规则 */
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的string规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (all MAC)", filterstr, url_timematch);
+                logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
-            /* 非IP地址使用字符串匹配规则 */
-            if (need_mac_condition) {
-                /* 为每个MAC地址生成单独的string规则 */
-                for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                    fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-                        dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
-                    webstr_items++;
-                    logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
-                }
-            } else {
-                /* 没有MAC限制，应用到所有流量 */
-                fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
-                    dtype, filterstr, url_timematch);
-                webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (all MAC)", filterstr, url_timematch);
-            }
+            /* 没有MAC限制，应用到所有流量 */
+            fprintf(fp, "-A %s -p tcp --dport 443 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                dtype, filterstr, url_timematch);
+            webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (all MAC)", filterstr, url_timematch);
         }
-
+        
+        /* 生成基于string模块的HTTP流量过滤规则 - 替换原来的webstr规则 */
+        if (url_total > 0)
+            url_length += strlen(split);
+        
+        if (url_total + url_length < sizeof(url_list)) {
+            if (url_total > 0)
+                strcat(url_list, split);
+            strcat(url_list, filterstr);
+            url_total += url_length;
+        } else {
+            /* flush merged url */
+            if (url_total > 0) {
+                if (need_mac_condition) {
+                    /* 为每个MAC地址生成单独的string规则 */
+                    for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                        fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                            dtype, url_list, url_timematch, mac_addresses[mac_idx]);
+                        webstr_items++;
+                        logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
+                    }
+                } else {
+                    /* 没有MAC限制，应用到所有流量 */
+                    fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                        dtype, url_list, url_timematch);
+                    webstr_items++;
+                    logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
+                }
+            }
+            
+            /* 开始新的URL列表 */
+            strcpy(url_list, filterstr);
+            url_total = strlen(filterstr);
+        }
     }
 
-
+    /* 处理剩余的合并URL */
+    if (url_total > 0) {
+        if (need_mac_condition) {
+            /* 为每个MAC地址生成单独的string规则 */
+            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, url_list, url_timematch, mac_addresses[mac_idx]);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
+            }
+        } else {
+            /* 没有MAC限制，应用到所有流量 */
+             fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+            dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
+        	webstr_items++;
+            logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s (all MAC)", url_list);
+        }
+    }
 
     //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     
@@ -1475,23 +1420,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 添加MAC条件以提高效率
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -1528,23 +1458,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -1573,23 +1488,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -1807,13 +1707,8 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		logmessage("Firewall", "INFO: Using xt_string module for URL filtering");
 	}
 
-	// 修复：检查iptables-restore的执行结果
-	if (doSystem("iptables-restore %s", ipt_file) != 0) {
-		logmessage("Firewall", "ERROR: Failed to load iptables rules from %s", ipt_file);
-		return -1;
-	}
+	doSystem("iptables-restore %s", ipt_file);
 	
-	logmessage("Firewall", "INFO: Successfully loaded iptables rules from %s", ipt_file);
 	return ret;
 }
 
@@ -1859,12 +1754,7 @@ ipt_filter_default(void)
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// 检查iptables-restore的执行结果
-	if (doSystem("iptables-restore %s", ipt_file) != 0) {
-		logmessage("Firewall", "ERROR: Failed to load default iptables rules from %s", ipt_file);
-	} else {
-		logmessage("Firewall", "INFO: Successfully loaded default iptables rules from %s", ipt_file);
-	}
+	doSystem("iptables-restore %s", ipt_file);
 }
 
 static void
@@ -1922,13 +1812,8 @@ ipt_mangle_rules(const char *man_if, const char *wan_if, int use_man)
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	if (i_wan_ttl_fix || is_module_loaded("iptable_mangle")) {
-		if (doSystem("iptables-restore %s", ipt_file) != 0) {
-			logmessage("Firewall", "ERROR: Failed to load mangle iptables rules from %s", ipt_file);
-		} else {
-			logmessage("Firewall", "INFO: Successfully loaded mangle iptables rules from %s", ipt_file);
-		}
-	}
+	if (i_wan_ttl_fix || is_module_loaded("iptable_mangle"))
+		doSystem("iptables-restore %s", ipt_file);
 }
 
 static void
@@ -1947,13 +1832,8 @@ ipt_raw_rules(void)
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	if (is_module_loaded("iptable_raw")) {
-		if (doSystem("iptables-restore %s", ipt_file) != 0) {
-			logmessage("Firewall", "ERROR: Failed to load raw iptables rules from %s", ipt_file);
-		} else {
-			logmessage("Firewall", "INFO: Successfully loaded raw iptables rules from %s", ipt_file);
-		}
-	}
+	if (is_module_loaded("iptable_raw"))
+		doSystem("iptables-restore %s", ipt_file);
 }
 
 #if defined (USE_IPV6)
@@ -2180,23 +2060,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 添加MAC条件以提高效率
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -2238,23 +2103,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式 - 不添加MAC条件，因为MAC拒绝的设备已经被处理过了
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -2283,23 +2133,8 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 				
 				// 检查是否启用MAC地址组模式
 				if (nvram_match("url_mac_group_x", "1")) {
-					// MAC地址组模式 - 检查是否实际配置了MAC地址
-					int mac_count = nvram_get_int("macfilter_num_x");
-					if (mac_count > 0) {
-						// 有MAC地址配置，使用MAC地址组模式
-						apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					} else {
-						// 没有MAC地址配置，回退到普通模式
-						mac_conv("url_mac_x", -1, mac_buf);
-						if (strlen(mac_buf) == 17) {
-							strcat(url_timematch, " -m mac");
-							if (nvram_match("url_inv_x", "1"))
-								strcat(url_timematch, " !");
-							strcat(url_timematch, " --mac-source ");
-							strcat(url_timematch, mac_buf);
-						}
-						fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
-					}
+					// MAC地址组模式
+					apply_url_mac_group_filter(fp, dtype, lan_if, url_timematch, IPT_CHAIN_NAME_URL_LIST);
 				} else {
 					// 单个MAC地址模式
 					mac_conv("url_mac_x", -1, mac_buf);
@@ -2844,12 +2679,7 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	if (doSystem("iptables-restore %s", ipt_file) != 0) {
-		logmessage("Firewall", "ERROR: Failed to load nat iptables rules from %s", ipt_file);
-		return -1;
-	}
-	
-	logmessage("Firewall", "INFO: Successfully loaded nat iptables rules from %s", ipt_file);
+	doSystem("iptables-restore %s", ipt_file);
 
 	return 0;
 }
@@ -2892,12 +2722,7 @@ ipt_nat_default(void)
 	fprintf(fp, "COMMIT\n\n");
 	fclose(fp);
 
-	// 检查iptables-restore的执行结果
-	if (doSystem("iptables-restore %s", ipt_file) != 0) {
-		logmessage("Firewall", "ERROR: Failed to load default iptables rules from %s", ipt_file);
-	} else {
-		logmessage("Firewall", "INFO: Successfully loaded default iptables rules from %s", ipt_file);
-	}
+	doSystem("iptables-restore %s", ipt_file);
 }
 
 void
@@ -2989,13 +2814,8 @@ start_firewall_ex(void)
 		doSystem("sh %s", shadowsocks_iptables_script);
 #endif
 #if defined (APP_ADBYBY)
-	if (check_if_file_exist(adbyby_iptables)) {
-		if (doSystem("iptables-restore -n %s", adbyby_iptables) != 0) {
-			logmessage("Firewall", "ERROR: Failed to load adbyby iptables rules from %s", adbyby_iptables);
-		} else {
-			logmessage("Firewall", "INFO: Successfully loaded adbyby iptables rules from %s", adbyby_iptables);
-		}
-	}
+	if (check_if_file_exist(adbyby_iptables))
+		doSystem("iptables-restore -n %s", adbyby_iptables);
 #endif
 	if (check_if_file_exist(int_iptables_script))
 		doSystem("%s", int_iptables_script);
