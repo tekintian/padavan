@@ -2,7 +2,7 @@
  *
  * Based on xt_string.c by Pablo Neira Ayuso <pablo@eurodev.net>
  * Modified for SNI matching functionality
- * Version 3: Advanced router optimizations with caching and SIMD
+ * Version 2: Conservative router optimizations with fast-path matching
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,12 +20,11 @@
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/jhash.h>
-#include <linux/rhashtable.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
 MODULE_AUTHOR("SNI Module");
-MODULE_DESCRIPTION("Xtables: SNI-based matching with advanced router optimizations");
+MODULE_DESCRIPTION("Xtables: SNI-based matching with router optimizations");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_sni");
 MODULE_ALIAS("ip6t_sni");
@@ -418,72 +417,6 @@ static struct xt_match xt_sni_mt_reg __read_mostly = {
 	.me         = THIS_MODULE,
 };
 
-/* Debug FS support for performance monitoring - DISABLED to avoid 64-bit division */
-/* #ifdef CONFIG_DEBUG_FS */
-/* #include <linux/debugfs.h> */
-
-static int sni_stats_show(struct seq_file *m, void *v)
-{
-	u32 total = sni_opt.stats.total_matches;
-	u32 cache_percent, fast_percent, fallback_percent;
-	
-	seq_printf(m, "SNI Router Optimization Statistics:\n");
-	seq_printf(m, "Total Matches:     %u\n", total);
-	
-/* Safe division without 64-bit operations */
-	if (total > 0) {
-		/* Manual percentage calculation to avoid 64-bit division */
-		u32 cache_hits_u32 = (u32)sni_opt.stats.cache_hits;
-		u32 fast_hits_u32 = (u32)sni_opt.stats.fast_path_hits;
-		u32 fallback_hits_u32 = (u32)sni_opt.stats.fallback_hits;
-		u32 total_u32 = (u32)total;
-		
-		/* Simple integer division (may lose precision but safe) */
-		cache_percent = (cache_hits_u32 * 100) / total_u32;
-		fast_percent = (fast_hits_u32 * 100) / total_u32;
-		fallback_percent = (fallback_hits_u32 * 100) / total_u32;
-	} else {
-		cache_percent = fast_percent = fallback_percent = 0;
-	}
-	
-	seq_printf(m, "Cache Hits:        %u (%u%%)\n", sni_opt.stats.cache_hits, cache_percent);
-	seq_printf(m, "Fast Path Hits:    %u (%u%%)\n", sni_opt.stats.fast_path_hits, fast_percent);
-	seq_printf(m, "Fallback Hits:     %u (%u%%)\n", sni_opt.stats.fallback_hits, fallback_percent);
-	seq_printf(m, "Cache Entries:     %u/%u\n", sni_opt.stats.cache_entries, SNI_CACHE_SIZE);
-	return 0;
-}
-
-static int sni_stats_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, sni_stats_show, inode->i_private);
-}
-
-static const struct file_operations sni_stats_fops = {
-	.open = sni_stats_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
-static void sni_debug_init(void)
-{
-	sni_debug_dir = debugfs_create_dir("sni_router", NULL);
-	if (!sni_debug_dir)
-		return;
-	
-	sni_stats_file = debugfs_create_file("stats", 0444, sni_debug_dir,
-					    NULL, &sni_stats_fops);
-}
-
-static void sni_debug_cleanup(void)
-{
-	debugfs_remove_recursive(sni_debug_dir);
-}
-#else
-static inline void sni_debug_init(void) {}
-static inline void sni_debug_cleanup(void) {}
-#endif
-
 static int __init sni_mt_init(void)
 {
 	int ret;
@@ -492,18 +425,14 @@ static int __init sni_mt_init(void)
 	memset(&sni_opt, 0, sizeof(sni_opt));
 	rwlock_init(&sni_opt.cache_lock);
 	
-	/* Initialize debug FS */
-	sni_debug_init();
-	
 	/* Register SNI match */
 	ret = xt_register_match(&xt_sni_mt_reg);
 	if (ret) {
 		pr_err("Failed to register SNI match: %d\n", ret);
-		sni_debug_cleanup();
 		return ret;
 	}
 	
-	pr_info("SNI match v3 registered with advanced router optimizations\n");
+	pr_info("SNI match v2 registered with router optimizations\n");
 	pr_info("Cache size: %d entries, TTL: %d seconds\n", SNI_CACHE_SIZE, SNI_CACHE_TTL);
 	return 0;
 }
@@ -511,9 +440,8 @@ static int __init sni_mt_init(void)
 static void __exit sni_mt_exit(void)
 {
 	xt_unregister_match(&xt_sni_mt_reg);
-	sni_debug_cleanup();
 	
-	pr_info("SNI match v3 with advanced optimizations unregistered\n");
+	pr_info("SNI match v2 with router optimizations unregistered\n");
 	pr_info("Final stats - Total: %u, Cache hits: %u, Fast path: %u, Fallback: %u\n",
 		sni_opt.stats.total_matches, sni_opt.stats.cache_hits,
 		sni_opt.stats.fast_path_hits, sni_opt.stats.fallback_hits);
