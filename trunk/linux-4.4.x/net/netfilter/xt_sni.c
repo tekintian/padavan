@@ -109,7 +109,7 @@ static bool sni_cache_lookup(const char *data, unsigned int data_len,
 			     const char *pattern, unsigned int pat_len, u8 flags)
 {
 	u32 hash = sni_compute_hash(data, data_len, pattern, pat_len, flags);
-	unsigned int idx = hash % SNI_CACHE_SIZE;
+	unsigned int idx = hash & (SNI_CACHE_SIZE - 1);  /* Use AND instead of modulo */
 	struct sni_cache_entry *entry;
 	bool found = false;
 	
@@ -134,7 +134,7 @@ static void sni_cache_update(const char *data, unsigned int data_len,
 			      const char *pattern, unsigned int pat_len, u8 flags, bool result)
 {
 	u32 hash = sni_compute_hash(data, data_len, pattern, pat_len, flags);
-	unsigned int idx = hash % SNI_CACHE_SIZE;
+	unsigned int idx = hash & (SNI_CACHE_SIZE - 1);  /* Use AND instead of modulo */
 	struct sni_cache_entry *entry;
 	
 	write_lock(&sni_opt.cache_lock);
@@ -147,7 +147,8 @@ static void sni_cache_update(const char *data, unsigned int data_len,
 	entry->flags = flags;
 	memcpy(entry->pattern, pattern, pat_len);
 	
-	sni_opt.stats.cache_entries = min_t(u32, sni_opt.stats.cache_entries + 1, SNI_CACHE_SIZE);
+	sni_opt.stats.cache_entries = (sni_opt.stats.cache_entries + 1 < SNI_CACHE_SIZE) ? 
+	                               sni_opt.stats.cache_entries + 1 : SNI_CACHE_SIZE;
 	
 	write_unlock(&sni_opt.cache_lock);
 }
@@ -332,18 +333,18 @@ sni_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	/* Try optimized router algorithm first */
 	if (strcmp(conf->algo, "router") == 0) {
 		unsigned int text_len;
-		const uint8_t *text;
+		u8 text_buffer[XT_SNI_MAX_PATTERN_SIZE * 2];
 		
 		/* Get SNI data efficiently */
 		text_len = skb_find_text((struct sk_buff *)skb, conf->from_offset,
 					 conf->to_offset, NULL);
 		
-		if (text_len != UINT_MAX && text_len <= XT_SNI_MAX_PATTERN_SIZE * 2) {
+		if (text_len != UINT_MAX && text_len <= sizeof(text_buffer)) {
 			/* Extract SNI data */
 			text_len = skb_copy_bits((struct sk_buff *)skb, conf->from_offset,
-						 (void*)&text, text_len);
+						 text_buffer, text_len);
 			if (text_len > 0) {
-				fast_result = sni_router_match_optimized((const char*)text, text_len,
+				fast_result = sni_router_match_optimized((const char*)text_buffer, text_len,
 									 conf->pattern, conf->patlen,
 									 conf->u.v1.flags);
 				/* Return result if optimization succeeded */
@@ -426,20 +427,24 @@ static struct dentry *sni_stats_file;
 
 static int sni_stats_show(struct seq_file *m, void *v)
 {
+	u64 total = sni_opt.stats.total_matches;
+	u32 cache_percent, fast_percent, fallback_percent;
+	
 	seq_printf(m, "SNI Router Optimization Statistics:\n");
-	seq_printf(m, "Total Matches:     %llu\n", sni_opt.stats.total_matches);
-	seq_printf(m, "Cache Hits:        %llu (%llu%%)\n", 
-		   sni_opt.stats.cache_hits,
-		   sni_opt.stats.total_matches ? 
-		   (sni_opt.stats.cache_hits * 100) / sni_opt.stats.total_matches : 0);
-	seq_printf(m, "Fast Path Hits:    %llu (%llu%%)\n",
-		   sni_opt.stats.fast_path_hits,
-		   sni_opt.stats.total_matches ?
-		   (sni_opt.stats.fast_path_hits * 100) / sni_opt.stats.total_matches : 0);
-	seq_printf(m, "Fallback Hits:     %llu (%llu%%)\n",
-		   sni_opt.stats.fallback_hits,
-		   sni_opt.stats.total_matches ?
-		   (sni_opt.stats.fallback_hits * 100) / sni_opt.stats.total_matches : 0);
+	seq_printf(m, "Total Matches:     %llu\n", total);
+	
+	/* Safe division without 64-bit operations */
+	if (total > 0) {
+		cache_percent = (u32)((sni_opt.stats.cache_hits * 100) / total);
+		fast_percent = (u32)((sni_opt.stats.fast_path_hits * 100) / total);
+		fallback_percent = (u32)((sni_opt.stats.fallback_hits * 100) / total);
+	} else {
+		cache_percent = fast_percent = fallback_percent = 0;
+	}
+	
+	seq_printf(m, "Cache Hits:        %llu (%u%%)\n", sni_opt.stats.cache_hits, cache_percent);
+	seq_printf(m, "Fast Path Hits:    %llu (%u%%)\n", sni_opt.stats.fast_path_hits, fast_percent);
+	seq_printf(m, "Fallback Hits:     %llu (%u%%)\n", sni_opt.stats.fallback_hits, fallback_percent);
 	seq_printf(m, "Cache Entries:     %u/%u\n", sni_opt.stats.cache_entries, SNI_CACHE_SIZE);
 	return 0;
 }
