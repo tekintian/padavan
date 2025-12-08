@@ -764,21 +764,21 @@ include_webstr_filter(FILE *fp)
             continue;
         }
         
-        /* 为每个URL生成单独的规则，使用multiport匹配80和443端口 */
+        /* 为每个URL生成单独的规则，不限制协议和端口 */
         if (need_mac_condition) {
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -p tcp -m multiport --dports 80,443 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                 webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added string rule for HTTP/HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
-            fprintf(fp, "-A %s -p tcp -m multiport --dports 80,443 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+            fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                 dtype, filterstr, url_timematch);
             webstr_items++;
-            logmessage("URL Filter", "DEBUG: Added string rule for HTTP/HTTPS: %s%s (all MAC)", filterstr, url_timematch);
+            logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (all MAC)", filterstr, url_timematch);
         }
 
     }
