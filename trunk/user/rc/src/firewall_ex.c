@@ -844,7 +844,7 @@ include_webstr_filter(FILE *fp)
         
         /* 检查过滤字符串是否有效 */
         url_length = strlen(filterstr);
-        if (url_length < 1 || url_length >= sizeof(url_list)) {
+        if (url_length < 1 || url_length >= sizeof(url_buf)) {
             logmessage("URL Filter", "DEBUG: Skipping URL %d - length: %d", i, url_length);
             continue;
         }
@@ -857,16 +857,13 @@ include_webstr_filter(FILE *fp)
 				if (is_ip_address(filterstr)) {
 					fprintf(fp, "-A %s -d %s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                         dtype, filterstr, mac_addresses[mac_idx]);
-                    webstr_items++;
                     logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
 				}else{
 					fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
 							dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
 					 logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
 				}
-
                 webstr_items++;
-               
             }
         } else {
 			/* 没有MAC限制，应用到所有流量 */
@@ -883,7 +880,6 @@ include_webstr_filter(FILE *fp)
             
         }
     }
-
 
     //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
     
