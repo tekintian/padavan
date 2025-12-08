@@ -186,6 +186,70 @@ filter_conv(char *proto, char *flag, char *srcip, char *srcport, char *dstip, ch
 	return (g_buf_alloc(g_buf));
 }
 
+/* 检测是否为IP地址或网段 */
+static int
+is_ip_address(const char *str)
+{
+	int octets[4];
+	int parts;
+	char *copy, *token, *saveptr;
+	int is_cidr = 0;
+	int cidr = 0;
+
+	/* 创建副本用于处理 */
+	copy = strdup(str);
+	if (!copy)
+		return 0;
+
+	/* 检查是否包含CIDR标记 */
+	if (strchr(copy, '/')) {
+		is_cidr = 1;
+		/* 分割IP和CIDR */
+		token = strtok(copy, "/");
+		if (!token) {
+			free(copy);
+			return 0;
+		}
+		/* 处理CIDR部分 */
+		char *cidr_str = strtok(NULL, "/");
+		if (!cidr_str) {
+			free(copy);
+			return 0;
+		}
+		cidr = atoi(cidr_str);
+		if (cidr < 0 || cidr > 32) {
+			free(copy);
+			return 0;
+		}
+	} else {
+		token = copy;
+	}
+
+	/* 解析IP地址 */
+	parts = 0;
+	while ((token = strtok(token, ".")) && parts < 4) {
+		octets[parts] = atoi(token);
+		if (octets[parts] < 0 || octets[parts] > 255) {
+			free(copy);
+			return 0;
+		}
+		parts++;
+		token = NULL;
+	}
+
+	free(copy);
+
+	/* 检查是否有正确的IP格式 */
+	if (parts != 4) {
+		return 0;
+	}
+
+	/* 检查是否为有效的IP地址格式 */
+	/* 对于单个IP，所有八位组都是0-255 */
+	/* 对于网段，CIDR应该在0-32之间 */
+	return 1;
+}
+
 static void
 timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 {
@@ -764,21 +828,41 @@ include_webstr_filter(FILE *fp)
             continue;
         }
         
-        /* 为每个URL生成单独的规则，不限制协议和端口 */
-        if (need_mac_condition) {
-            /* 为每个MAC地址生成单独的string规则 */
-            for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-                fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-                    dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
+        /* 检测是否为IP地址或网段 */
+        if (is_ip_address(filterstr)) {
+            /* IP地址/网段使用高效的IP屏蔽规则 */
+            if (need_mac_condition) {
+                /* 为每个MAC地址生成单独的IP屏蔽规则 */
+                for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                    fprintf(fp, "-A %s -d %s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                        dtype, filterstr, mac_addresses[mac_idx]);
+                    webstr_items++;
+                    logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                }
+            } else {
+                /* 没有MAC限制，应用到所有流量 */
+                fprintf(fp, "-A %s -d %s -j REJECT --reject-with tcp-reset\n",
+                    dtype, filterstr);
                 webstr_items++;
-                logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (all MAC)", filterstr, url_timematch);
             }
         } else {
-            /* 没有MAC限制，应用到所有流量 */
-            fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
-                dtype, filterstr, url_timematch);
-            webstr_items++;
-            logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (all MAC)", filterstr, url_timematch);
+            /* 非IP地址使用字符串匹配规则 */
+            if (need_mac_condition) {
+                /* 为每个MAC地址生成单独的string规则 */
+                for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
+                    fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+                        dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
+                    webstr_items++;
+                    logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                }
+            } else {
+                /* 没有MAC限制，应用到所有流量 */
+                fprintf(fp, "-A %s -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
+                    dtype, filterstr, url_timematch);
+                webstr_items++;
+                logmessage("URL Filter", "DEBUG: Added string rule for all protocols/ports: %s%s (all MAC)", filterstr, url_timematch);
+            }
         }
 
     }
