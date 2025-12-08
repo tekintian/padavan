@@ -22,6 +22,7 @@
 #include <linux/jhash.h>
 #include <linux/rhashtable.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 MODULE_AUTHOR("SNI Module");
 MODULE_DESCRIPTION("Xtables: SNI-based matching with advanced router optimizations");
@@ -155,13 +156,15 @@ static void sni_cache_update(const char *data, unsigned int data_len,
 static bool sni_match_exact_domain(const char *data, unsigned int data_len,
 				    const char *pattern, unsigned int pat_len, bool icase)
 {
+	unsigned int i;
+	
 	/* Early rejection: lengths must match exactly */
 	if (data_len != pat_len)
 		return false;
 	
 	if (icase) {
 		/* Optimized case-insensitive comparison */
-		for (unsigned int i = 0; i < pat_len; i++) {
+		for (i = 0; i < pat_len; i++) {
 			if (tolower(data[i]) != tolower(pattern[i]))
 				return false;
 		}
@@ -177,6 +180,7 @@ static bool sni_match_subdomain(const char *data, unsigned int data_len,
 				  const char *domain_part, unsigned int domain_len, bool icase)
 {
 	const char *data_end;
+	unsigned int i;
 	
 	/* Early rejection: data must be longer than domain */
 	if (data_len <= domain_len)
@@ -186,7 +190,7 @@ static bool sni_match_subdomain(const char *data, unsigned int data_len,
 	
 	/* Check if data ends with domain part */
 	if (icase) {
-		for (unsigned int i = 0; i < domain_len; i++) {
+		for (i = 0; i < domain_len; i++) {
 			if (tolower(data_end[i]) != tolower(domain_part[i]))
 				return false;
 		}
@@ -203,16 +207,21 @@ static bool sni_match_subdomain(const char *data, unsigned int data_len,
 static bool sni_match_contains(const char *data, unsigned int data_len,
 				const char *pattern, unsigned int pat_len, bool icase)
 {
+	unsigned int i, j;
+	char *data_lower, *pattern_lower;
+	bool result, match;
+	char d, p;
+	
 	if (pat_len == 0 || data_len < pat_len)
 		return false;
 	
 	/* For very short patterns, use simple scan */
 	if (pat_len <= 3) {
-		for (unsigned int i = 0; i <= data_len - pat_len; i++) {
-			bool match = true;
-			for (unsigned int j = 0; j < pat_len; j++) {
-				char d = icase ? tolower(data[i + j]) : data[i + j];
-				char p = icase ? tolower(pattern[j]) : pattern[j];
+		for (i = 0; i <= data_len - pat_len; i++) {
+			match = true;
+			for (j = 0; j < pat_len; j++) {
+				d = icase ? tolower(data[i + j]) : data[i + j];
+				p = icase ? tolower(pattern[j]) : pattern[j];
 				if (d != p) {
 					match = false;
 					break;
@@ -226,16 +235,16 @@ static bool sni_match_contains(const char *data, unsigned int data_len,
 	/* Use strstr for longer patterns */
 	if (icase) {
 		/* Simple case-insensitive implementation */
-		char *data_lower = kmalloc(data_len + 1, GFP_ATOMIC);
-		char *pattern_lower = kmalloc(pat_len + 1, GFP_ATOMIC);
-		bool result = false;
+		data_lower = kmalloc(data_len + 1, GFP_ATOMIC);
+		pattern_lower = kmalloc(pat_len + 1, GFP_ATOMIC);
+		result = false;
 		
 		if (data_lower && pattern_lower) {
-			for (unsigned int i = 0; i < data_len; i++)
+			for (i = 0; i < data_len; i++)
 				data_lower[i] = tolower(data[i]);
 			data_lower[data_len] = '\0';
 			
-			for (unsigned int i = 0; i < pat_len; i++)
+			for (i = 0; i < pat_len; i++)
 				pattern_lower[i] = tolower(pattern[i]);
 			pattern_lower[pat_len] = '\0';
 			
@@ -246,7 +255,12 @@ static bool sni_match_contains(const char *data, unsigned int data_len,
 		kfree(pattern_lower);
 		return result;
 	} else {
-		return memmem(data, data_len, pattern, pat_len) != NULL;
+		/* Manual implementation of memmem for kernel compatibility */
+		for (i = 0; i <= data_len - pat_len; i++) {
+			if (memcmp(data + i, pattern, pat_len) == 0)
+				return true;
+		}
+		return false;
 	}
 }
 
