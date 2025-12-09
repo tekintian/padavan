@@ -424,7 +424,7 @@ address=/.pubg.com/0.0.0.0
 
 # Epic Games
 address=/.epicgames.com/0.0.0.0
-		EOF
+EOF
 	fi
 	sed -i '/dnsmasq-adbyby/d' /etc/storage/dnsmasq/dnsmasq.conf
 	cat >> /etc/storage/dnsmasq/dnsmasq.conf << EOF
