@@ -459,10 +459,10 @@ function changeBgColorrl(obj, num){
                         </div>
 								<div class="row-fluid">
 									<div id="tabMenu" class="submenuBlock"></div>
-									<div class="alert alert-info" style="margin: 10px;">广告屏蔽大师 Open 可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站<br />
+									<div class="alert alert-info" style="margin: 10px;">开源广告管理Adbyby Open可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站, C语言实现,100%完全开源,高效安全,可靠!<br />
 									<div>Open 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
 									<div>专业软件研发定制:<a href="https://dev.tekin.cn" target="_blank">https://dev.tekin.cn</a> | QQ: 932256355 </div>
-									<div>Adbyby-Open项目地址:<a href="https://github.com/tekintian/adbyby-open" target="_blank">https://github.com/tekintian/adbyby-open</a>  |  <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">https://gitee.com/tekintian/adt-rules/tree/master/adbyby</a> </div>
+									<div>Adbyby-Open项目地址:<a href="https://gitee.com/tekintian/adbyby-open" target="_blank">https://gitee.com/tekintian/adbyby-open</a>  |  <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">https://gitee.com/tekintian/adt-rules/tree/master/adbyby</a> </div>
 									<div>静态规则：【<% nvram_get_x("", "adbyby_ltime"); %>】 | 视频规则：【<% nvram_get_x("", "adbyby_vtime"); %>】</div>
 									<div>anti-AD规则：【<% nvram_get_x("", "anti_ad_count"); %>】条 | Hosts AD：【<% nvram_get_x("", "adbyby_hostsad"); %>】条</div>
 									<div>第三方规则：【<% nvram_get_x("", "adbyby_user"); %>】条</div>

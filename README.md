@@ -19,7 +19,7 @@ mac过滤模块重构, 完美支持mac地址组模式;
 - 不需要USB存储功能的K2P用户
 
 **核心功能模块**：
-- **广告管理**：集成adbyby plus+广告拦截
+- **广告管理**：集成Adbyby Open开源广告拦截
 - **网络代理**：支持Shadowsocks、Trojan、simple-obfs等
 - **DNS服务**：内置SmartDNS智能解析
 - **安全通信**：完整的OpenSSH服务
@@ -36,7 +36,7 @@ mac过滤模块重构, 完美支持mac地址组模式;
 - 希望平衡功能和性能的用户
 
 **核心功能模块**：
-- **广告管理**：保留adbyby plus+广告拦截功能
+- **广告管理**：保留Adbyby Open开源广告拦截功能
 - **系统监控**：包含htop进程监控工具
 - **网络测试**：保留iperf3、mtr等基础网络诊断工具
 - **网络优化**：支持SQM和轻量级WireGuard
@@ -95,7 +95,7 @@ mac过滤模块重构, 完美支持mac地址组模式;
 - **Redsocks** - 重定向TCP连接的工具
 
 ### 2. 广告拦截
-- **Adbyby plus+** - 广告拦截工具
+- **Adbyby Open** - 广告拦截工具
 - **AdGuardHome** (~8M) - 广告拦截与DNS过滤
 - **SmartDNS** - 智能DNS解析器，可减少DNS污染
 - **DNS-Forwarder** - DNS转发工具

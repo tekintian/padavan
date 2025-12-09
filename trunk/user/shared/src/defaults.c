@@ -660,7 +660,7 @@ struct nvram_pair router_defaults[] = {
 	{ "ss_keyword", "过期时间/剩余流量" },
 #endif
 	
-	/*Adbyby PlUS+*/
+	/*Adbyby Open*/
 	{ "adbyby_enable", "0" },
 	{ "adbyby_set", "0" },
 	{ "adbyby_adb_update", "0" },
