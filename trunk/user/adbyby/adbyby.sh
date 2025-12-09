@@ -618,7 +618,6 @@ addscripts()
 	if [ ! -f "$adbyby_rules" ] || [ ! -s "$adbyby_rules" ] ; then
 	cat > "$adbyby_rules" <<-EOF
 !  ------------------------------ ADByby 自定义过滤语法简表---------------------------------
-! 完整手册请参考:https://gitee.com/tekintian/adt-rules/blob/master/adbyby/ADByBy_%E8%AF%AD%E6%B3%95%E6%89%8B%E5%86%8C.md，下面为大致摘要
 !  "!" 为行注释符，注释行以该符号起始作为一行注释语义，用于规则描述
 !  "*" 为字符通配符，能够匹配0长度或任意长度的字符串，该通配符不能与正则语法混用。
 !  "^" 为分隔符，可以是除了字母、数字或者 _ - . % 之外的任何字符。
