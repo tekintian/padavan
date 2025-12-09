@@ -11,8 +11,9 @@ adbyby_update_min=`nvram get adbyby_update_min`
 nvram set adbyby_adb=0
 ipt_n="iptables -t nat"
 #adbyby_dir="/tmp/adbyby"
-PROG_PATH="/tmp/adbyby"
-DATA_PATH="$PROG_PATH/data"
+PROG_PATH="/usr/share/adbyby"
+DATA_PATH="/tmp/adbyby/data"
+adbyby_dir="/tmp/adbyby"
 WAN_FILE="/etc/storage/dnsmasq-adbyby.d/03-adbyby-ipset.conf"
 wan_mode=`nvram get adbyby_set`
 #abp_mode=`nvram get adbyby_adb_update`
@@ -26,16 +27,26 @@ adbyby_start()
 {
 	addscripts
 	if [ ! -f "$PROG_PATH/adbyby" ]; then
-	logger -t "adbyby" "adbyby程序文件不存在，正在解压..."
-	tar -xzvf "/etc_ro/adbyby.tar.gz" -C "/tmp"
-	logger -t "adbyby" "成功解压至：$PROG_PATH"
+	logger -t "adbyby" "adbyby程序文件不存在，请检查安装！"
+	return 1
 	fi
+	logger -t "adbyby" "adbyby程序文件存在：$PROG_PATH/adbyby"
+	
+	# 创建数据目录
+	mkdir -p $DATA_PATH
+	mkdir -p $adbyby_dir
+	
+	# 创建配置文件符号链接（如果不存在）
+	if [ ! -f "$adbyby_dir/adhook.ini" ]; then
+		ln -sf $PROG_PATH/adhook.ini $adbyby_dir/adhook.ini
+	fi
+	
 	#if [ $abp_mode -eq 1 ]; then
-	#/tmp/adbyby/adblock.sh &
+	#$PROG_PATH/adblock.sh &
 	#fi
-	#/tmp/adbyby/adupdate.sh &
+	#$PROG_PATH/adupdate.sh &
 	add_rules
-	$PROG_PATH/adbyby &>/dev/null &
+	cd /tmp && $PROG_PATH/adbyby &>/dev/null &
 	add_dns
 	iptables-save | grep ADBYBY >/dev/null || \
 	add_rule
@@ -99,11 +110,11 @@ add_rules()
 	#nvram set adbyby_rules=`grep -v '^!' /tmp/adbyby/data/rules.txt | wc -l`
 
 	#nvram set adbyby_utime=`cat /tmp/adbyby.updated 2>/dev/null`
-	grep -v '^!' /etc/storage/adbyby_rules.sh | grep -v "^$" > $PROG_PATH/rules.txt
-	grep -v '^!' /etc/storage/adbyby_blockip.sh | grep -v "^$" > $PROG_PATH/blockip.conf
-	grep -v '^!' /etc/storage/adbyby_adblack.sh | grep -v "^$" > $PROG_PATH/adblack.conf
-	grep -v '^!' /etc/storage/adbyby_adesc.sh | grep -v "^$" > $PROG_PATH/adesc.conf
-	grep -v '^!' /etc/storage/adbyby_adhost.sh | grep -v "^$" > $PROG_PATH/adhost.conf
+	grep -v '^!' /etc/storage/adbyby_rules.sh | grep -v "^$" > $adbyby_dir/rules.txt
+	grep -v '^!' /etc/storage/adbyby_blockip.sh | grep -v "^$" > $adbyby_dir/blockip.conf
+	grep -v '^!' /etc/storage/adbyby_adblack.sh | grep -v "^$" > $adbyby_dir/adblack.conf
+	grep -v '^!' /etc/storage/adbyby_adesc.sh | grep -v "^$" > $adbyby_dir/adesc.conf
+	grep -v '^!' /etc/storage/adbyby_adhost.sh | grep -v "^$" > $adbyby_dir/adhost.conf
 	logger -t "adbyby" "正在处理规则..."
 	rm -f $DATA_PATH/user.bin
 	rm -f $DATA_PATH/user.txt
@@ -124,7 +135,7 @@ add_rules()
 	grep -v '^!' $DATA_PATH/user3adblocks.txt | grep -v "^$" >> $DATA_PATH/user.txt
 	rm -f $DATA_PATH/user3adblocks.txt
 	fi
-	grep -v ^! $PROG_PATH/rules.txt >> $DATA_PATH/user.txt
+	grep -v ^! $adbyby_dir/rules.txt >> $DATA_PATH/user.txt
 	nvram set adbyby_user=`cat /tmp/adbyby/data/user.txt | wc -l`
 }
 
@@ -183,7 +194,7 @@ ip_rule()
 		2)
 			ipset -N adbyby_wan hash:ip
 			$ipt_n -A ADBYBY -m set --match-set adbyby_wan dst -s $ip -p tcp -j REDIRECT --to-ports 8118
-			awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $PROG_PATH/adhost.conf > $WAN_FILE
+			awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $adbyby_dir/adhost.conf > $WAN_FILE
 			logger -t "adbyby" "设置$ip走Plus+过滤。"
 			;;
 		esac
@@ -204,7 +215,7 @@ ip_rule()
 	esac
 
 	echo "create blockip hash:net family inet hashsize 1024 maxelem 65536" > /tmp/blockip.ipset
-	awk '!/^$/&&!/^#/{printf("add blockip %s'" "'\n",$0)}' $PROG_PATH/blockip.conf >> /tmp/blockip.ipset
+	awk '!/^$/&&!/^#/{printf("add blockip %s'" "'\n",$0)}' $adbyby_dir/blockip.conf >> /tmp/blockip.ipset
 	ipset -! restore < /tmp/blockip.ipset 2>/dev/null
 	iptables -I FORWARD -m set --match-set blockip dst -j DROP
 	iptables -I OUTPUT -m set --match-set blockip dst -j DROP
@@ -218,8 +229,8 @@ add_dns()
 	block_ios=`nvram get block_ios`
 	block_shortvideo=`nvram get block_shortvideo`
 	block_games=`nvram get block_games`
-	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_esc"'\n",$0)}' $PROG_PATH/adesc.conf > /etc/storage/dnsmasq-adbyby.d/06-dnsmasq.esc
-	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $PROG_PATH/adblack.conf > /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
+	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_esc"'\n",$0)}' $adbyby_dir/adesc.conf > /etc/storage/dnsmasq-adbyby.d/06-dnsmasq.esc
+	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $adbyby_dir/adblack.conf > /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
 	[ $block_ios -eq 1 ] && cat <<-EOF >> /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
 # Apple iOS OTA Update Blocking (Valid domains only)
 address=/mesu.apple.com/0.0.0.0
@@ -414,16 +425,26 @@ adbyby_uprules()
 	adbyby_close
 	addscripts
 	if [ ! -f "$PROG_PATH/adbyby" ]; then
-	logger -t "adbyby" "adbyby程序文件不存在，正在解压..."
-	tar -xzvf "/etc_ro/adbyby.tar.gz" -C "/tmp"
-	logger -t "adbyby" "成功解压至：$PROG_PATH"
+	logger -t "adbyby" "adbyby程序文件不存在，请检查安装！"
+	return 1
 	fi
+	logger -t "adbyby" "adbyby程序文件存在：$PROG_PATH/adbyby"
+	
+	# 创建数据目录
+	mkdir -p $DATA_PATH
+	mkdir -p $adbyby_dir
+	
+	# 创建配置文件符号链接（如果不存在）
+	if [ ! -f "$adbyby_dir/adhook.ini" ]; then
+		ln -sf $PROG_PATH/adhook.ini $adbyby_dir/adhook.ini
+	fi
+	
 	#if [ $abp_mode -eq 1 ]; then
-	#/tmp/adbyby/adblock.sh &
+	#$PROG_PATH/adblock.sh &
 	#fi
-	#/tmp/adbyby/adupdate.sh &
+	#$PROG_PATH/adupdate.sh &
 	add_rules
-	$PROG_PATH/adbyby &>/dev/null &
+	cd /tmp && $PROG_PATH/adbyby &>/dev/null &
 	add_dns
 	iptables-save | grep ADBYBY >/dev/null || \
 	add_rule
@@ -518,29 +539,9 @@ EEE
 	adbyby_adblack="/etc/storage/adbyby_adblack.sh"
 	if [ ! -f "$adbyby_adblack" ] || [ ! -s "$adbyby_adblack" ] ; then
 	cat > "$adbyby_adblack" <<-\EEE
-gvod.aiseejapp.atianqi.com
-stat.pandora.xiaomi.com
-upgrade.mishop.pandora.xiaomi.com
-logonext.tv.kuyun.com
-config.kuyun.com
-serving.bepolite.eu
-pagead2.googlesyndication.com
-c2.popads.net
-c1.popads.net
-serve.popads.net
-xenylclio.com
-exclusiveroughlywhich.com
-banquetunarmedgrater.com
-friendshipmale.com
-proftrafficcounter.com
-d3a781y1fb2dm6.cloudfront.net
-dlvds9i67c60j.cloudfront.net
 pogothere.xyz
 evidenceguidance.com
-d2ovgc4ipdt6us.cloudfront.net
-static.adsafeprotected.com
-du0pud0sdlmzf.cloudfront.net
-d2yeczd6cyyd0z.cloudfront.net
+config.kuyun.com
 
 EEE
 	chmod 755 "$adbyby_adblack"
@@ -560,72 +561,9 @@ EEE
 	adbyby_adhost="/etc/storage/adbyby_adhost.sh"
 	if [ ! -f "$adbyby_adhost" ] || [ ! -s "$adbyby_adhost" ] ; then
 	cat > "$adbyby_adhost" <<-\EEE
-cbjs.baidu.com
-list.video.baidu.com
-nsclick.baidu.com
-play.baidu.com
-sclick.baidu.com
-tieba.baidu.com
-baidustatic.com
-bdimg.com
-bdstatic.com
-share.baidu.com
-hm.baidu.com
-v.baidu.com
-cpro.baidu.com
-1000fr.net
-atianqi.com
-56.com
-v-56.com
-acfun.com
-acfun.tv
-baofeng.com
-baofeng.net
-cntv.cn
-hoopchina.com.cn
-funshion.com
-fun.tv
-hitvs.cn
-hljtv.com
-iqiyi.com
-qiyi.com
-agn.aty.sohu.com
-itc.cn
-kankan.com
-ku6.com
-letv.com
-letvcloud.com
-letvimg.com
-pplive.cn
-pps.tv
-ppsimg.com
-pptv.com
-www.qq.com
-l.qq.com
-v.qq.com
-video.sina.com.cn
-tudou.com
-wasu.cn
 analytics-union.xunlei.com
-kankan.xunlei.com
-youku.com
-hunantv.com
-ifeng.com
-renren.com
 mediav.com
-cnbeta.com
-mydrivers.com
-168f.info
 doubleclick.net
-126.net
-sohu.com
-right.com.cn
-50bang.org
-you85.cn
-jiuzhilan.com
-googles.com
-cnbetacdn.com
-ptqy.gitv.tv
 admaster.com.cn
 serving-sys.com
 

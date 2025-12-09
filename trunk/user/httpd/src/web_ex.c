@@ -2262,7 +2262,7 @@ static int adbyby_action_hook(int eid, webs_t wp, int argc, char **argv)
 
 static int adbyby_status_hook(int eid, webs_t wp, int argc, char **argv)
 {
-	int ad_status_code = pids("adbyby");
+	int ad_status_code = pids("adbyby") || pids("/usr/share/adbyby/adbyby");
 	websWrite(wp, "function adbyby_status() { return %d;}\n", ad_status_code);
 	return 0;
 }

@@ -8,40 +8,54 @@
 #define INITIAL_RULE_CAPACITY 1000
 #define MAX_RULE_LENGTH 512
 
-// 内置广告域名列表
+// 内置广告域名列表（与utils.c保持一致）
 static const char* builtin_ad_domains[] = {
+    // 国际主要广告平台
     "doubleclick.net",
-    "googleadservices.com",
-    "googlesyndication.com", 
+    "googleadservices.com", 
+    "googlesyndication.com",
     "google-analytics.com",
     "googletagmanager.com",
-    "facebook.com/tr",
     "amazon-adsystem.com",
-    "taboola.com",
-    "outbrain.com",
-    "adsystem.google.com",
+    "adsco.re",
+    "adnxs.com",          // AppNexus
+    "criteo.com",         // Criteo
+    "taboola.com",        // Taboola
+    "outbrain.com",       // Outbrain
+    "adsafeprotected.com", // 广告验证
+    "moatads.com",        // 广告监测
+    "scorecardresearch.com", // 量化分析
     "advertising.com",
     "ads.yahoo.com",
     "adserver.com",
-    "adnxs.com",
-    "adsafeprotected.com",
-    "moatads.com",
-    "scorecardresearch.com",
     "quantserve.com",
     "serving-sys.com",
     "turn.com",
     "adsymptotic.com",
     "adtech.de",
     "rlcdn.com",
-    "criteo.com",
-    "advertising.com",
-    "taboola.com",
-    "outbrain.com",
+    
+    // 国内主要广告平台
+    "tanx.com",           // 阿里妈妈
+    "allyes.com",         // 好耶广告
+    "guohead.com",        // 果壳
+    "mediav.com",         // 亿玛
+    "iads.cn",            // 爱广告
+    "admaster.com.cn",    // 传漾
+    "miaozhen.com",       // 秒针
+    "dianjoy.com",        // 点乐
+    "ucweb.com",          // UC广告
+    "qutoutiao.net",      // 趣头条
+    "toutiaocdn.com",     // 今日头条CDN
+    "snssdk.com",         // 字节跳动
+    "pangolin-sdk.com",   // 穿山甲广告
+    
     NULL
 };
 
-// 内置URL模式列表
+// 内置URL模式列表（国内环境优化）
 static const char* builtin_url_patterns[] = {
+    // 通用广告路径
     "/ad.",
     "/ads.",
     "/advertisement",
@@ -54,15 +68,37 @@ static const char* builtin_url_patterns[] = {
     "/analytics",
     "/beacon",
     "/pixel",
+    
+    // 国际广告平台
     "doubleclick",
     "googlesyndication",
     "googleads",
-    "facebook.com/tr",
     "analytics.google.com",
     "adsco.re",
     "amazon-adsystem",
     "taboola",
     "outbrain",
+    
+    // 国内广告平台相关
+    "tanx.com",
+    "pangolin-sdk",
+    "allyes.com",
+    "admaster.com.cn",
+    "miaozhen.com",
+    "mediav.com",
+    "iads.cn",
+    
+    // 统计分析相关
+    "hm.baidu.com",
+    "log.mi.com",
+    "analysis.qq.com",
+    
+    // 短视频平台广告
+    "douyin.com/ad",
+    "kuaishou.com/ad",
+    "toutiao.com/ad",
+    "snssdk.com/ad",
+    
     NULL
 };
 

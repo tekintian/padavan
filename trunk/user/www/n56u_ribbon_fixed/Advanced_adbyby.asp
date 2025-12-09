@@ -459,8 +459,8 @@ function changeBgColorrl(obj, num){
                         </div>
 								<div class="row-fluid">
 									<div id="tabMenu" class="submenuBlock"></div>
-									<div class="alert alert-info" style="margin: 10px;">广告屏蔽大师 Plus + 可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站<br />
-									<div>Plus + 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
+									<div class="alert alert-info" style="margin: 10px;">广告屏蔽大师 Open 可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站<br />
+									<div>Open 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
 									<div>anti-AD项目地址:<a href="https://github.com/privacy-protection-tools/anti-AD">https://github.com/privacy-protection-tools/anti-AD</a></div>
 									<div>静态规则：【<% nvram_get_x("", "adbyby_ltime"); %>】 | 视频规则：【<% nvram_get_x("", "adbyby_vtime"); %>】</div>
 									<div>anti-AD规则：【<% nvram_get_x("", "anti_ad_count"); %>】条 | Hosts AD：【<% nvram_get_x("", "adbyby_hostsad"); %>】条</div>
@@ -472,7 +472,7 @@ function changeBgColorrl(obj, num){
                                             <td id="adbyby_status" colspan="3"></td>
                                         </tr>
 										<tr >
-											<th width="50%">启用 Adbyby 功能 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+											<th width="50%">启用 Adbyby-Open 功能 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="adbyby_enable_on_of">

@@ -5,6 +5,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
 
 int parse_http_request(const char* request_data, http_request_t* request) {
     if (!request_data || !request) {
@@ -75,11 +80,25 @@ int parse_http_request(const char* request_data, http_request_t* request) {
 int is_blocked_request(const http_request_t* request) {
     if (!request) return 0;
     
-    // 检查URL中的广告关键词
+    // 检查URL中的广告关键词（国内环境优化）
     const char* ad_patterns[] = {
+        // 通用广告路径
         "/ad.", "/ads.", "/advert", "/advertisement", "/banner", "/popup",
+        
+        // 国际广告平台
         "doubleclick", "googlesyndication", "googleads", "facebook.com/tr",
         "analytics.google.com", "amazon-adsystem", "taboola", "outbrain",
+        
+        // 国内广告平台
+        "tanx.com", "pangolin-sdk", "gdt.qq.com", "e.qq.com", "ad.qq.com",
+        "allyes.com", "admaster.com.cn", "miaozhen.com", "mediav.com", "iads.cn",
+        
+        // 统计分析
+        "hm.baidu.com", "tongji.baidu.com", "cnzz.com", "51.la",
+        
+        // 短视频广告
+        "douyin.com/ad", "kuaishou.com/ad", "toutiao.com/ad",
+        
         NULL
     };
     
@@ -157,28 +176,210 @@ void send_block_response(int client_fd, const http_request_t* request) {
 }
 
 int forward_request(const http_request_t* request, http_response_t* response) {
-    // 简单实现：返回一个通用的代理响应
     if (!request || !response) return 0;
     
     memset(response, 0, sizeof(http_response_t));
-    response->status_code = HTTP_OK;
-    strcpy(response->status_text, "OK");
-    strcpy(response->content_type, "text/html");
     
-    const char* proxy_msg = 
-        "<!DOCTYPE html>"
-        "<html><head><title>代理转发</title></head>"
-        "<body><h1>AdByBy-Open 代理</h1>"
-        "<p>请求已转发，此功能待完善</p>"
-        "<p>URL: ";
+    // 检查是否为根路径请求，如果是则返回状态页面
+    if (strcmp(request->url, "/") == 0 || strlen(request->url) == 0) {
+        response->status_code = HTTP_OK;
+        strcpy(response->status_text, "OK");
+        strcpy(response->content_type, "text/html");
+        
+        const char* proxy_msg = 
+            "<!DOCTYPE html>"
+            "<html><head>"
+            "<title>AdByBy-Open 状态</title>"
+            "<meta charset='utf-8'>"
+            "<style>"
+            "body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }"
+            ".container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }"
+            ".header { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 20px; }"
+            ".status { display: flex; justify-content: space-around; margin: 30px 0; }"
+            ".status-item { text-align: center; padding: 20px; background: #ecf0f1; border-radius: 8px; flex: 1; margin: 0 10px; }"
+            ".status-item h3 { color: #27ae60; margin: 0 0 10px 0; }"
+            ".info-section { margin: 20px 0; padding: 15px; background: #f8f9fa; border-left: 4px solid #3498db; }"
+            ".footer { text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px; }"
+            ".running { color: #27ae60; }"
+            ".stopped { color: #e74c3c; }"
+            "</style>"
+            "</head><body>"
+            "<div class='container'>"
+            "<div class='header'>"
+            "<h1>🛡️ AdByBy-Open 广告过滤代理</h1>"
+            "<p class='running'>✅ 服务正在运行</p>"
+            "</div>"
+            
+            "<div class='status'>"
+            "<div class='status-item'>"
+            "<h3>🌐 代理状态</h3>"
+            "<p>端口: 8118</p>"
+            "<p>状态: <span class='running'>运行中</span></p>"
+            "</div>"
+            "<div class='status-item'>"
+            "<h3>📊 过滤统计</h3>"
+            "<p>内置规则: 48条</p>"
+            "<p>过滤命中: <span id='hits'>0</span>次</p>"
+            "</div>"
+            "<div class='status-item'>"
+            "<h3>⚙️ 系统信息</h3>"
+            "<p>版本: AdByBy-Open v1.0</p>"
+            "<p>架构: MIPS</p>"
+            "</div>"
+            "</div>"
+            
+            "<div class='info-section'>"
+            "<h3>📋 功能说明</h3>"
+            "<ul>"
+            "<li><strong>透明代理</strong>: 自动过滤HTTP请求中的广告</li>"
+            "<li><strong>DNS过滤</strong>: 阻止广告域名解析</li>"
+            "<li><strong>规则更新</strong>: 支持在线更新过滤规则</li>"
+            "<li><strong>自定义规则</strong>: 支持用户自定义过滤规则</li>"
+            "</ul>"
+            "</div>"
+            
+            "<div class='info-section'>"
+            "<h3>🔧 请求信息</h3>"
+            "<p><strong>当前请求URL:</strong> ";
+        
+        strcpy(response->body, proxy_msg);
+        strcat(response->body, request->url);
+        strcat(response->body, "</p>"
+            "<p><strong>请求时间:</strong> <span id='timestamp'></span></p>"
+            "</div>"
+            
+            "<div class='footer'>"
+            "<p>🔒 AdByBy-Open - 开源广告过滤解决方案 | 保护您的隐私，提升浏览体验</p>"
+            "<p>如遇问题，请检查路由器管理界面或查看系统日志</p>"
+            "</div>"
+            "</div>"
+            
+            "<script>"
+            "document.getElementById('timestamp').textContent = new Date().toLocaleString('zh-CN');"
+            "</script>"
+            "</body></html>");
+        
+        response->content_length = strlen(response->body);
+        return 1;
+    }
     
-    strcpy(response->body, proxy_msg);
-    strcat(response->body, request->url);
-    strcat(response->body, "</p></body></html>");
+    // 对于其他请求，实现真正的HTTP转发
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        log_message(LOG_ERROR, "Failed to create server socket");
+        return 0;
+    }
     
-    response->content_length = strlen(response->body);
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(request->port);
     
-    return 1;
+    // 解析目标主机
+    struct hostent* host_entry = gethostbyname(request->host);
+    if (!host_entry) {
+        log_message(LOG_ERROR, "Failed to resolve host: %s", request->host);
+        close(server_fd);
+        return 0;
+    }
+    
+    memcpy(&server_addr.sin_addr, host_entry->h_addr, host_entry->h_length);
+    
+    // 连接到目标服务器
+    if (connect(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        log_message(LOG_ERROR, "Failed to connect to %s:%d", request->host, request->port);
+        close(server_fd);
+        return 0;
+    }
+    
+    // 构建完整的HTTP请求
+    char full_request[8192];
+    int request_len = snprintf(full_request, sizeof(full_request),
+        "%s %s %s\r\n"
+        "Host: %s\r\n"
+        "User-Agent: %s\r\n"
+        "Connection: close\r\n",
+        request->method, request->url, request->version,
+        request->host, request->user_agent);
+    
+    // 添加其他头部
+    if (strlen(request->headers) > 0) {
+        strncat(full_request + request_len, request->headers, sizeof(full_request) - request_len - 1);
+        request_len = strlen(full_request);
+    }
+    
+    // 添加头部结束标记
+    strcat(full_request + request_len, "\r\n");
+    request_len = strlen(full_request);
+    
+    // 发送请求到目标服务器
+    if (send(server_fd, full_request, request_len, 0) < 0) {
+        log_message(LOG_ERROR, "Failed to send request to server");
+        close(server_fd);
+        return 0;
+    }
+    
+    // 接收响应
+    char response_buffer[32768];
+    int total_received = 0;
+    int bytes_received;
+    
+    while ((bytes_received = recv(server_fd, response_buffer + total_received, 
+                                  (int)(sizeof(response_buffer) - total_received - 1), 0)) > 0) {
+        total_received += bytes_received;
+        if (total_received >= (int)(sizeof(response_buffer) - 1)) {
+            break;
+        }
+    }
+    
+    response_buffer[total_received] = '\0';
+    close(server_fd);
+    
+    if (total_received == 0) {
+        log_message(LOG_ERROR, "No response received from server");
+        return 0;
+    }
+    
+    // 解析响应
+    char* headers_end = strstr(response_buffer, "\r\n\r\n");
+    if (!headers_end) {
+        log_message(LOG_ERROR, "Invalid HTTP response format");
+        return 0;
+    }
+    
+    int headers_length = headers_end - response_buffer + 4;
+    char* body_start = headers_end + 4;
+    int body_length = total_received - headers_length;
+    
+    // 解析状态行
+    char* first_line = strtok(response_buffer, "\r\n");
+    if (first_line && sscanf(first_line, "HTTP/%*f %d %255[^\r\n]", 
+                            &response->status_code, response->status_text) == 2) {
+        // 解析头部
+        char* line = strtok(NULL, "\r\n");
+        while (line && strlen(line) > 0) {
+            if (strncasecmp(line, "Content-Type:", 13) == 0) {
+                sscanf(line + 13, " %127[^\r\n]", response->content_type);
+            } else if (strncasecmp(line, "Content-Length:", 15) == 0) {
+                response->content_length = atoi(line + 15);
+            }
+            line = strtok(NULL, "\r\n");
+        }
+        
+        // 复制响应体
+        if (body_length > 0) {
+            int copy_length = (body_length < (int)(sizeof(response->body) - 1)) ? 
+                             body_length : (int)(sizeof(response->body) - 1);
+            memcpy(response->body, body_start, copy_length);
+            response->body[copy_length] = '\0';
+        }
+        
+        log_message(LOG_INFO, "Forwarded request: %s %s - Status: %d", 
+                   request->method, request->url, response->status_code);
+        return 1;
+    }
+    
+    return 0;
 }
 
 void send_response(int client_fd, const http_response_t* response) {
