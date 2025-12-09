@@ -30,7 +30,8 @@ $j(document).ready(function() {
 	init_itoggle('hosts_ad');
 	init_itoggle('anti_ad');
 	init_itoggle('block_ios');
-	init_itoggle('block_douyin');
+	init_itoggle('block_shortvideo');
+	init_itoggle('block_games');
 	init_itoggle('tv_hosts');
 	init_itoggle('adbyby_adb_update');
 	init_itoggle('adbyby_ip_x', change_adbyby_ip_enabled);
@@ -528,16 +529,31 @@ function changeBgColorrl(obj, num){
 										</tr>
 										<tr>
 											<th width="50%">
-											拦截 抖音 APP 和网站:</th>
+											拦截热门短视频平台 APP和网站:</th>
 											<td>
 													<div class="main_itoggle">
-													<div id="block_douyin_on_of">
-														<input type="checkbox" id="block_douyin_fake" <% nvram_match_x("", "block_douyin", "1", "value=1 checked"); %><% nvram_match_x("", "block_douyin", "0", "value=0"); %>  />
+													<div id="block_shortvideo_on_of">
+														<input type="checkbox" id="block_shortvideo_fake" <% nvram_match_x("", "block_shortvideo", "1", "value=1 checked"); %><% nvram_match_x("", "block_shortvideo", "0", "value=0"); %>  />
 													</div>
 												</div>
 												<div style="position: absolute; margin-left: -10000px;">
-													<input type="radio" value="1" name="block_douyin" id="block_douyin_1" class="input" value="1" <% nvram_match_x("", "block_douyin", "1", "checked"); %> /><#checkbox_Yes#>
-													<input type="radio" value="0" name="block_douyin" id="block_douyin_0" class="input" value="0" <% nvram_match_x("", "block_douyin", "0", "checked"); %> /><#checkbox_No#>
+													<input type="radio" value="1" name="block_shortvideo" id="block_shortvideo_1" class="input" value="1" <% nvram_match_x("", "block_shortvideo", "1", "checked"); %> /><#checkbox_Yes#>
+													<input type="radio" value="0" name="block_shortvideo" id="block_shortvideo_0" class="input" value="0" <% nvram_match_x("", "block_shortvideo", "0", "checked"); %> /><#checkbox_No#>
+												</div>
+											</td>
+										</tr>
+										<tr>
+											<th width="50%">
+											拦截热门游戏:</th>
+											<td>
+													<div class="main_itoggle">
+													<div id="block_games_on_of">
+														<input type="checkbox" id="block_games_fake" <% nvram_match_x("", "block_games", "1", "value=1 checked"); %><% nvram_match_x("", "block_games", "0", "value=0"); %>  />
+													</div>
+												</div>
+												<div style="position: absolute; margin-left: -10000px;">
+													<input type="radio" value="1" name="block_games" id="block_games_1" class="input" value="1" <% nvram_match_x("", "block_games", "1", "checked"); %> /><#checkbox_Yes#>
+													<input type="radio" value="0" name="block_games" id="block_games_0" class="input" value="0" <% nvram_match_x("", "block_games", "0", "checked"); %> /><#checkbox_No#>
 												</div>
 											</td>
 										</tr>

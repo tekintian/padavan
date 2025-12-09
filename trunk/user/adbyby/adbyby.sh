@@ -216,15 +216,120 @@ add_dns()
 	mkdir -p /tmp/dnsmasq.d
 	anti_ad
 	block_ios=`nvram get block_ios`
-	block_douyin=`nvram get block_douyin`
+	block_shortvideo=`nvram get block_shortvideo`
+	block_games=`nvram get block_games`
 	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_esc"'\n",$0)}' $PROG_PATH/adesc.conf > /etc/storage/dnsmasq-adbyby.d/06-dnsmasq.esc
 	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $PROG_PATH/adblack.conf > /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
-	[ $block_ios -eq 1 ] && echo 'address=/mesu.apple.com/0.0.0.0' >> /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
-	if [ $block_douyin -eq 1 ]; then
-  cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.douyin
-address=/api.amemv.com/0.0.0.0
-address=/.snssdk.com/0.0.0.0
+	[ $block_ios -eq 1 ] && cat <<-EOF >> /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
+# Apple iOS OTA Update Blocking (Valid domains only)
+address=/mesu.apple.com/0.0.0.0
+address=/appldnld.apple.com/0.0.0.0
+address=/updates-http.cdn-apple.com/0.0.0.0
+address=/xp.apple.com/0.0.0.0
+address=/gs.apple.com/0.0.0.0
+address=/iosapps.itunes.apple.com/0.0.0.0
+EOF
+	if [ $block_shortvideo -eq 1 ]; then
+  cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo
+# 热门短视频平台域名拦截规则
+
+# 抖音相关域名 (Douyin/TikTok)
 address=/.douyin.com/0.0.0.0
+address=/.douyinvod.com/0.0.0.0
+address=/.douyincdn.com/0.0.0.0
+address=/.tiktok.com/0.0.0.0
+address=/.tiktokcdn.com/0.0.0.0
+address=/.tiktokv.com/0.0.0.0
+
+# 字节跳动相关域名 (ByteDance)
+address=/.bytedance.com/0.0.0.0
+address=/.toutiao.com/0.0.0.0
+address=/.snssdk.com/0.0.0.0
+address=/.amemv.com/0.0.0.0
+address=/.bytecdn.com/0.0.0.0
+address=/.ibytecdn.com/0.0.0.0
+address=/.sglog.com/0.0.0.0
+
+# 快手相关域名 (Kuaishou)
+address=/.kuaishou.com/0.0.0.0
+address=/.kwimgs.com/0.0.0.0
+address=/.ksad.com/0.0.0.0
+address=/.kuaishou.com.cn/0.0.0.0
+address=/.ksyungslb.com/0.0.0.0
+address=/.yximgs.com/0.0.0.0
+
+# 微信视频号相关域名 (WeChat Video)
+address=/.channels.weixin.qq.com/0.0.0.0
+address=/.weixin.qq.com/0.0.0.0
+address=/.wx.qq.com/0.0.0.0
+address=/.wx.qlogo.cn/0.0.0.0
+address=/.video.qq.com/0.0.0.0
+
+# 小红书相关域名 (Xiaohongshu/RED)
+address=/.xiaohongshu.com/0.0.0.0
+address=/.xhslink.com/0.0.0.0
+address=/.xhsjpg.com/0.0.0.0
+address=/.xhsdsp.com/0.0.0.0
+address=/.redbook.com/0.0.0.0
+
+# QQ短视频相关域名 (QQ Video)
+address=/.v.qq.com/0.0.0.0
+address=/.video.qq.com/0.0.0.0
+address=/.liveplay.qq.com/0.0.0.0
+address=/.video.gtimg.cn/0.0.0.0
+
+# 西瓜视频相关域名 (Xigua Video)
+address=/.ixigua.com/0.0.0.0
+address=/.toutiao.com/0.0.0.0
+address=/.snssdk.com/0.0.0.0
+
+# 美拍相关域名 (Meipai)
+address=/.meipai.com/0.0.0.0
+address=/.meitu.com/0.0.0.0
+address=/.meitudata.com/0.0.0.0
+
+# 火山小视频相关域名 (Huoshan)
+address=/.huoshan.com/0.0.0.0
+address=/.huoshan.tv/0.0.0.0
+
+# 梨视频相关域名 (Pear Video)
+address=/.pearvideo.com/0.0.0.0
+address=/.pearnode.com/0.0.0.0
+
+# 微视相关域名 (Weishi)
+address=/.weishi.com/0.0.0.0
+address=/.weishi.qq.com/0.0.0.0
+
+# 相关分析和跟踪域名
+address=/.sglog.com/0.0.0.0
+address=/.tencent.com/0.0.0.0
+address=/.qzone.qq.com/0.0.0.0
+		EOF
+	fi
+	if [ $block_games -eq 1 ]; then
+  cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/09-dnsmasq.games
+# Popular Online Games Blocking (Valid domains only)
+# Minecraft (我的世界)
+address=/.minecraft.net/0.0.0.0
+address=/session.minecraft.net/0.0.0.0
+
+# Tencent Games (腾讯游戏)
+address=/.pvp.qq.com/0.0.0.0
+address=/.game.qq.com/0.0.0.0
+
+# Steam Games
+address=/.steampowered.com/0.0.0.0
+address=/.steamcommunity.com/0.0.0.0
+
+# NetEase Games (网易游戏)
+address=/.game.163.com/0.0.0.0
+address=/.nie.163.com/0.0.0.0
+
+# PUBG
+address=/.pubg.com/0.0.0.0
+
+# Epic Games
+address=/.epicgames.com/0.0.0.0
 		EOF
 	fi
 	sed -i '/dnsmasq-adbyby/d' /etc/storage/dnsmasq/dnsmasq.conf
