@@ -76,14 +76,8 @@ adbyby_start()
 {
 	logger -t "adbyby" "开始启动AdByBy..."
 	
-	# 显示调试信息
-	debug_adbyby_status
-	
 	# 先初始化环境
 	init_adbyby_env
-	
-	# 再次检查环境
-	debug_adbyby_status
 	
 	addscripts
 	
@@ -93,16 +87,6 @@ adbyby_start()
 	fi
 	logger -t "adbyby" "adbyby程序文件存在：$PROG_PATH/adbyby"
 	
-	# 创建必要的数据目录结构
-	mkdir -p $DATA_PATH
-	mkdir -p $adbyby_dir
-	mkdir -p /etc/storage/dnsmasq-adbyby.d
-	mkdir -p /tmp/dnsmasq.d
-	
-	# 设置目录权限
-	chmod -R 755 $adbyby_dir 2>/dev/null
-	chmod -R 755 $DATA_PATH 2>/dev/null
-	
 	# 创建配置文件符号链接（如果不存在）
 	if [ ! -f "$adbyby_dir/adhook.ini" ]; then
 		if [ -f "$PROG_PATH/adhook.ini" ]; then
@@ -111,12 +95,6 @@ adbyby_start()
 		else
 			logger -t "adbyby" "警告：配置文件不存在 $PROG_PATH/adhook.ini"
 		fi
-	fi
-	
-	# 检查并创建基础配置文件
-	if [ ! -f "$DATA_PATH/lazy.txt" ]; then
-		logger -t "adbyby" "初始化规则文件..."
-		touch $DATA_PATH/lazy.txt $DATA_PATH/video.txt
 	fi
 	
 	#if [ $abp_mode -eq 1 ]; then
@@ -532,16 +510,6 @@ adbyby_uprules()
 	fi
 	logger -t "adbyby" "adbyby程序文件存在：$PROG_PATH/adbyby"
 	
-	# 创建必要的数据目录结构
-	mkdir -p $DATA_PATH
-	mkdir -p $adbyby_dir
-	mkdir -p /etc/storage/dnsmasq-adbyby.d
-	mkdir -p /tmp/dnsmasq.d
-	
-	# 设置目录权限
-	chmod -R 755 $adbyby_dir 2>/dev/null
-	chmod -R 755 $DATA_PATH 2>/dev/null
-	
 	# 创建配置文件符号链接（如果不存在）
 	if [ ! -f "$adbyby_dir/adhook.ini" ]; then
 		if [ -f "$PROG_PATH/adhook.ini" ]; then
@@ -550,12 +518,6 @@ adbyby_uprules()
 		else
 			logger -t "adbyby" "警告：配置文件不存在 $PROG_PATH/adhook.ini"
 		fi
-	fi
-	
-	# 检查并创建基础配置文件
-	if [ ! -f "$DATA_PATH/lazy.txt" ]; then
-		logger -t "adbyby" "初始化规则文件..."
-		touch $DATA_PATH/lazy.txt $DATA_PATH/video.txt
 	fi
 	
 	#if [ $abp_mode -eq 1 ]; then
@@ -654,7 +616,7 @@ addscripts()
 
 	adbyby_rules="/etc/storage/adbyby_rules.sh"
 	if [ ! -f "$adbyby_rules" ] || [ ! -s "$adbyby_rules" ] ; then
-	cat > "$adbyby_rules" <<-\EEE
+	cat > "$adbyby_rules" <<-EOF
 !  ------------------------------ ADByby 自定义过滤语法简表---------------------------------
 !  --------------  规则基于abp规则，并进行了字符替换部分的扩展-----------------------------
 !  ABP规则请参考https://adblockplus.org/zh_CN/filters，下面为大致摘要
@@ -671,33 +633,33 @@ addscripts()
 !  支持通配符*和？
 !  -------------------------------------------------------------------------------------------
 
-EEE
+EOF
 	chmod 755 "$adbyby_rules"
 	fi
 
 	adbyby_blockip="/etc/storage/adbyby_blockip.sh"
 	if [ ! -f "$adbyby_blockip" ] || [ ! -s "$adbyby_blockip" ] ; then
-	cat > "$adbyby_blockip" <<-\EEE
+	cat > "$adbyby_blockip" <<-EOF
 2.2.2.2
 
-EEE
+EOF
 	chmod 755 "$adbyby_blockip"
 	fi
 
 	adbyby_adblack="/etc/storage/adbyby_adblack.sh"
 	if [ ! -f "$adbyby_adblack" ] || [ ! -s "$adbyby_adblack" ] ; then
-	cat > "$adbyby_adblack" <<-\EEE
+	cat > "$adbyby_adblack" <<-EOF
 pogothere.xyz
 evidenceguidance.com
 config.kuyun.com
 
-EEE
+EOF
 	chmod 755 "$adbyby_adblack"
 	fi
 
 	adbyby_adesc="/etc/storage/adbyby_adesc.sh"
 	if [ ! -f "$adbyby_adesc" ] || [ ! -s "$adbyby_adesc" ] ; then
-	cat > "$adbyby_adesc" <<-\EEE
+	cat > "$adbyby_adesc" <<-EOF
 weixin.qq.com
 qpic.cn
 imtt.qq.com
@@ -708,26 +670,26 @@ api.openai.com
 openai.com
 cdn.openai.com
 
-EEE
+EOF
 	chmod 755 "$adbyby_adesc"
 	fi
 
 	adbyby_adhost="/etc/storage/adbyby_adhost.sh"
 	if [ ! -f "$adbyby_adhost" ] || [ ! -s "$adbyby_adhost" ] ; then
-	cat > "$adbyby_adhost" <<-\EEE
+	cat > "$adbyby_adhost" <<-EOF
 analytics-union.xunlei.com
 mediav.com
 doubleclick.net
 admaster.com.cn
 serving-sys.com
 
-EEE
+EOF
 	chmod 755 "$adbyby_adhost"
 	fi
 
 	adbyby_host="/etc/storage/adbyby_host.sh"
 	if [ ! -f "$adbyby_host" ] || [ ! -s "$adbyby_host" ] ; then
-	cat > "$adbyby_host" <<-\EEE
+	cat > "$adbyby_host" <<-EOF
 # AdByby Hosts下载列表配置文件
 # 每行一个URL，支持http/https协议
 # 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
@@ -738,49 +700,45 @@ https://gitee.com/tekintian/adt-rules/raw/master/hosts/ads_hosts.txt
 # 统计站点过滤hosts
 # https://gitee.com/tekintian/adt-rules/raw/master/hosts/stats_hosts.txt
 
-# adaway(https://adaway.org/hosts.txt)精简版
+# adaway[https://adaway.org/hosts.txt]精简版
 # https://gitee.com/tekintian/adt-rules/raw/master/hosts/adaway_hosts.txt
 
 
-EEE
+EOF
 	chmod 755 "$adbyby_host"
 	fi
 }
-
 case $1 in
 start)
-	adbyby_start
-	;;
+adbyby_start
+;;
 stop)
-	adbyby_close
-	;;
+adbyby_close
+;;
 A)
-	add_rules
-	;;
+add_rules
+;;
 C)
-	add_rule
-	;;
+add_rule
+;;
 D)
-	add_dns
-	;;
+add_dns
+;;
 E)
-	addscripts
-	;;
+addscripts
+;;
 F)
-	hosts_ads
-	;;
+hosts_ads
+;;
 G)
-	adbyby_uprules
-	;;
+adbyby_uprules
+;;
 debug)
-	debug_adbyby_status
-	;;
+debug_adbyby_status
+;;
 init)
-	init_adbyby_env
-	;;
-#updateadb)
-#	updateadb
-#	;;
+init_adbyby_env
+;;
 *)
 echo "Usage: $0 {start|stop|A|C|D|E|F|G|debug|init}"
 echo "  start  - 启动AdByBy服务"
@@ -790,7 +748,6 @@ echo "  C      - 添加防火墙规则"
 echo "  D      - 添加DNS规则"
 echo "  E      - 添加脚本文件"
 echo "  F      - 更新hosts文件"
-echo "  G      - 更新规则并重启"
 echo "  G      - 更新规则并重启"
 echo "  debug  - 显示调试信息"
 echo "  init   - 初始化环境"
