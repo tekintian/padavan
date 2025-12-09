@@ -105,8 +105,22 @@ add_rules()
 
 	rm -f /tmp/lazy.txt /tmp/video.txt /tmp/local-md5.json /tmp/md5.json
 	logger -t "adbyby" "Adbyby规则更新完成"
-	nvram set adbyby_ltime=`head -1 /tmp/adbyby/data/lazy.txt | awk -F' ' '{print $3,$4}'`
-	nvram set adbyby_vtime=`head -1 /tmp/adbyby/data/video.txt | awk -F' ' '{print $3,$4}'`
+	lazy_version=`head -1 /tmp/adbyby/data/lazy.txt | awk -F': ' '{print $2}'`
+	video_version=`head -1 /tmp/adbyby/data/video.txt | awk -F': ' '{print $2}'`
+	# 格式化时间显示：lazy.txt 的版本号转换为 YYYY-MM-DD HH:MM
+	if [ ${#lazy_version} -eq 12 ]; then
+		formatted_ltime=`echo $lazy_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3 \4:\5/'`
+	else
+		formatted_ltime=$lazy_version
+	fi
+	# video.txt 的版本号处理
+	if [ ${#video_version} -eq 8 ]; then
+		formatted_vtime=`echo $video_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/'`
+	else
+		formatted_vtime=$video_version
+	fi
+	nvram set adbyby_ltime="$formatted_ltime"
+	nvram set adbyby_vtime="$formatted_vtime"
 	#nvram set adbyby_rules=`grep -v '^!' /tmp/adbyby/data/rules.txt | wc -l`
 
 	#nvram set adbyby_utime=`cat /tmp/adbyby.updated 2>/dev/null`
