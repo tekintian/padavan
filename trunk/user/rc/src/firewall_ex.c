@@ -274,7 +274,43 @@ is_ip_address(const char *str)
 	return 1;
 }
 
+/**
+ * @brief 将日期和时间配置转换为iptables时间模块匹配规则字符串
+ *
+ * 该函数根据NVRAM中的日期和时间配置，生成适用于iptables时间模块的匹配规则字符串。
+ * 支持全天、跨夜、特定时间段以及工作日组合的时间匹配规则生成。
+ *
+ * @param mstr 输出缓冲区，用于存储生成的iptables时间匹配规则字符串
+ * @param nv_date NVRAM中存储日期配置的变量名，格式应为7位数字字符串(1表示启用，0表示禁用)
+ * @param nv_time NVRAM中存储时间配置的变量名，格式应为8位数字字符串(前4位开始时间，后4位结束时间)
+ *
+ * @note 日期格式说明：
+ *       - 7位字符串对应周日到周六(0-6)
+ *       - '1'表示启用该日，'0'表示禁用
+ *       - "1111111"表示每天
+ *       - "0000000"表示不启用
+ * @note 时间格式说明：
+ *       - 8位字符串，前4位为开始时间(HHMM)，后4位为结束时间(HHMM)
+ *       - "00002359"表示全天
+ */
 
+/**
+ * @brief 生成iptables时间匹配规则
+ *
+ * 根据日期和时间配置生成iptables时间模块的匹配规则，支持以下情况：
+ * 1. 全天候匹配(不添加时间条件)
+ * 2. 特定时间段匹配(包括跨夜情况)
+ * 3. 工作日组合匹配
+ *
+ * @param[out] mstr 输出缓冲区，最小长度应足够容纳生成的规则字符串
+ * @param[in] nv_date 日期配置的NVRAM变量名，格式为7位'0'/'1'字符串
+ * @param[in] nv_time 时间配置的NVRAM变量名，格式为8位数字字符串(HHMMHHMM)
+ *
+ * @author tekintian@gmail.com https://dev.tekin.cn
+ * @note 使用内核时区(--kerneltz)，无需手动处理时区转换
+ * @note 对于跨夜时间段(开始时间>结束时间)，自动添加--contiguous参数
+ * @note 如果日期为"1111111"且时间为"00002359"或相同起止时间，则不生成任何规则
+ */
 static void
 timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 {
@@ -349,6 +385,25 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	}
 }
 
+/**
+ * @brief 应用URL过滤的MAC地址组规则
+ *
+ * 该函数处理MAC地址组过滤规则，生成相应的iptables规则。它会：
+ * 1. 从NVRAM获取MAC地址列表
+ * 2. 进行去重处理（最多支持64个唯一MAC地址）
+ * 3. 为每个唯一MAC地址生成iptables规则
+ * 4. 如果没有配置MAC地址，则生成基础流量引导规则
+ *
+ * @param fp 输出文件指针，用于写入iptables规则
+ * @param dtype 数据包类型（如FORWARD）
+ * @param lan_if 局域网接口名称
+ * @param timematch 时间匹配条件字符串
+ * @param chain_name 目标链名称
+ *
+ * @author tekintian@gmail.com https://dev.tekin.cn
+ * @note 函数内部会处理MAC地址格式验证和去重
+ * @note 当没有配置MAC地址时，会生成基础规则确保URL过滤功能正常
+ */
 static void
 apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, const char *timematch, const char *chain_name)
 {
@@ -491,8 +546,18 @@ is_valid_filter_time(const char *nv_time)
 }
 #endif
 
-void
-ip2class(const char *addr, const char *mask, char *out_buf, size_t out_len)
+/**
+ * @brief 根据IP地址和子网掩码计算网络地址和CIDR前缀
+ *
+ * @param addr 点分十进制格式的IP地址字符串
+ * @param mask 点分十进制格式的子网掩码字符串
+ * @param out_buf 用于存储输出结果的缓冲区
+ * @param out_len 输出缓冲区的长度
+ *
+ * @note 仅处理A、B、C类网络地址
+ * @note 输出格式为"网络地址/CIDR前缀"，例如"192.168.1.0/24"
+ */
+void ip2class(const char *addr, const char *mask, char *out_buf, size_t out_len)
 {
 	unsigned int val, ip;
 	struct in_addr in;
@@ -512,8 +577,20 @@ ip2class(const char *addr, const char *mask, char *out_buf, size_t out_len)
 }
 
 // WAN, MAN, LAN
-void
-fill_static_routes(char *buf, int len, const char *ift)
+/**
+ * @brief 填充静态路由信息到缓冲区
+ *
+ * 遍历配置中的静态路由条目，将与指定接口匹配的路由信息格式化后填充到缓冲区中。
+ * 每条路由信息格式为 "IP:子网掩码:网关:跃点数"，多个路由之间用空格分隔。
+ *
+ * @param buf 用于存储路由信息的输出缓冲区
+ * @param len 缓冲区长度
+ * @param ift 要匹配的网络接口名称
+ *
+ * @note 缓冲区长度必须至少为32字节
+ * @note 输出字符串末尾的空格会被自动移除
+ */
+void fill_static_routes(char *buf, int len, const char *ift)
 {
 	int i, len_iter;
 	char buf_iter[128];
@@ -552,6 +629,17 @@ fill_static_routes(char *buf, int len, const char *ift)
 		buf[len_iter-1] = '\0';
 }
 
+/**
+ * @brief 将VPN客户端添加到防火墙规则中
+ *
+ * 该函数读取VPN服务器的租约文件，为每个VPN客户端接口生成防火墙规则，
+ * 将这些客户端的流量添加到ACCEPT链中。
+ *
+ * @param fp 指向防火墙规则文件的指针，用于写入生成的规则
+ *
+ * @note 该函数只处理PPTP/L2TP类型的VPN客户端(接口名称为pppX，其中X >= VPN_SERVER_PPP_UNIT)
+ * @note 函数内部会打开VPN_SERVER_LEASE_FILE文件读取客户端列表
+ */
 static void
 include_vpns_clients(FILE *fp)
 {
@@ -741,11 +829,30 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 	return mac_filter_mode;
 }
 
+/**
+ * @brief 生成基于URL过滤的iptables规则
+ *
+ * 该函数处理URL过滤规则，支持以下功能：
+ * 1. 根据时间条件过滤URL
+ * 2. 支持MAC地址分组或单个MAC地址过滤
+ * 3. 自动处理HTTP/HTTPS前缀
+ * 4. 区分IP地址和域名规则
+ * 5. 添加默认RETURN规则确保不匹配的流量正常通过
+ *
+ * @param fp 文件指针，用于输出iptables规则
+ * @return int 返回生成的规则数量
+ *
+ * @author tekintian@gmail.com https://dev.tekin.cn
+ * @note 函数会记录详细的调试信息到日志中
+ * @note 支持两种MAC地址模式：分组模式和单个MAC模式
+ * @note 会自动清理URL中的http://或https://前缀
+ * @note 对于IP地址会生成直接的目标地址规则，对于域名会生成字符串匹配规则
+ */
 static int
 include_webstr_filter(FILE *fp)
 {
-    int webstr_items, url_length;
-    char url_list[256], nv_name[32], url_buf[256], *filterstr;
+	int webstr_items, url_length;
+	char url_list[256], nv_name[32], url_buf[256], *filterstr;
     char url_timematch[256];  // 添加时间匹配字符串
     const char *dtype = IPT_CHAIN_NAME_URL_LIST;
 
@@ -856,7 +963,7 @@ include_webstr_filter(FILE *fp)
             /* 为每个MAC地址生成单独的string规则 */
             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
 				if (is_ip_address(filterstr)) {
-					fprintf(fp, "-A %s -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
+					fprintf(fp, "-A %s -p tcp -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                         dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
                     logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
 					
@@ -868,12 +975,11 @@ include_webstr_filter(FILE *fp)
 
 				}
 				webstr_items++;
-               
             }
         } else {
             /* 没有MAC限制，应用到所有流量 */
             if (is_ip_address(filterstr)) {
-                fprintf(fp, "-A %s -d %s%s -j REJECT --reject-with tcp-reset\n",
+                fprintf(fp, "-A %s -p tcp -d %s%s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch);
                 logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (all MAC)", filterstr, url_timematch);
             } else {
@@ -883,70 +989,15 @@ include_webstr_filter(FILE *fp)
             }
             webstr_items++;
         }
-        
-        // /* 生成基于string模块的HTTP流量过滤规则 - 替换原来的webstr规则 */
-        // if (url_total > 0)
-        //     url_length += strlen(split);
-        
-        // if (url_total + url_length < sizeof(url_list)) {
-        //     if (url_total > 0)
-        //         strcat(url_list, split);
-        //     strcat(url_list, filterstr);
-        //     url_total += url_length;
-        // } else {
-        //     /* flush merged url */
-        //     if (url_total > 0) {
-        //         if (need_mac_condition) {
-        //             /* 为每个MAC地址生成单独的string规则 */
-        //             for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-        //                 fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-        //                     dtype, url_list, url_timematch, mac_addresses[mac_idx]);
-        //                 webstr_items++;
-        //                 logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
-        //             }
-        //         } else {
-        //             /* 没有MAC限制，应用到所有流量 */
-        //             fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
-        //                 dtype, url_list, url_timematch);
-        //             webstr_items++;
-        //             logmessage("URL Filter", "DEBUG: Added string rule for HTTP: %s%s (all MAC)", url_list, url_timematch);
-        //         }
-        //     }
-            
-        //     /* 开始新的URL列表 */
-        //     strcpy(url_list, filterstr);
-        //     url_total = strlen(filterstr);
-        // }
     }
 
-    // /* 处理剩余的合并URL */
-    // if (url_total > 0) {
-    //     if (need_mac_condition) {
-    //         /* 为每个MAC地址生成单独的string规则 */
-    //         for (int mac_idx = 0; mac_idx < mac_count; mac_idx++) {
-    //             fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
-    //                 dtype, url_list, url_timematch, mac_addresses[mac_idx]);
-    //             webstr_items++;
-    //             logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s%s (MAC: %s)", url_list, url_timematch, mac_addresses[mac_idx]);
-    //         }
-    //     } else {
-    //         /* 没有MAC限制，应用到所有流量 */
-    //          fprintf(fp, "-A %s -p tcp --dport 80 -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
-    //         dtype, url_list, url_timematch);  // 修复：添加url_timematch参数
-    //     	webstr_items++;
-    //         logmessage("URL Filter", "DEBUG: Added final string rule for HTTP: %s (all MAC)", url_list);
-    //     }
-    // }
-
-    //logmessage("URL Filter", "DEBUG: Total webstr_items = %d", webstr_items);
-    
     /* 🔥 修复：添加默认RETURN规则，确保不匹配URL规则的流量能正常通过 */
     if (webstr_items > 0) {
         fprintf(fp, "-A %s -j RETURN\n", dtype);
         logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
     }
     
-    // logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
+    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int
@@ -1812,8 +1863,27 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	return ret;
 }
 
-void
-ipt_filter_default(void)
+/**
+ * @brief 初始化并应用默认的iptables过滤规则
+ *
+ * 该函数生成一个默认的iptables过滤规则集，并将其写入临时文件后应用。
+ * 规则配置包括INPUT、FORWARD和OUTPUT链的基本规则，以及特定于VPN和UPnP的链。
+ * 防火墙状态由nvram中的"fw_enable_x"设置决定，启用时默认策略为DROP，否则为ACCEPT。
+ *
+ * 生成的规则包括：
+ * - 允许已建立和相关的连接
+ * - 允许本地回环和桥接接口的流量
+ * - 丢弃无效状态的数据包
+ * - 根据防火墙状态允许DHCP流量
+ * - 桥接接口间的转发规则
+ *
+ * 最终规则通过iptables-restore命令应用。
+ *
+ * @note 规则文件路径固定为"/tmp/ipt_filter.default"
+ * @note 使用nvram_match检查防火墙是否启用
+ * @note 包含对MINIUPNPD_CHAIN_IP4_FORWARD和IPT_CHAIN_NAME_VPN_LIST链的初始化
+ */
+void ipt_filter_default(void)
 {
 	FILE *fp;
 	char *ftype, *dtype;
@@ -1857,6 +1927,20 @@ ipt_filter_default(void)
 	doSystem("iptables-restore %s", ipt_file);
 }
 
+/**
+ * @brief 配置iptables mangle表的规则，主要用于TTL修改功能
+ * 
+ * 该函数根据NVRAM配置生成iptables mangle表规则，主要处理WAN接口和MAN接口的TTL修改需求，
+ * 包括普通TTL递增和组播TTL特殊处理。
+ * 
+ * @param man_if 管理接口名称
+ * @param wan_if WAN接口名称
+ * @param use_man 是否需要对管理接口应用TTL规则 (1=应用, 0=不应用)
+ * 
+ * @note 生成的规则会写入临时文件/tmp/ipt_mangle.rules，并通过iptables-restore加载
+ * @note 当wan_ttl_fix=2且mr_enable_x≠1时，会自动禁用TTL修改功能
+ * @note 支持对IPTV接口(viptv_ifname)的特殊组播流量处理
+ */
 static void
 ipt_mangle_rules(const char *man_if, const char *wan_if, int use_man)
 {
@@ -2430,11 +2514,32 @@ ip6t_mangle_rules(char *man_if)
 
 #endif
 
+/**
+ * @brief 配置并应用NAT规则
+ *
+ * 该函数生成并应用iptables的NAT规则，包括端口转发、DMZ、VPN相关规则等。
+ *
+ * @param man_if 管理接口名称
+ * @param man_ip 管理接口IP地址
+ * @param wan_if WAN接口名称
+ * @param wan_ip WAN接口IP地址
+ * @param lan_if LAN接口名称
+ * @param lan_ip LAN接口IP地址
+ * @param lan_net LAN网络地址
+ * @param use_man 是否使用管理接口(1:使用, 0:不使用)
+ * @param wan_proto WAN协议类型
+ *
+ * @return 执行成功返回0，失败返回非0值
+ *
+ * @note 该函数会生成临时规则文件/tmp/ipt_nat.rules，并通过iptables-restore应用规则
+ * @note 函数会根据NVRAM配置动态生成不同的NAT规则
+ * @note 支持的NAT功能包括:端口转发、DMZ、VPN穿透、UPnP等
+ */
 static int
 ipt_nat_rules(char *man_if, char *man_ip,
-              char *wan_if, char *wan_ip,
-              char *lan_if, char *lan_ip, char *lan_net,
-              int use_man, int wan_proto)
+			  char *wan_if, char *wan_ip,
+			  char *lan_if, char *lan_ip, char *lan_net,
+			  int use_man, int wan_proto)
 {
 	FILE *fp;
 	char *dtype, *vpnc_if;
@@ -2825,8 +2930,33 @@ ipt_nat_default(void)
 	doSystem("iptables-restore %s", ipt_file);
 }
 
-void
-start_firewall_ex(void)
+/**
+ * @brief 初始化并启动防火墙扩展功能
+ *
+ * 该函数负责配置和启动防火墙的扩展功能，包括：
+ * - 设置时区信息
+ * - 获取网络接口配置
+ * - 配置IP过滤规则
+ * - 处理IPv4/IPv6规则
+ * - 执行自定义防火墙脚本
+ *
+ * 主要功能流程：
+ * 1. 设置内核时区
+ * 2. 获取WAN/LAN/MAN接口信息
+ * 3. 配置路由策略过滤
+ * 4. 设置日志记录类型
+ * 5. 应用IPv4 RAW/Mangle/NAT/Filter规则
+ * 6. 应用IPv6 Mangle/Filter规则(如果启用)
+ * 7. 执行第三方防火墙脚本(如Shadowsocks/Adbyby)
+ * 8. 启用IPv4转发
+ * 9. 卸载未使用的iptables模块
+ *
+ * @note 该函数会修改系统iptables配置和内核网络参数
+ * @note 依赖于NVRAM配置和系统网络接口状态
+ *
+ * @warning 修改防火墙规则可能会影响网络连接
+ */
+void start_firewall_ex(void)
 {
 	/* Ensure timezone is set before generating time-based firewall rules */
 	time_zone_x_mapping();
@@ -2938,4 +3068,3 @@ start_firewall_ex(void)
 	module_smart_unload("iptable_mangle", 0);
 	module_smart_unload("ip6table_mangle", 0);
 }
-
