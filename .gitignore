@@ -9,3 +9,4 @@ toolchain/toolchain-*/
 /trunk/user/iptables/Makefile.bak
 /trunk/user/iptables/temp.txt
 *.xz
+/trunk/user/adbyby/adbyby
