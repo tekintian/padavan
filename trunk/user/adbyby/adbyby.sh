@@ -491,27 +491,42 @@ adbyby_hosts=`nvram get hosts_ad`
 nvram set adbyby_hostsad=0
 if [ "$adbyby_hosts" = "1" ]; then
 rm -rf $PROG_PATH/hosts
-grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $PROG_PATH/hostlist.txt
-for ip in `cat $PROG_PATH/hostlist.txt`
-do
-logger -t "adbyby" "正在下载: $ip"
-curl -k -s -o /tmp/host.txt --connect-timeout 5 --retry 3 $ip
-if [ ! -f "/tmp/host.txt" ]; then
-	logger -t "adbyby" "$ip 下载失败！"
-else
-	logger -t "adbyby" "hosts下载成功,处理中..."
-grep -v '^#' /tmp/host.txt | grep -v "^$" >> $PROG_PATH/hosts
-fi
-done
-rm -f /tmp/host.txt
-logger -t "adbyby" "正在对hosts文件进行去重处理."
-sort $PROG_PATH/hosts | uniq
-nvram set adbyby_hostsad=`grep -v '^!' $PROG_PATH/hosts | wc -l`
-sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
-cat >> /etc/storage/dnsmasq/dnsmasq.conf <<-EOF
+if [ -f "/etc/storage/adbyby_host.sh" ] && [ -s "/etc/storage/adbyby_host.sh" ]; then
+	grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $PROG_PATH/hostlist.txt
+	if [ -s "$PROG_PATH/hostlist.txt" ]; then
+		for ip in `cat $PROG_PATH/hostlist.txt`
+		do
+		logger -t "adbyby" "正在下载: $ip"
+		curl -k -s -o /tmp/host.txt --connect-timeout 5 --retry 3 $ip
+		if [ ! -f "/tmp/host.txt" ]; then
+			logger -t "adbyby" "$ip 下载失败！"
+		else
+			logger -t "adbyby" "hosts下载成功,处理中..."
+			grep -v '^#' /tmp/host.txt | grep -v "^$" >> $PROG_PATH/hosts
+		fi
+		done
+		rm -f /tmp/host.txt
+		logger -t "adbyby" "正在对hosts文件进行去重处理."
+		if [ -f "$PROG_PATH/hosts" ]; then
+			sort $PROG_PATH/hosts | uniq > $PROG_PATH/hosts.tmp && mv $PROG_PATH/hosts.tmp $PROG_PATH/hosts
+			nvram set adbyby_hostsad=`grep -v '^!' $PROG_PATH/hosts | wc -l`
+			sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
+			cat >> /etc/storage/dnsmasq/dnsmasq.conf <<-EOF
 	addn-hosts=$PROG_PATH/hosts
 EOF
+		fi
+	else
+		logger -t "adbyby" "hosts下载列表为空，跳过hosts处理"
+	fi
+else
+	logger -t "adbyby" "hosts配置文件不存在，请先配置hosts下载列表"
 fi
+else
+	# 移除dnsmasq中的hosts配置
+	sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
+	rm -f $PROG_PATH/hosts
+fi
+rm -f $PROG_PATH/hostlist.txt
 }
 
 
@@ -583,6 +598,32 @@ serving-sys.com
 
 EEE
 	chmod 755 "$adbyby_adhost"
+	fi
+
+	adbyby_host="/etc/storage/adbyby_host.sh"
+	if [ ! -f "$adbyby_host" ] || [ ! -s "$adbyby_host" ] ; then
+	cat > "$adbyby_host" <<-\\EEE
+# AdByby Hosts下载列表配置文件
+# 每行一个URL，支持http/https协议
+# 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
+
+# StevenBlack hosts合并版本（包含广告、恶意软件、假新闻等）
+# https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+
+# 仅广告过滤hosts
+# https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews/hosts
+
+# adaway.org hosts
+# https://adaway.org/hosts.txt
+
+# yhosts.org hosts
+# https://raw.githubusercontent.com/VeleSila/yhosts/master/hosts
+
+# 大河马hosts（中文广告过滤）
+# https://raw.githubusercontent.com/jdlingyu/ad-wars/master/hosts
+
+EEE
+	chmod 755 "$adbyby_host"
 	fi
 }
 
