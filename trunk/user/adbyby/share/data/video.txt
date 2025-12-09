@@ -1,8 +1,8 @@
-! Version: 20251209
-! Title: Adt视频网站广告过滤规则
+! Version: 202512091633
+! Title: abbyby video ad filter rules
 ! Expires: 2 days (update frequency)
-! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adt-video.txt
-!----------------------------视频网站规则----------------------------
+! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt
+!----------------------------video ad filter rules----------------------------
 !--video site common ads
 ! ##div.h5-ext-layer
 ##div.m-video-play.js-play>a.m-video-bannerTitle.js-video-bannerTitle

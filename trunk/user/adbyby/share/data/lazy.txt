@@ -1,8 +1,8 @@
 ! Version: 202312251231
-! Title: Adt基础广告过滤规则
-! ADT全局基础广告过滤规则,包含全局ID, CLASS,文件规则
+! Title: adbyby base ad filter rules
+! adbyby base ad filter ruless
 ! Last modified: 2023-12-25 12:25 PRC
-! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adt-base.txt
+! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt
 !
 !----GNU LGPL Licensed, NO WARRANTY but Best Wishes----
 !-- exclude rule

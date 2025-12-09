@@ -366,20 +366,12 @@ EOF
 	fi
 	if ls /etc/storage/dnsmasq-adbyby.d/* >/dev/null 2>&1; then
 	mkdir -p /tmp/dnsmasq.d
-	#if [ $abp_mode -eq 1 ]; then
-	#cp $PROG_PATH/dnsmasq.adblock /etc/storage/dnsmasq-adbyby.d/04-dnsmasq.adblock
-	#sed -i '/youku.com/d' $PROG_PATH/dnsmasq.ads
-	#cp $PROG_PATH/dnsmasq.ads /etc/storage/dnsmasq-adbyby.d/05-dnsmasq.ads
-	#fi
 	fi
-	#sed -i '/mesu.apple.com/d' /etc/dnsmasq.conf && [ $block_ios -eq 1 ] && echo 'address=/mesu.apple.com/0.0.0.0' >> /etc/dnsmasq.conf
-	#处理hosts文件
 }
 
 del_dns()
 {
 	sed -i '/dnsmasq-adbyby/d' /etc/storage/dnsmasq/dnsmasq.conf
-	#sed -i '/tvhosts/d' /etc/storage/dnsmasq/dnsmasq.conf
 	sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
 	rm -f /tmp/dnsmasq.d/dnsmasq-adbyby.conf
 	rm -f /etc/storage/dnsmasq-adbyby.d/*
@@ -582,6 +574,12 @@ EEE
 weixin.qq.com
 qpic.cn
 imtt.qq.com
+api.codebuddy.com
+api.codebuddy.com
+chat.openai.com
+api.openai.com
+openai.com
+cdn.openai.com
 
 EEE
 	chmod 755 "$adbyby_adesc"
@@ -607,20 +605,15 @@ EEE
 # 每行一个URL，支持http/https协议
 # 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
 
-# StevenBlack hosts合并版本（包含广告、恶意软件、假新闻等）
-# https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+# 常见广告过滤hosts
+https://gitee.com/tekintian/adt-rules/raw/master/hosts/ads_hosts.txt
 
-# 仅广告过滤hosts
-# https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews/hosts
+# 统计站点过滤hosts
+# https://gitee.com/tekintian/adt-rules/raw/master/hosts/stats_hosts.txt
 
-# adaway.org hosts
-# https://adaway.org/hosts.txt
+# adaway(https://adaway.org/hosts.txt)精简版
+# https://gitee.com/tekintian/adt-rules/raw/master/hosts/adaway_hosts.txt
 
-# yhosts.org hosts
-# https://raw.githubusercontent.com/VeleSila/yhosts/master/hosts
-
-# 大河马hosts（中文广告过滤）
-# https://raw.githubusercontent.com/jdlingyu/ad-wars/master/hosts
 
 EEE
 	chmod 755 "$adbyby_host"
