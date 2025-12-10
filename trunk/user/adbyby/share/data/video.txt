@@ -1,7 +1,8 @@
-! Version: 202512091633
+! Version: 2025-12-10T09:33:40
 ! Title: Adbyby Video Site Ad Filtering Rules
 ! Expires: 2 days (update frequency)
 ! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt
+!
 !----------------------------video ad filter rules----------------------------
 !--video site common ads
 ! ##div.h5-ext-layer

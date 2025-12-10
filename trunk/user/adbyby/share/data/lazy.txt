@@ -1,4 +1,4 @@
-! Version: 202312251231
+! Version: 2025-12-10T10:12:03
 ! Title: Adbyby Basic Ad Filtering Rules
 ! Expires: 2 days (update frequency)
 ! Homepage: https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt

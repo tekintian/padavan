@@ -27,7 +27,6 @@ init_adbyby_env()
 	logger -t "adbyby" "初始化AdByBy环境..."
 	
 	# 创建必要的目录结构
-	mkdir -p /tmp/adbyby
 	mkdir -p /tmp/adbyby/data
 	mkdir -p /etc/storage/dnsmasq-adbyby.d
 	mkdir -p /tmp/dnsmasq.d
@@ -153,9 +152,10 @@ add_rules()
 	touch /tmp/md5.json && curl -k -s -o /tmp/md5.json --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/md5.json
 
 	lazy_local=$(grep 'lazy' /tmp/local-md5.json | awk -F' ' '{print $1}')
-	video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')  
-	lazy_online=$(sed  's/":"/\n/g' /tmp/md5.json  |  sed  's/","/\n/g' | sed -n '2p')
-	video_online=$(sed  's/":"/\n/g' /tmp/md5.json  |  sed  's/","/\n/g' | sed -n '4p')
+	video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')
+	# 从md5.json文件中提取lazy.txt和video.txt的MD5值
+	lazy_online=$(grep 'lazy.txt' /tmp/md5.json | awk -F'"' '{print $4}')
+	video_online=$(grep 'video.txt' /tmp/md5.json | awk -F'"' '{print $4}')
 
 	if [ "$lazy_online"x != "$lazy_local"x -o "$video_online"x != "$video_local"x ]; then
 		echo "MD5 not match! Need update!"
