@@ -21,6 +21,158 @@ debug_adbyby_status()
 	logger -t "adbyby" "=== 调试信息结束 ==="
 }
 
+# 检查8118代理状态
+debug_8118_status()
+{
+	logger -t "adbyby" "=== 8118代理状态检查 ==="
+	
+	# 检查adbyby进程
+	if pgrep -f "adbyby" > /dev/null; then
+		ADBYBY_PID=$(pgrep -f "adbyby")
+		logger -t "adbyby" "AdByBy进程运行中，PID: $ADBYBY_PID"
+		
+		# 检查进程状态
+		if ps -p $ADBYBY_PID > /dev/null 2>&1; then
+			logger -t "adbyby" "AdByBy进程状态正常"
+		else
+			logger -t "adbyby" "AdByBy进程状态异常"
+		fi
+		
+		# 检查端口监听
+		if netstat -ln | grep ":8118" > /dev/null 2>&1; then
+			logger -t "adbyby" "8118端口正在监听"
+			netstat -ln | grep ":8118" | while read line; do
+				logger -t "adbyby" "端口状态: $line"
+			done
+		else
+			logger -t "adbyby" "8118端口未在监听"
+		fi
+		
+		# 检查配置文件
+		if [ -f "/tmp/adbyby/adhook.ini" ]; then
+			logger -t "adbyby" "配置文件存在: /tmp/adbyby/adhook.ini"
+			if grep -q "listen-address=0.0.0.0:8118" "/tmp/adbyby/adhook.ini"; then
+				logger -t "adbyby" "配置文件监听地址正确"
+			else
+				logger -t "adbyby" "配置文件监听地址异常"
+			fi
+		else
+			logger -t "adbyby" "配置文件不存在: /tmp/adbyby/adhook.ini"
+		fi
+		
+		# 检查防火墙规则
+		if iptables -t nat -L PREROUTING | grep ADBYBY > /dev/null 2>&1; then
+			logger -t "adbyby" "防火墙规则存在"
+		else
+			logger -t "adbyby" "防火墙规则不存在"
+		fi
+		
+		# 测试本地连接
+		if curl -s --connect-timeout 3 http://127.0.0.1:8118/ > /dev/null 2>&1; then
+			logger -t "adbyby" "本地8118端口连接正常"
+		else
+			logger -t "adbyby" "本地8118端口连接失败"
+		fi
+		
+	else
+		logger -t "adbyby" "AdByBy进程未运行"
+	fi
+	
+	logger -t "adbyby" "=== 8118代理状态检查结束 ==="
+}
+
+# 健康检查和自动重启adbyby
+health_check_adbyby()
+{
+	if pgrep -f "adbyby" > /dev/null; then
+		# 更严格的端口响应检查 - 连续测试两次
+		first_test=$(curl -s --connect-timeout 3 --max-time 5 http://127.0.0.1:8118/ >/dev/null 2>&1 && echo "OK" || echo "FAIL")
+		sleep 1
+		second_test=$(curl -s --connect-timeout 3 --max-time 5 http://127.0.0.1:8118/ >/dev/null 2>&1 && echo "OK" || echo "FAIL")
+		
+		if [ "$first_test" = "FAIL" ] || [ "$second_test" = "FAIL" ]; then
+			logger -t "adbyby" "端口响应测试失败(第一次:$first_test, 第二次:$second_test)，重启adbyby服务"
+			killall -q adbyby
+			sleep 2
+			cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+			sleep 3
+			logger -t "adbyby" "adbyby服务已重启"
+		else
+			logger -t "adbyby" "健康检查通过，端口响应正常"
+		fi
+	else
+		logger -t "adbyby" "adbyby进程不存在，尝试启动"
+		cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+		sleep 3
+	fi
+}
+
+# 专门处理"第一次成功，第二次失败"问题的激进清理函数
+cleanup_8118_connections()
+{
+	# 记录当前时间戳
+	echo $(date +%s) > /tmp/last_cleanup_time
+	
+	# 检查8118端口所有连接状态
+	total_connections=$(netstat -an | grep ":8118 " | wc -l)
+	time_wait_connections=$(netstat -an | grep ":8118 " | grep TIME_WAIT | wc -l)
+	established_connections=$(netstat -an | grep ":8118 " | grep ESTABLISHED | wc -l)
+	
+	logger -t "adbyby" "8118端口连接状态: 总计=$total_connections, TIME_WAIT=$time_wait_connections, ESTABLISHED=$established_connections"
+	
+	# 更激进的清理策略 - 只要有TIME_WAIT连接就重启
+	if [ "$time_wait_connections" -gt 5 ]; then
+		logger -t "adbyby" "检测到TIME_WAIT连接($time_wait_connections)，立即重启adbyby服务"
+		killall -q adbyby
+		sleep 2
+		cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+		sleep 4
+		logger -t "adbyby" "adbyby服务已因连接清理而重启"
+		return
+	fi
+	
+	# 检查是否存在任何ESTABLISHED连接但无法响应的情况
+	if [ "$established_connections" -gt 0 ]; then
+		# 测试连接是否真的有效
+		test_result=$(timeout 3 curl -s http://127.0.0.1:8118/ >/dev/null 2>&1 && echo "OK" || echo "FAIL")
+		if [ "$test_result" = "FAIL" ]; then
+			logger -t "adbyby" "检测到僵死的ESTABLISHED连接，强制重启adbyby服务"
+			killall -9 adbyby
+			sleep 3
+			cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+			sleep 5
+			logger -t "adbyby" "adbyby服务已强制重启"
+			return
+		fi
+	fi
+	
+	# 检查进程状态
+	if pgrep -f "adbyby" > /dev/null; then
+		# 检查进程资源使用
+		ps aux | grep -v grep | grep "adbyby" | awk '{print $3, $4}' > /tmp/adbyby_resource 2>/dev/null
+		if [ -f "/tmp/adbyby_resource" ]; then
+			cpu_mem=$(cat /tmp/adbyby_resource)
+			cpu_usage=$(echo $cpu_mem | awk '{print $1}')
+			mem_usage=$(echo $cpu_mem | awk '{print $2}')
+			
+			# 更敏感的资源使用阈值
+			if [ "$(echo "$cpu_usage > 30" | bc 2>/dev/null || echo 0)" = "1" ] || [ "$(echo "$mem_usage > 5" | bc 2>/dev/null || echo 0)" = "1" ]; then
+				logger -t "adbyby" "检测到异常资源使用(CPU:${cpu_usage}%, MEM:${mem_usage}%)，重启adbyby服务"
+				killall -q adbyby
+				sleep 3
+				cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+				sleep 5
+				logger -t "adbyby" "adbyby服务已因资源异常重启"
+			fi
+			rm -f /tmp/adbyby_resource
+		fi
+	else
+		logger -t "adbyby" "adbyby进程意外终止，重新启动"
+		cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
+		sleep 5
+	fi
+}
+
 # 初始化AdByBy环境
 init_adbyby_env()
 {
@@ -132,6 +284,13 @@ adbyby_start()
 	hosts_ads
 	/sbin/restart_dhcpd
 	add_cron
+	
+	# 启动健康检查定时任务 - 更频繁的检查（每2分钟）
+	echo "*/2 * * * * /bin/sh /usr/bin/adbyby.sh health_check" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
+	# 添加连接清理任务（每3分钟）
+	echo "*/3 * * * * /bin/sh /usr/bin/adbyby.sh cleanup_connections" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
+	logger -t "adbyby" "已添加adbyby健康检查任务（每2分钟）和连接清理任务（每3分钟）"
+	
 	logger -t "adbyby" "Adbyby启动完成。"
 }
 
@@ -797,17 +956,26 @@ debug_adbyby_status
 init)
 init_adbyby_env
 ;;
+health_check)
+health_check_adbyby
+cleanup_8118_connections
+;;
+cleanup_connections)
+cleanup_8118_connections
+;;
 *)
-echo "Usage: $0 {start|stop|A|C|D|E|F|G|debug|init}"
-echo "  start  - 启动AdByBy服务"
-echo "  stop   - 停止AdByBy服务"
-echo "  A      - 更新规则"
-echo "  C      - 添加防火墙规则"
-echo "  D      - 添加DNS规则"
-echo "  E      - 添加脚本文件"
-echo "  F      - 更新hosts文件"
-echo "  G      - 更新规则并重启"
-echo "  debug  - 显示调试信息"
-echo "  init   - 初始化环境"
+echo "Usage: $0 {start|stop|A|C|D|E|F|G|debug|init|health_check|cleanup_connections}"
+echo "  start           - 启动AdByBy服务"
+echo "  stop            - 停止AdByBy服务"
+echo "  A               - 更新规则"
+echo "  C               - 添加防火墙规则"
+echo "  D               - 添加DNS规则"
+echo "  E               - 添加脚本文件"
+echo "  F               - 更新hosts文件"
+echo "  G               - 更新规则并重启"
+echo "  debug           - 显示调试信息"
+echo "  init            - 初始化环境"
+echo "  health_check    - 执行健康检查和连接清理"
+echo "  cleanup_connections - 仅执行连接清理"
 ;;
 esac

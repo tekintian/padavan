@@ -153,22 +153,13 @@ static const char* ad_domains[] = {
     "iads.cn",            // 爱广告
     "admaster.com.cn",    // 传漾
     "miaozhen.com",       // 秒针
-    "dianjoy.com",        // 点乐
-    "ucweb.com",          // UC广告
-    "qutoutiao.net",      // 趣头条
-    "toutiaocdn.com",     // 今日头条CDN
-    "snssdk.com",         // 字节跳动
     "pangolin-sdk.com",   // 穿山甲广告
     "gdt.qq.com",         // 腾讯广告
     "e.qq.com",           // 腾讯效果广告
     "ad.qq.com",          // 腾讯广告
-    "mi.com",             // 小米广告
-    "oppo.com",           // OPPO广告
-    "vivo.com",           // VIVO广告
     
     // 程序化广告平台
     "adnxs.com",          // AppNexus
-    "criteo.com",         // Criteo
     "taboola.com",        // Taboola
     "outbrain.com",       // Outbrain
     "adsafeprotected.com", // 广告验证
@@ -177,7 +168,6 @@ static const char* ad_domains[] = {
     
     // 数据统计和分析
     "hm.baidu.com",       // 百度统计
-    "tongji.baidu.com",   // 百度统计
     "cnzz.com",           // CNZZ统计
     "51.la",              // 51LA统计
     "log.mi.com",         // 小米统计

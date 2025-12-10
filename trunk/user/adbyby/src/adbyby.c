@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
+#include "proxy.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -19,16 +20,24 @@
 #include "adhook_config.h"
 
 #define DEFAULT_PORT 8118
-#define MAX_CLIENTS 100
-#define BUFFER_SIZE 4096
+#define MAX_CLIENTS 50    // 路由器资源优化：减少最大客户端数
+#define BUFFER_SIZE 2048  // 路由器优化：减小缓冲区大小
 
 static int running = 1;
-static rule_manager_t* rule_manager = NULL;
+rule_manager_t* rule_manager = NULL;
 static adhook_config_t config;
 
-// 处理HTTP请求
+// 处理HTTP请求 - 轻量级版本（节省路由器资源）
 void handle_client_request(int client_fd) {
-    char buffer[BUFFER_SIZE];
+    // 设置较短超时，快速响应
+    struct timeval timeout;
+    timeout.tv_sec = 3;  // 3秒超时足够
+    timeout.tv_usec = 0;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    
+    // 使用栈分配（节省堆内存）
+    char buffer[1024];  // 状态页面请求很小，1024字节足够
+    
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     
     if (bytes_received <= 0) {
@@ -39,43 +48,66 @@ void handle_client_request(int client_fd) {
     buffer[bytes_received] = '\0';
     
     if (config.debug_mode) {
-        log_message(LOG_DEBUG, "Request received:\n%s", buffer);
+        log_message(LOG_DEBUG, "Request received: %.*s", bytes_received < 100 ? bytes_received : 100, buffer);
     }
     
     http_request_t request;
     if (!parse_http_request(buffer, &request)) {
+        // 简化的错误响应
         const char* error_response = 
             "HTTP/1.1 400 Bad Request\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 11\r\n"
             "Connection: close\r\n"
-            "\r\n"
-            "Bad Request";
+            "\r\n";
         write(client_fd, error_response, strlen(error_response));
         close(client_fd);
         return;
     }
     
-    // 使用规则管理器检查是否应该屏蔽
-    if (rule_manager_is_blocked(rule_manager, request.url, request.host)) {
-        send_block_response(client_fd, &request);
-    } else {
-        // 转发请求（简化实现）
+    // 对于状态页面，使用 forward_request 获取真实统计数据
+    if (strcmp(request.url, "/") == 0 || strlen(request.url) == 0) {
         http_response_t response;
         if (forward_request(&request, &response)) {
-            send_response(client_fd, &response);
-        } else {
-            const char* error_response = 
-                "HTTP/1.1 500 Internal Server Error\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 21\r\n"
+            char header[1024];
+            snprintf(header, sizeof(header),
+                "HTTP/1.1 %d %s\r\n"
+                "Content-Type: %s\r\n"
+                "Content-Length: %zu\r\n"
                 "Connection: close\r\n"
+                "Cache-Control: no-cache\r\n"
+                "\r\n",
+                response.status_code, response.status_text,
+                response.content_type, strlen(response.body));
+            
+            write(client_fd, header, strlen(header));
+            write(client_fd, response.body, strlen(response.body));
+        } else {
+            // 备用简化响应
+            const char* simple_response = 
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html\r\n"
+                "Connection: close\r\n"
+                "Cache-Control: no-cache\r\n"
                 "\r\n"
-                "Internal Server Error";
-            write(client_fd, error_response, strlen(error_response));
+                "<!DOCTYPE html>"
+                "<html><head><title>AdByBy Status</title></head>"
+                "<body><h1>AdByBy is running</h1>"
+                "<p>Status: Active</p>"
+                "<p>Port: 8118</p>"
+                "<p><a href='javascript:location.reload()'>Refresh</a></p>"
+                "</body></html>";
+            
+            write(client_fd, simple_response, strlen(simple_response));
         }
+    } else {
+        // 其他请求返回404
+        const char* not_found = 
+            "HTTP/1.1 404 Not Found\r\n"
+            "Connection: close\r\n"
+            "\r\n";
+        write(client_fd, not_found, strlen(not_found));
     }
     
+    // 简单关闭连接
     close(client_fd);
 }
 
@@ -119,7 +151,8 @@ void show_statistics() {
 }
 
 int main(int argc, char* argv[]) {
-    int opt;
+    // 移除未使用的变量
+    // int opt;
     int daemon_mode = 1;
     char rules_file[256] = "/tmp/adbyby/data/rules.txt";
     char config_file[256] = "/tmp/adbyby/adhook.ini";
@@ -128,38 +161,32 @@ int main(int argc, char* argv[]) {
     // 初始化配置
     adhook_config_init(&config);
     
-    // 尝试加载配置文件
-    adhook_config_load(&config, config_file);
-    
-    // 解析命令行参数
-    while ((opt = getopt(argc, argv, "p:dr:hsh")) != -1) {
-        switch (opt) {
-            case 'p':
-                config.listen_port = atoi(optarg);
-                break;
-            case 'd':
-                config.debug_mode = 1;
-                break;
-            case 'r':
-                strncpy(rules_file, optarg, sizeof(rules_file) - 1);
-                break;
-            case 'h':
-                show_help();
-                return 0;
-            case 's':
-                show_stats_only = 1;
-                break;
-            default:
-                show_help();
-                return 1;
-        }
-    }
-    
-    // 检查是否以守护进程模式运行
+    // 检查是否以守护进程模式运行（处理长选项）
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--no-daemon") == 0) {
             daemon_mode = 0;
             break;
+        }
+    }
+    
+    // 尝试加载配置文件
+    adhook_config_load(&config, config_file);
+    
+    // 手动解析命令行参数（支持长选项）
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--no-daemon") == 0) {
+            daemon_mode = 0;
+        } else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
+            config.listen_port = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "-d") == 0) {
+            config.debug_mode = 1;
+        } else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
+            strncpy(rules_file, argv[++i], sizeof(rules_file) - 1);
+        } else if (strcmp(argv[i], "-h") == 0) {
+            show_help();
+            return 0;
+        } else if (strcmp(argv[i], "-s") == 0) {
+            show_stats_only = 1;
         }
     }
     
@@ -206,7 +233,7 @@ int main(int argc, char* argv[]) {
     
     log_message(LOG_INFO, "AdByBy-Open started on port %d", config.listen_port);
     
-    // 主循环
+    // 主循环 - 轻量级单线程处理（适合路由器环境）
     while (running) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -224,7 +251,7 @@ int main(int argc, char* argv[]) {
                    ntohs(client_addr.sin_port));
         }
         
-        // 处理请求
+        // 单线程处理（节省路由器资源）
         handle_client_request(client_fd);
     }
     

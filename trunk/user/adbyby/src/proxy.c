@@ -1,5 +1,9 @@
 #include "proxy.h"
 #include "utils.h"
+#include "rules.h"
+
+// 外部声明规则管理器（在adbyby.c中定义）
+extern rule_manager_t* rule_manager;
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -34,7 +38,8 @@ int parse_http_request(const char* request_data, http_request_t* request) {
     
     // 解析头部
     char* headers_start = line + strlen(line) + 2;
-    strcpy(request->headers, headers_start);
+    strncpy(request->headers, headers_start, sizeof(request->headers) - 1);
+    request->headers[sizeof(request->headers) - 1] = '\0';
     
     // 解析各个头部字段
     line = strtok(NULL, "\r\n");
@@ -94,10 +99,7 @@ int is_blocked_request(const http_request_t* request) {
         "allyes.com", "admaster.com.cn", "miaozhen.com", "mediav.com", "iads.cn",
         
         // 统计分析
-        "hm.baidu.com", "tongji.baidu.com", "cnzz.com", "51.la",
-        
-        // 短视频广告
-        "douyin.com/ad", "kuaishou.com/ad", "toutiao.com/ad",
+        "hm.baidu.com", "cnzz.com", "51.la",
         
         NULL
     };
@@ -127,52 +129,18 @@ int is_blocked_request(const http_request_t* request) {
 }
 
 void send_block_response(int client_fd, const http_request_t* request) {
-    const char* block_html = 
-        "<!DOCTYPE html>"
-        "<html><head>"
-        "<title>广告已屏蔽</title>"
-        "<meta charset='utf-8'>"
-        "<style>"
-        "body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:50px;}"
-        ".container{max-width:600px;margin:0 auto;background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}"
-        ".blocked-icon{font-size:48px;color:#e74c3c;margin-bottom:20px;}"
-        ".title{color:#2c3e50;font-size:24px;margin-bottom:10px;}"
-        ".message{color:#7f8c8d;font-size:16px;}"
-        ".details{margin-top:20px;padding:15px;background:#f8f9fa;border-radius:4px;font-family:monospace;font-size:12px;color:#555;}"
-        "</style></head><body>"
-        "<div class='container'>"
-        "<div class='blocked-icon'>🚫</div>"
-        "<div class='title'>广告已被屏蔽</div>"
-        "<div class='message'>此广告被 AdByBy-Open 自动拦截，保护您的网络安全</div>";
-    
-    if (request && strlen(request->url) > 0) {
-        char details[512];
-        snprintf(details, sizeof(details), 
-            "<div class='details'>被屏蔽的URL: %s<br>Host: %s</div>", 
-            request->url, request->host);
-        block_html = realloc((char*)block_html, strlen(block_html) + strlen(details) + 100);
-        strcat((char*)block_html, details);
-    }
-    
-    strcat((char*)block_html, "</div></body></html>");
-    
-    char response[4096];
-    int html_len = strlen(block_html);
-    
-    int header_len = snprintf(response, sizeof(response),
+    // 极简屏蔽页面，节省路由器资源
+    (void)request; // 避免未使用参数警告
+    const char* simple_block = 
         "HTTP/1.1 200 OK\r\n"
-        "Server: AdByBy-Open/1.0\r\n"
-        "Content-Type: text/html; charset=utf-8\r\n"
-        "Content-Length: %d\r\n"
+        "Content-Type: text/html\r\n"
         "Connection: close\r\n"
-        "Cache-Control: no-cache\r\n"
-        "\r\n",
-        html_len);
+        "\r\n"
+        "<!DOCTYPE html>"
+        "<html><head><title>Blocked</title></head>"
+        "<body><h1>🚫 Ad Blocked</h1></body></html>";
     
-    write(client_fd, response, header_len);
-    write(client_fd, block_html, html_len);
-    
-    log_message(LOG_INFO, "Sent block page for URL: %s", request ? request->url : "unknown");
+    write(client_fd, simple_block, strlen(simple_block));
 }
 
 int forward_request(const http_request_t* request, http_response_t* response) {
@@ -183,10 +151,23 @@ int forward_request(const http_request_t* request, http_response_t* response) {
     // 检查是否为根路径请求，如果是则返回状态页面
     if (strcmp(request->url, "/") == 0 || strlen(request->url) == 0) {
         response->status_code = HTTP_OK;
-        strcpy(response->status_text, "OK");
-        strcpy(response->content_type, "text/html");
+        strncpy(response->status_text, "OK", sizeof(response->status_text) - 1);
+        strncpy(response->content_type, "text/html", sizeof(response->content_type) - 1);
         
-        const char* proxy_msg = 
+        // 获取真实统计数据
+        int total_rules = 0, enabled_rules = 0, total_hits = 0;
+        if (rule_manager) {
+            rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
+        }
+        
+        char stats_buffer[256];
+        snprintf(stats_buffer, sizeof(stats_buffer), 
+            "<p>内置规则: %d条</p>"
+            "<p>过滤命中: <span id='hits'>%d</span>次</p>", 
+            total_rules, total_hits);
+        
+        // 构建包含真实统计数据的HTML响应
+        strcpy(response->body, 
             "<!DOCTYPE html>"
             "<html><head>"
             "<title>AdByBy-Open 状态</title>"
@@ -207,7 +188,7 @@ int forward_request(const http_request_t* request, http_response_t* response) {
             "<div class='container'>"
             "<div class='header'>"
             "<h1>🛡️ AdByBy-Open 广告过滤代理</h1>"
-            "<p class='running'>✅ 服务正在运行</p>"
+            "<p class='running'>✅ 服务正在运行  |  <a href='https://dev.tekin.cn' target='_blank'>软件定制开发</a>咨询QQ:932256355</p>"
             "</div>"
             
             "<div class='status'>"
@@ -217,9 +198,12 @@ int forward_request(const http_request_t* request, http_response_t* response) {
             "<p>状态: <span class='running'>运行中</span></p>"
             "</div>"
             "<div class='status-item'>"
-            "<h3>📊 过滤统计</h3>"
-            "<p>内置规则: 48条</p>"
-            "<p>过滤命中: <span id='hits'>0</span>次</p>"
+            "<h3>📊 过滤统计</h3>");
+        
+        // 添加动态统计数据
+        strcat(response->body, stats_buffer);
+        
+        strcat(response->body,
             "</div>"
             "<div class='status-item'>"
             "<h3>⚙️ 系统信息</h3>"
@@ -227,22 +211,12 @@ int forward_request(const http_request_t* request, http_response_t* response) {
             "<p>架构: MIPS</p>"
             "</div>"
             "</div>"
-            
-            "<div class='info-section'>"
-            "<h3>📋 功能说明</h3>"
-            "<ul>"
-            "<li><strong>透明代理</strong>: 自动过滤HTTP请求中的广告</li>"
-            "<li><strong>DNS过滤</strong>: 阻止广告域名解析</li>"
-            "<li><strong>规则更新</strong>: 支持在线更新过滤规则</li>"
-            "<li><strong>自定义规则</strong>: 支持用户自定义过滤规则</li>"
-            "</ul>"
-            "</div>"
-            
+
             "<div class='info-section'>"
             "<h3>🔧 请求信息</h3>"
-            "<p><strong>当前请求URL:</strong> ";
+            "<p><strong>当前请求URL:</strong> ");
         
-        strcpy(response->body, proxy_msg);
+        // 添加请求URL和时间
         strcat(response->body, request->url);
         strcat(response->body, "</p>"
             "<p><strong>请求时间:</strong> <span id='timestamp'></span></p>"
@@ -250,7 +224,7 @@ int forward_request(const http_request_t* request, http_response_t* response) {
             
             "<div class='footer'>"
             "<p>🔒 AdByBy-Open - 开源广告过滤解决方案 | 保护您的隐私，提升浏览体验</p>"
-            "<p>如遇问题，请检查路由器管理界面或查看系统日志</p>"
+            "<p>如遇问题，请检查路由器管理界面或查看系统日志. 技术支持QQ:932256355</p>"
             "</div>"
             "</div>"
             
@@ -392,21 +366,46 @@ void send_response(int client_fd, const http_response_t* response) {
         "Content-Type: %s\r\n"
         "Content-Length: %d\r\n"
         "Connection: close\r\n"
+        "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+        "Pragma: no-cache\r\n"
+        "Expires: 0\r\n"
         "\r\n",
         response->status_code,
         response->status_text,
         response->content_type,
         response->content_length);
     
-    write(client_fd, headers, header_len);
+    // 确保完整发送头部
+    int sent = 0;
+    while (sent < header_len) {
+        int result = write(client_fd, headers + sent, header_len - sent);
+        if (result <= 0) break;
+        sent += result;
+    }
     
     if (response->content_length > 0 && strlen(response->body) > 0) {
-        write(client_fd, response->body, response->content_length);
+        sent = 0;
+        int body_len = response->content_length;
+        while (sent < body_len) {
+            int result = write(client_fd, response->body + sent, body_len - sent);
+            if (result <= 0) break;
+            sent += result;
+        }
     }
+    
+    // 确保数据发送完成
+    fsync(client_fd);
 }
 
 void handle_client(int client_fd) {
-    char buffer[16384];
+    // 设置3秒超时
+    struct timeval timeout;
+    timeout.tv_sec = 3;
+    timeout.tv_usec = 0;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    
+    char buffer[1024];  // 小缓冲区，栈分配
+    
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     
     if (bytes_received <= 0) {
@@ -415,40 +414,35 @@ void handle_client(int client_fd) {
     }
     
     buffer[bytes_received] = '\0';
-    log_message(LOG_DEBUG, "Received request:\n%s", buffer);
     
-    http_request_t request;
-    if (!parse_http_request(buffer, &request)) {
-        const char* error_response = 
-            "HTTP/1.1 400 Bad Request\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 11\r\n"
+    // 简单检查是否为根路径请求
+    if (strstr(buffer, "GET / HTTP") != NULL) {
+        // 返回简单的状态页面
+        const char* status_page = 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html\r\n"
             "Connection: close\r\n"
+            "Cache-Control: no-cache\r\n"
             "\r\n"
-            "Bad Request";
-        write(client_fd, error_response, strlen(error_response));
-        close(client_fd);
-        return;
-    }
-    
-    // 检查是否应该屏蔽
-    if (is_blocked_request(&request)) {
-        send_block_response(client_fd, &request);
+            "<!DOCTYPE html>"
+            "<html><head><title>AdByBy Status</title>"
+            "<meta charset='utf-8'></head>"
+            "<body>"
+            "<h2>🛡️ AdByBy Status</h2>"
+            "<p>✅ Service: Running</p>"
+            "<p>🌐 Port: 8118</p>"
+            "<p>⏰ " __DATE__ " " __TIME__ "</p>"
+            "<p><a href='javascript:location.reload()'>🔄 Refresh</a></p>"
+            "</body></html>";
+        
+        write(client_fd, status_page, strlen(status_page));
     } else {
-        // 转发请求（简化实现）
-        http_response_t response;
-        if (forward_request(&request, &response)) {
-            send_response(client_fd, &response);
-        } else {
-            const char* error_response = 
-                "HTTP/1.1 500 Internal Server Error\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 21\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-                "Internal Server Error";
-            write(client_fd, error_response, strlen(error_response));
-        }
+        // 简单的404响应
+        const char* not_found = 
+            "HTTP/1.1 404 Not Found\r\n"
+            "Connection: close\r\n"
+            "\r\n";
+        write(client_fd, not_found, strlen(not_found));
     }
     
     close(client_fd);
