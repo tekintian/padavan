@@ -35,8 +35,8 @@ void handle_client_request(int client_fd) {
     timeout.tv_usec = 0;
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     
-    // 使用栈分配（节省堆内存）
-    char buffer[1024];  // 状态页面请求很小，1024字节足够
+    // 使用栈分配（节省路由器堆内存）
+    char buffer[512];   // 状态页面请求很小，512字节绰绰有余
     
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     
@@ -63,51 +63,99 @@ void handle_client_request(int client_fd) {
         return;
     }
     
-    // 对于状态页面，使用 forward_request 获取真实统计数据
+    // 对于状态页面，直接构建响应（避免DNS解析和网络连接）
     if (strcmp(request.url, "/") == 0 || strlen(request.url) == 0) {
-        http_response_t response;
-        if (forward_request(&request, &response)) {
-            char header[1024];
-            snprintf(header, sizeof(header),
-                "HTTP/1.1 %d %s\r\n"
-                "Content-Type: %s\r\n"
-                "Content-Length: %zu\r\n"
-                "Connection: close\r\n"
-                "Cache-Control: no-cache\r\n"
-                "\r\n",
-                response.status_code, response.status_text,
-                response.content_type, strlen(response.body));
+        // 获取真实统计数据
+        int total_rules = 0, enabled_rules = 0, total_hits = 0;
+        if (rule_manager) {
+            rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
+        }
+        
+        // 直接构建状态页面HTML（优化内存使用）
+        char status_html[2048];  // 优化：状态页面HTML实际约1.5KB
+        int html_len = snprintf(status_html, sizeof(status_html),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "Connection: close\r\n"
+            "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+            "Pragma: no-cache\r\n"
+            "Expires: 0\r\n"
+            "\r\n"
+            "<!DOCTYPE html>"
+            "<html><head>"
+            "<title>AdByBy-Open 状态</title>"
+            "<meta charset='utf-8'>"
+            "<style>"
+            "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }"
+            ".container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }"
+            ".header { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 15px; }"
+            ".status { display: flex; justify-content: space-around; margin: 20px 0; }"
+            ".status-item { text-align: center; padding: 15px; background: #ecf0f1; border-radius: 6px; flex: 1; margin: 0 5px; }"
+            ".status-item h3 { color: #27ae60; margin: 0 0 8px 0; }"
+            ".footer { text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px; }"
+            ".running { color: #27ae60; font-weight: bold; }"
+            "</style>"
+            "</head><body>"
+            "<div class='container'>"
+            "<div class='header'>"
+            "<h1>🛡️ AdByBy-Open</h1>"
+            "<p class='running'>✅ 服务运行中</p>"
+            "</div>"
             
-            write(client_fd, header, strlen(header));
-            write(client_fd, response.body, strlen(response.body));
-        } else {
-            // 备用简化响应
-            const char* simple_response = 
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/html\r\n"
-                "Connection: close\r\n"
-                "Cache-Control: no-cache\r\n"
-                "\r\n"
-                "<!DOCTYPE html>"
-                "<html><head><title>AdByBy Status</title></head>"
-                "<body><h1>AdByBy is running</h1>"
-                "<p>Status: Active</p>"
-                "<p>Port: 8118</p>"
-                "<p><a href='javascript:location.reload()'>Refresh</a></p>"
-                "</body></html>";
-            
-            write(client_fd, simple_response, strlen(simple_response));
+            "<div class='status'>"
+            "<div class='status-item'>"
+            "<h3>🌐 代理状态</h3>"
+            "<p>端口: 8118</p>"
+            "<p>状态: 运行中</p>"
+            "</div>"
+            "<div class='status-item'>"
+            "<h3>📊 过滤统计</h3>"
+            "<p>规则: %d条</p>"
+            "<p>命中: %d次</p>"
+            "</div>"
+            "<div class='status-item'>"
+            "<h3>⚙️ 系统</h3>"
+            "<p>架构: MIPS</p>"
+            "<p>版本: v1.0</p>"
+            "</div>"
+            "</div>"
+
+            "<div class='footer'>"
+            "<p>🔒 AdByBy-Open - 开源广告过滤解决方案  |  <a href='https://dev.tekin.cn' target='_blank'>软件定制开发</a>咨询QQ:932256355</p>"
+            "<p><a href='javascript:location.reload()'>🔄 刷新状态</a></p>"
+            "</div>"
+            "</div>"
+            "</body></html>",
+            total_rules, total_hits);
+        
+        // 发送响应
+        int sent = 0;
+        while (sent < html_len) {
+            int result = write(client_fd, status_html + sent, html_len - sent);
+            if (result <= 0) break;
+            sent += result;
         }
     } else {
-        // 其他请求返回404
-        const char* not_found = 
-            "HTTP/1.1 404 Not Found\r\n"
-            "Connection: close\r\n"
-            "\r\n";
-        write(client_fd, not_found, strlen(not_found));
+        // 检查是否为广告请求
+        if (is_blocked_request(&request)) {
+            // 发送屏蔽响应
+            send_block_response(client_fd, &request);
+            log_message(LOG_INFO, "Blocked: %s", request.url);
+        } else {
+            // 非广告请求，返回简单的代理响应
+            // 注意：这里应该实现真正的代理转发逻辑，但为了简化演示，返回501
+            const char* not_implemented = 
+                "HTTP/1.1 501 Not Implemented\r\n"
+                "Content-Type: text/html\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "<!DOCTYPE html><html><head><title>501 Not Implemented</title></head>"
+                "<body><h1>Proxy Not Implemented</h1><p>This is an ad filter, not a general proxy.</p></body></html>";
+            write(client_fd, not_implemented, strlen(not_implemented));
+        }
     }
     
-    // 简单关闭连接
+    // 确保关闭连接
     close(client_fd);
 }
 

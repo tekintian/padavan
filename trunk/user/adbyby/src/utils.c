@@ -74,8 +74,8 @@ int parse_url(const char* url, url_info_t* info) {
     
     memset(info, 0, sizeof(url_info_t));
     
-    // 简单的URL解析
-    char url_copy[2048];
+    // 简单的URL解析（优化内存使用）
+    char url_copy[1024];  // 状态页面URL通常很短
     strncpy(url_copy, url, sizeof(url_copy) - 1);
     url_copy[sizeof(url_copy) - 1] = '\0';
     
@@ -179,8 +179,8 @@ static const char* ad_domains[] = {
 int is_ad_domain(const char* domain) {
     if (!domain) return 0;
     
-    // 域名预处理
-    char processed_domain[512];
+    // 域名预处理（优化内存使用）
+    char processed_domain[256];  // 内网域名通常很短
     strncpy(processed_domain, domain, sizeof(processed_domain) - 1);
     processed_domain[sizeof(processed_domain) - 1] = '\0';
     preprocess_domain(processed_domain);

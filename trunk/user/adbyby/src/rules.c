@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <regex.h>
 
-#define INITIAL_RULE_CAPACITY 1000
+#define INITIAL_RULE_CAPACITY 500  // 优化：减少初始内存占用
 #define MAX_RULE_LENGTH 512
 
 // 内置广告域名列表（与utils.c保持一致）
@@ -149,7 +149,7 @@ int rule_manager_load_rules(rule_manager_t* rm) {
         return 0;
     }
     
-    char line[1024];
+    char line[512];   // 规则文件行通常不会太长
     int loaded_count = 0;
     
     while (fgets(line, sizeof(line), file)) {
