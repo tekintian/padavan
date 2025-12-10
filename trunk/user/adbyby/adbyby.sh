@@ -60,7 +60,6 @@ adbyby_update_hour=`nvram get adbyby_update_hour`
 adbyby_update_min=`nvram get adbyby_update_min`
 nvram set adbyby_adb=0
 ipt_n="iptables -t nat"
-#adbyby_dir="/tmp/adbyby"
 PROG_PATH="/usr/share/adbyby"
 DATA_PATH="/tmp/adbyby/data"
 adbyby_dir="/tmp/adbyby"
@@ -578,11 +577,11 @@ hosts_ads(){
 	adbyby_hosts=`nvram get hosts_ad`
 	nvram set adbyby_hostsad=0
 	if [ "$adbyby_hosts" = "1" ]; then
-		rm -rf $PROG_PATH/hosts
+		rm -rf $DATA_PATH/hosts
 		if [ -f "/etc/storage/adbyby_host.sh" ] && [ -s "/etc/storage/adbyby_host.sh" ]; then
-			grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $PROG_PATH/hostlist.txt
-			if [ -s "$PROG_PATH/hostlist.txt" ]; then
-				for ip in `cat $PROG_PATH/hostlist.txt`
+			grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $DATA_PATH/hostlist.txt
+			if [ -s "$DATA_PATH/hostlist.txt" ]; then
+				for ip in `cat $DATA_PATH/hostlist.txt`
 				do
 					logger -t "adbyby" "正在下载: $ip"
 					curl -k -s -o /tmp/host.txt --connect-timeout 5 --retry 3 $ip
@@ -590,17 +589,17 @@ hosts_ads(){
 						logger -t "adbyby" "$ip 下载失败！"
 					else
 						logger -t "adbyby" "hosts下载成功,处理中..."
-						grep -v '^#' /tmp/host.txt | grep -v "^$" >> $PROG_PATH/hosts
+						grep -v '^#' /tmp/host.txt | grep -v "^$" >> $DATA_PATH/hosts
 					fi
 				done
 				rm -f /tmp/host.txt
 				logger -t "adbyby" "正在对hosts文件进行去重处理."
-				if [ -f "$PROG_PATH/hosts" ]; then
-					sort $PROG_PATH/hosts | uniq > $PROG_PATH/hosts.tmp && mv $PROG_PATH/hosts.tmp $PROG_PATH/hosts
-					nvram set adbyby_hostsad=`grep -v '^!' $PROG_PATH/hosts | wc -l`
+				if [ -f "$DATA_PATH/hosts" ]; then
+					sort $DATA_PATH/hosts | uniq > $DATA_PATH/hosts.tmp && mv $DATA_PATH/hosts.tmp $DATA_PATH/hosts
+					nvram set adbyby_hostsad=`grep -v '^!' $DATA_PATH/hosts | wc -l`
 					sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
 					cat >> /etc/storage/dnsmasq/dnsmasq.conf <<-EOF
-			addn-hosts=$PROG_PATH/hosts
+			addn-hosts=$DATA_PATH/hosts
 EOF
 				fi
 			else
@@ -612,9 +611,9 @@ EOF
 	else
 		# 移除dnsmasq中的hosts配置
 		sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
-		rm -f $PROG_PATH/hosts
+		rm -f $DATA_PATH/hosts
 	fi
-	rm -f $PROG_PATH/hostlist.txt
+	rm -f $DATA_PATH/hostlist.txt
 }
 
 
