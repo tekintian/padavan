@@ -420,27 +420,70 @@ address=/.qzone.qq.com/0.0.0.0
 	if [ $block_games -eq 1 ]; then
   cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/09-dnsmasq.games
 # Popular Online Games Blocking (Valid domains only)
-# Minecraft (我的世界)
-address=/.minecraft.net/0.0.0.0
+# 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
+# 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
+# ===================== Tencent Games (腾讯游戏) =====================
+address=/pvp.qq.com/0.0.0.0
+address=/game.qq.com/0.0.0.0
+address=/down-update.qq.com/0.0.0.0
+address=/update1.dlied.qq.com/0.0.0.0
+address=/update5.dlied.qq.com/0.0.0.0
+address=/oth.str.mdt.qq.com/0.0.0.0
+address=/c.tdm.qq.com/0.0.0.0
+address=/a.ssl.msdk.qq.com/0.0.0.0
+address=/cloudctrl.gclud.qq.com/0.0.0.0
+address=/masdk.3g.qq.com/0.0.0.0
+address=/minigame.qq.com/0.0.0.0
+address=/pubgmobile.qq.com/0.0.0.0
+address=/sg-public-api.qq.com/0.0.0.0
+address=/qqgame.qq.com/0.0.0.0
+address=/wegame.com/0.0.0.0
+
+# ===================== Steam Games =====================
+address=/steampowered.com/0.0.0.0
+address=/steamcommunity.com/0.0.0.0
+
+# ===================== NetEase Games (网易游戏) =====================
+address=/minecraft.net/0.0.0.0
 address=/session.minecraft.net/0.0.0.0
+address=/game.163.com/0.0.0.0
+address=/nie.163.com/0.0.0.0
+address=/g79.update.netease.com/0.0.0.0
+address=/g79.gdl.netease.com/0.0.0.0
+address=/qa.pub-api.seadra.netease.com/0.0.0.0
+address=/nie.netease.com/0.0.0.0
+address=/api.pub.seadra.netease.com/0.0.0.0
+address=/superstar.pt.163.com/0.0.0.0
+address=/x19.update.netease.com/0.0.0.0
+address=/news-api.16163.com/0.0.0.0
+address=/mgbsdk.matrix.netease.com/0.0.0.0
+address=/api.k.163.com/0.0.0.0
+address=/api.iplay.163.com/0.0.0.0
+address=/gameyw.netease.com/0.0.0.0
 
-# Tencent Games (腾讯游戏)
-address=/.pvp.qq.com/0.0.0.0
-address=/.game.qq.com/0.0.0.0
+# ===================== PUBG =====================
+address=/pubg.com/0.0.0.0
 
-# Steam Games
-address=/.steampowered.com/0.0.0.0
-address=/.steamcommunity.com/0.0.0.0
+# ===================== Epic Games =====================
+address=/epicgames.com/0.0.0.0
+address=/api.epicgames.com/0.0.0.0
 
-# NetEase Games (网易游戏)
-address=/.game.163.com/0.0.0.0
-address=/.nie.163.com/0.0.0.0
+# ===================== Baidu Lewan (百度乐玩) =====================
+address=/lewan.baidu.com/0.0.0.0
 
-# PUBG
-address=/.pubg.com/0.0.0.0
+# ===================== Huawei Games (华为游戏) =====================
+address=/game.hicloud.com/0.0.0.0
 
-# Epic Games
-address=/.epicgames.com/0.0.0.0
+# ===================== Bilibili Games (哔哩哔哩游戏) =====================
+address=/biligame.com/0.0.0.0
+
+# ===================== Mihoyo Games (米哈游/原神/崩坏) =====================
+address=/api.mihoyo.com/0.0.0.0
+address=/api.miyoushe.com/0.0.0.0
+
+# ===================== UC Games (UC游戏) =====================
+address=/game.open.uc.cn/0.0.0.0
+
 EOF
 	fi
 	sed -i '/dnsmasq-adbyby/d' /etc/storage/dnsmasq/dnsmasq.conf
