@@ -58,6 +58,21 @@ http_username=`nvram get http_username`
 adbyby_update=`nvram get adbyby_update`
 adbyby_update_hour=`nvram get adbyby_update_hour`
 adbyby_update_min=`nvram get adbyby_update_min`
+
+# 参数验证，确保数值类型
+[ -z "$adbyby_enable" ] && adbyby_enable=0
+[ -z "$adbyby_ip_x" ] && adbyby_ip_x=0
+[ -z "$adbyby_rules_x" ] && adbyby_rules_x=0
+[ -z "$adbyby_set" ] && adbyby_set=1
+[ -z "$adbyby_update" ] && adbyby_update=2
+[ -z "$adbyby_update_hour" ] && adbyby_update_hour=3
+[ -z "$adbyby_update_min" ] && adbyby_update_min=30
+mem_mode=0
+
+# 参数验证，确保数值类型
+[ -z "$adbyby_update" ] && adbyby_update=2
+[ -z "$adbyby_update_hour" ] && adbyby_update_hour=3
+[ -z "$adbyby_update_min" ] && adbyby_update_min=30
 nvram set adbyby_adb=0
 ipt_n="iptables -t nat"
 PROG_PATH="/usr/share/adbyby"
@@ -219,12 +234,14 @@ add_rules()
 	rm -f $DATA_PATH/user.bin
 	rm -f $DATA_PATH/user.txt
 	rulesnum=`nvram get adbybyrules_staticnum_x`
+	[ -z "$rulesnum" ] && rulesnum=0
 	if [ $adbyby_rules_x -eq 1 ]; then
 		for i in $(seq 1 $rulesnum)
 		do
 			j=`expr $i - 1`
 			rules_address=`nvram get adbybyrules_x$j`
 			rules_road=`nvram get adbybyrules_road_x$j`
+			[ -z "$rules_road" ] && rules_road=0
 			if [ $rules_road -ne 0 ]; then
 				logger -t "adbyby" "正在下载和合并第三方规则"
 				curl -k -s -o /tmp/adbyby/user2.txt --connect-timeout 5 --retry 3 $rules_address
@@ -273,6 +290,7 @@ ip_rule()
 	ipset -N adbyby_esc hash:ip
 	$ipt_n -A ADBYBY -m set --match-set adbyby_esc dst -j RETURN
 	num=`nvram get adbybyip_staticnum_x`
+	[ -z "$num" ] && num=0
 	if [ $adbyby_ip_x -eq 1 ]; then
 		if [ $num -ne 0 ]; then
 			logger -t "adbyby" "设置内网IP过滤控制"
@@ -281,6 +299,7 @@ ip_rule()
 				j=`expr $i - 1`
 				ip=`nvram get adbybyip_ip_x$j`
 				mode=`nvram get adbybyip_ip_road_x$j`
+			[ -z "$mode" ] && mode=0
 				case $mode in
 				0)
 					$ipt_n -A ADBYBY -s $ip -j RETURN
@@ -329,6 +348,11 @@ add_dns()
 	block_ios=`nvram get block_ios`
 	block_shortvideo=`nvram get block_shortvideo`
 	block_games=`nvram get block_games`
+	
+	# 参数验证，确保数值类型
+	[ -z "$block_ios" ] && block_ios=0
+	[ -z "$block_shortvideo" ] && block_shortvideo=0
+	[ -z "$block_games" ] && block_games=0
 	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_esc"'\n",$0)}' $adbyby_dir/adesc.conf > /etc/storage/dnsmasq-adbyby.d/06-dnsmasq.esc
 	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $adbyby_dir/adblack.conf > /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
 	[ $block_ios -eq 1 ] && cat <<-EOF >> /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
@@ -341,7 +365,7 @@ address=/gs.apple.com/0.0.0.0
 address=/iosapps.itunes.apple.com/0.0.0.0
 EOF
 	if [ $block_shortvideo -eq 1 ]; then
-  cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo
+  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo
 # 热门短视频平台域名拦截规则
 
 # 抖音相关域名 (Douyin/TikTok)
@@ -411,14 +435,10 @@ address=/pearnode.com/0.0.0.0
 address=/weishi.com/0.0.0.0
 address=/weishi.qq.com/0.0.0.0
 
-# 相关分析和跟踪域名
-address=/sglog.com/0.0.0.0
-address=/tencent.com/0.0.0.0
-address=/qzone.qq.com/0.0.0.0
-		EOF
+EOF
 	fi
 	if [ $block_games -eq 1 ]; then
-  cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/09-dnsmasq.games
+  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/09-dnsmasq.games
 # Popular Online Games Blocking (Valid domains only)
 # 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
 # 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
@@ -606,6 +626,8 @@ anti_ad(){
 	anti_ad=`nvram get anti_ad`
 	anti_ad_link=`nvram get anti_ad_link`
 	nvram set anti_ad_count=0
+	# 参数验证，确保数值类型
+	[ -z "$anti_ad" ] && anti_ad=0
 	if [ "$anti_ad" = "1" ]; then
 	curl -k -s -o /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf --connect-timeout 5 --retry 3 $anti_ad_link
 		if [ ! -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
@@ -620,6 +642,8 @@ anti_ad(){
 hosts_ads(){
 	adbyby_hosts=`nvram get hosts_ad`
 	nvram set adbyby_hostsad=0
+	# 参数验证，确保数值类型
+	[ -z "$adbyby_hosts" ] && adbyby_hosts=0
 	if [ "$adbyby_hosts" = "1" ]; then
 		rm -rf $DATA_PATH/hosts
 		if [ -f "/etc/storage/adbyby_host.sh" ] && [ -s "/etc/storage/adbyby_host.sh" ]; then
