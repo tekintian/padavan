@@ -208,9 +208,9 @@ add_rules()
 	nvram set adbyby_ltime="$formatted_ltime"
 	nvram set adbyby_vtime="$formatted_vtime"
 	logger -t "adbyby" "规则版本更新 - 静态规则：$formatted_ltime | 视频规则：$formatted_vtime"
-	#nvram set adbyby_rules=`grep -v '^!' /tmp/adbyby/data/rules.txt | wc -l`
+	nvram set adbyby_rules=`grep -v '^!' /tmp/adbyby/data/rules.txt | wc -l`
 
-	#nvram set adbyby_utime=`cat /tmp/adbyby.updated 2>/dev/null`
+	nvram set adbyby_utime=`cat /tmp/adbyby.updated 2>/dev/null`
 	grep -v '^!' /etc/storage/adbyby_rules.sh | grep -v "^$" > $adbyby_dir/rules.txt
 	grep -v '^!' /etc/storage/adbyby_blockip.sh | grep -v "^$" > $adbyby_dir/blockip.conf
 	grep -v '^!' /etc/storage/adbyby_adblack.sh | grep -v "^$" > $adbyby_dir/adblack.conf
@@ -274,32 +274,32 @@ ip_rule()
 	$ipt_n -A ADBYBY -m set --match-set adbyby_esc dst -j RETURN
 	num=`nvram get adbybyip_staticnum_x`
 	if [ $adbyby_ip_x -eq 1 ]; then
-	if [ $num -ne 0 ]; then
-	logger -t "adbyby" "设置内网IP过滤控制"
-	for i in $(seq 1 $num)
-	do
-		j=`expr $i - 1`
-		ip=`nvram get adbybyip_ip_x$j`
-		mode=`nvram get adbybyip_ip_road_x$j`
-		case $mode in
-		0)
-			$ipt_n -A ADBYBY -s $ip -j RETURN
-			logger -t "adbyby" "忽略$ip走AD过滤。"
-			;;
-		1)
-			$ipt_n -A ADBYBY -s $ip -p tcp -j REDIRECT --to-ports 8118
-			$ipt_n -A ADBYBY -s $ip -j RETURN
-			logger -t "adbyby" "设置$ip走全局过滤。"
-			;;
-		2)
-			ipset -N adbyby_wan hash:ip
-			$ipt_n -A ADBYBY -m set --match-set adbyby_wan dst -s $ip -p tcp -j REDIRECT --to-ports 8118
-			awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $adbyby_dir/adhost.conf > $WAN_FILE
-			logger -t "adbyby" "设置$ip走Plus+过滤。"
-			;;
-		esac
-	done
-	fi
+		if [ $num -ne 0 ]; then
+			logger -t "adbyby" "设置内网IP过滤控制"
+			for i in $(seq 1 $num)
+			do
+				j=`expr $i - 1`
+				ip=`nvram get adbybyip_ip_x$j`
+				mode=`nvram get adbybyip_ip_road_x$j`
+				case $mode in
+				0)
+					$ipt_n -A ADBYBY -s $ip -j RETURN
+					logger -t "adbyby" "忽略$ip走AD过滤。"
+					;;
+				1)
+					$ipt_n -A ADBYBY -s $ip -p tcp -j REDIRECT --to-ports 8118
+					$ipt_n -A ADBYBY -s $ip -j RETURN
+					logger -t "adbyby" "设置$ip走全局过滤。"
+					;;
+				2)
+					ipset -N adbyby_wan hash:ip
+					$ipt_n -A ADBYBY -m set --match-set adbyby_wan dst -s $ip -p tcp -j REDIRECT --to-ports 8118
+					awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $adbyby_dir/adhost.conf > $WAN_FILE
+					logger -t "adbyby" "设置$ip走Plus+过滤。"
+					;;
+				esac
+			done
+		fi
 	fi
 
 	case $wan_mode in
@@ -448,10 +448,10 @@ EOF
 conf-dir=/etc/storage/dnsmasq-adbyby.d
 EOF
 	if [ $wan_mode -eq 1 ]; then
-	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $PROG_PATH/adhost.conf > $WAN_FILE
+		awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_wan"'\n",$0)}' $PROG_PATH/adhost.conf > $WAN_FILE
 	fi
 	if ls /etc/storage/dnsmasq-adbyby.d/* >/dev/null 2>&1; then
-	mkdir -p /tmp/dnsmasq.d
+		mkdir -p /tmp/dnsmasq.d
 	fi
 }
 
@@ -481,12 +481,11 @@ add_rule()
 	$ipt_n -I PREROUTING -p tcp --dport 80 -j ADBYBY
 	iptables-save | grep -E "ADBYBY|^\*|^COMMIT" | sed -e "s/^-A \(OUTPUT\|PREROUTING\)/-I \1 1/" > /tmp/adbyby.save
 	if [ -f "/tmp/adbyby.save" ]; then
-	logger -t "adbyby" "保存adbyby防火墙规则成功！"
+		logger -t "adbyby" "保存adbyby防火墙规则成功！"
 	else
-	logger -t "adbyby" "保存adbyby防火墙规则失败！可能会造成重启后过滤广告失效，需要手动关闭再打开ADBYBY！"
+		logger -t "adbyby" "保存adbyby防火墙规则失败！可能会造成重启后过滤广告失效，需要手动关闭再打开ADBYBY！"
 	fi
 }
-
 del_rule()
 {
 	$ipt_n -D PREROUTING -p tcp --dport 80 -j ADBYBY 2>/dev/null
@@ -570,7 +569,7 @@ anti_ad(){
 			logger -t "adbyby" "anti_AD下载失败！"
 		else
 			logger -t "adbyby" "anti_AD下载成功,处理中..."
-		nvram set anti_ad_count=`grep -v '^#' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | wc -l`
+			nvram set anti_ad_count=`grep -v '^#' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | wc -l`
 		fi
 	fi
 }
