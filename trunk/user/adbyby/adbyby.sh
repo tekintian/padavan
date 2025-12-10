@@ -442,7 +442,7 @@ EOF
 # Popular Online Games Blocking (Valid domains only)
 # 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
 # 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
-# ===================== Tencent Games (腾讯游戏) =====================
+# Tencent Games
 address=/pvp.qq.com/0.0.0.0
 address=/game.qq.com/0.0.0.0
 address=/down-update.qq.com/0.0.0.0
@@ -459,11 +459,7 @@ address=/sg-public-api.qq.com/0.0.0.0
 address=/qqgame.qq.com/0.0.0.0
 address=/wegame.com/0.0.0.0
 
-# ===================== Steam Games =====================
-address=/steampowered.com/0.0.0.0
-address=/steamcommunity.com/0.0.0.0
-
-# ===================== NetEase Games (网易游戏) =====================
+#  NetEase Games
 address=/minecraft.net/0.0.0.0
 address=/session.minecraft.net/0.0.0.0
 address=/game.163.com/0.0.0.0
@@ -481,27 +477,17 @@ address=/api.k.163.com/0.0.0.0
 address=/api.iplay.163.com/0.0.0.0
 address=/gameyw.netease.com/0.0.0.0
 
-# ===================== PUBG =====================
+# other
+address=/steampowered.com/0.0.0.0
+address=/steamcommunity.com/0.0.0.0
 address=/pubg.com/0.0.0.0
-
-# ===================== Epic Games =====================
 address=/epicgames.com/0.0.0.0
 address=/api.epicgames.com/0.0.0.0
-
-# ===================== Baidu Lewan (百度乐玩) =====================
 address=/lewan.baidu.com/0.0.0.0
-
-# ===================== Huawei Games (华为游戏) =====================
 address=/game.hicloud.com/0.0.0.0
-
-# ===================== Bilibili Games (哔哩哔哩游戏) =====================
 address=/biligame.com/0.0.0.0
-
-# ===================== Mihoyo Games (米哈游/原神/崩坏) =====================
 address=/api.mihoyo.com/0.0.0.0
 address=/api.miyoushe.com/0.0.0.0
-
-# ===================== UC Games (UC游戏) =====================
 address=/game.open.uc.cn/0.0.0.0
 
 EOF
