@@ -345,76 +345,76 @@ EOF
 # 热门短视频平台域名拦截规则
 
 # 抖音相关域名 (Douyin/TikTok)
-address=/.douyin.com/0.0.0.0
-address=/.douyinvod.com/0.0.0.0
-address=/.douyincdn.com/0.0.0.0
-address=/.tiktok.com/0.0.0.0
-address=/.tiktokcdn.com/0.0.0.0
-address=/.tiktokv.com/0.0.0.0
+address=/douyin.com/0.0.0.0
+address=/douyinvod.com/0.0.0.0
+address=/douyincdn.com/0.0.0.0
+address=/tiktok.com/0.0.0.0
+address=/tiktokcdn.com/0.0.0.0
+address=/tiktokv.com/0.0.0.0
 
 # 字节跳动相关域名 (ByteDance)
-address=/.bytedance.com/0.0.0.0
-address=/.toutiao.com/0.0.0.0
-address=/.snssdk.com/0.0.0.0
-address=/.amemv.com/0.0.0.0
-address=/.bytecdn.com/0.0.0.0
-address=/.ibytecdn.com/0.0.0.0
-address=/.sglog.com/0.0.0.0
+address=/bytedance.com/0.0.0.0
+address=/toutiao.com/0.0.0.0
+address=/snssdk.com/0.0.0.0
+address=/amemv.com/0.0.0.0
+address=/bytecdn.com/0.0.0.0
+address=/ibytecdn.com/0.0.0.0
+address=/sglog.com/0.0.0.0
 
 # 快手相关域名 (Kuaishou)
-address=/.kuaishou.com/0.0.0.0
-address=/.kwimgs.com/0.0.0.0
-address=/.ksad.com/0.0.0.0
-address=/.kuaishou.com.cn/0.0.0.0
-address=/.ksyungslb.com/0.0.0.0
-address=/.yximgs.com/0.0.0.0
+address=/kuaishou.com/0.0.0.0
+address=/kwimgs.com/0.0.0.0
+address=/ksad.com/0.0.0.0
+address=/kuaishou.com.cn/0.0.0.0
+address=/ksyungslb.com/0.0.0.0
+address=/yximgs.com/0.0.0.0
 
 # 微信视频号相关域名 (WeChat Video)
-address=/.channels.weixin.qq.com/0.0.0.0
-address=/.weixin.qq.com/0.0.0.0
-address=/.wx.qq.com/0.0.0.0
-address=/.wx.qlogo.cn/0.0.0.0
-address=/.video.qq.com/0.0.0.0
+address=/channels.weixin.qq.com/0.0.0.0
+address=/weixin.qq.com/0.0.0.0
+address=/wx.qq.com/0.0.0.0
+address=/wx.qlogo.cn/0.0.0.0
+address=/video.qq.com/0.0.0.0
 
 # 小红书相关域名 (Xiaohongshu/RED)
-address=/.xiaohongshu.com/0.0.0.0
-address=/.xhslink.com/0.0.0.0
-address=/.xhsjpg.com/0.0.0.0
-address=/.xhsdsp.com/0.0.0.0
-address=/.redbook.com/0.0.0.0
+address=/xiaohongshu.com/0.0.0.0
+address=/xhslink.com/0.0.0.0
+address=/xhsjpg.com/0.0.0.0
+address=/xhsdsp.com/0.0.0.0
+address=/redbook.com/0.0.0.0
 
 # QQ短视频相关域名 (QQ Video)
-address=/.v.qq.com/0.0.0.0
-address=/.video.qq.com/0.0.0.0
-address=/.liveplay.qq.com/0.0.0.0
-address=/.video.gtimg.cn/0.0.0.0
+address=/v.qq.com/0.0.0.0
+address=/video.qq.com/0.0.0.0
+address=/liveplay.qq.com/0.0.0.0
+address=/video.gtimg.cn/0.0.0.0
 
 # 西瓜视频相关域名 (Xigua Video)
-address=/.ixigua.com/0.0.0.0
-address=/.toutiao.com/0.0.0.0
-address=/.snssdk.com/0.0.0.0
+address=/ixigua.com/0.0.0.0
+address=/toutiao.com/0.0.0.0
+address=/snssdk.com/0.0.0.0
 
 # 美拍相关域名 (Meipai)
-address=/.meipai.com/0.0.0.0
-address=/.meitu.com/0.0.0.0
-address=/.meitudata.com/0.0.0.0
+address=/meipai.com/0.0.0.0
+address=/meitu.com/0.0.0.0
+address=/meitudata.com/0.0.0.0
 
 # 火山小视频相关域名 (Huoshan)
-address=/.huoshan.com/0.0.0.0
-address=/.huoshan.tv/0.0.0.0
+address=/huoshan.com/0.0.0.0
+address=/huoshan.tv/0.0.0.0
 
 # 梨视频相关域名 (Pear Video)
-address=/.pearvideo.com/0.0.0.0
-address=/.pearnode.com/0.0.0.0
+address=/pearvideo.com/0.0.0.0
+address=/pearnode.com/0.0.0.0
 
 # 微视相关域名 (Weishi)
-address=/.weishi.com/0.0.0.0
-address=/.weishi.qq.com/0.0.0.0
+address=/weishi.com/0.0.0.0
+address=/weishi.qq.com/0.0.0.0
 
 # 相关分析和跟踪域名
-address=/.sglog.com/0.0.0.0
-address=/.tencent.com/0.0.0.0
-address=/.qzone.qq.com/0.0.0.0
+address=/sglog.com/0.0.0.0
+address=/tencent.com/0.0.0.0
+address=/qzone.qq.com/0.0.0.0
 		EOF
 	fi
 	if [ $block_games -eq 1 ]; then
