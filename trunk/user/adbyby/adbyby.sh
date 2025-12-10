@@ -232,6 +232,7 @@ add_rules()
 				rm -f /tmp/adbyby/user2.txt
 			fi
 		done
+		# 将user3adblocks.txt的非注释规则输出到user.txt
 		grep -v '^!' $DATA_PATH/user3adblocks.txt | grep -v "^$" >> $DATA_PATH/user.txt
 		rm -f $DATA_PATH/user3adblocks.txt
 	fi
