@@ -54,30 +54,14 @@ int parse_http_request(const char* request_data, http_request_t* request) {
             } else {
                 request->port = (strncmp(request->url, "https:", 6) == 0) ? 443 : 80;
             }
-        } else if (strncasecmp(line, "User-Agent:", 11) == 0) {
-            sscanf(line, "User-Agent: %255[^\r\n]", request->user_agent);
-        } else if (strncasecmp(line, "Referer:", 8) == 0) {
-            sscanf(line, "Referer: %511[^\r\n]", request->referer);
-        } else if (strncasecmp(line, "Content-Type:", 13) == 0) {
-            sscanf(line, "Content-Type: %127[^\r\n]", request->content_type);
         } else if (strncasecmp(line, "Content-Length:", 15) == 0) {
             request->content_length = atoi(line + 15);
         }
         line = strtok(NULL, "\r\n");
     }
     
-    // 解析请求体
-    if (request->content_length > 0) {
-        char* body_start = strstr(request_data, "\r\n\r\n");
-        if (body_start) {
-            body_start += 4;
-            int body_len = strlen(body_start);
-            if (body_len > 0) {
-                strncpy(request->body, body_start, sizeof(request->body) - 1);
-                request->body[sizeof(request->body) - 1] = '\0';
-            }
-        }
-    }
+    // 请求体解析已移除 - 状态页面不需要body，节省内存
+    // 注：对于需要body的POST请求，可在需要时重新添加此功能
     
     free(data);
     return 1;
