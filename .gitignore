@@ -10,3 +10,4 @@ toolchain/toolchain-*/
 /trunk/user/iptables/temp.txt
 *.xz
 /trunk/user/adbyby/adbyby
+/trunk/user/adbyby/src/adbyby

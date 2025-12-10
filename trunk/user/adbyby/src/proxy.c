@@ -10,6 +10,7 @@ extern rule_manager_t* rule_manager;
 #include <stdio.h>
 #include <ctype.h>
 #include <netdb.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
