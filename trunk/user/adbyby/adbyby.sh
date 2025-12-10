@@ -285,11 +285,11 @@ adbyby_start()
 	/sbin/restart_dhcpd
 	add_cron
 	
-	# 启动健康检查定时任务 - 更频繁的检查（每2分钟）
-	echo "*/2 * * * * /bin/sh /usr/bin/adbyby.sh health_check" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
-	# 添加连接清理任务（每3分钟）
-	echo "*/3 * * * * /bin/sh /usr/bin/adbyby.sh cleanup_connections" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
-	logger -t "adbyby" "已添加adbyby健康检查任务（每2分钟）和连接清理任务（每3分钟）"
+	# 启动健康检查定时任务 - 更频繁的检查（每10分钟）
+	echo "*/10 * * * * /bin/sh /usr/bin/adbyby.sh health_check" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
+	# 添加连接清理任务（每20分钟）
+	echo "*/20 * * * * /bin/sh /usr/bin/adbyby.sh cleanup_connections" >> /etc/storage/cron/crontabs/$http_username 2>/dev/null
+	logger -t "adbyby" "已添加adbyby健康检查任务（每10分钟）和连接清理任务（每20分钟）"
 	
 	logger -t "adbyby" "Adbyby启动完成。"
 }
