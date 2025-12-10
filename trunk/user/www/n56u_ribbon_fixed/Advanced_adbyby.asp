@@ -530,7 +530,7 @@ function changeBgColorrl(obj, num){
 										</tr>
 										<tr>
 											<th width="50%">
-											拦截热门短视频平台 APP和网站:</th>
+											拦截热门短视频APP和网站:</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="block_shortvideo_on_of">

@@ -534,8 +534,6 @@ address=/douyincdn.com/0.0.0.0
 address=/tiktok.com/0.0.0.0
 address=/tiktokcdn.com/0.0.0.0
 address=/tiktokv.com/0.0.0.0
-
-# 字节跳动相关域名 (ByteDance)
 address=/bytedance.com/0.0.0.0
 address=/toutiao.com/0.0.0.0
 address=/snssdk.com/0.0.0.0
@@ -543,6 +541,18 @@ address=/amemv.com/0.0.0.0
 address=/bytecdn.com/0.0.0.0
 address=/ibytecdn.com/0.0.0.0
 address=/sglog.com/0.0.0.0
+address=/api.douyin.com/0.0.0.0
+address=/api-amemv.douyin.com/0.0.0.0
+address=/api-toutiao.douyin.com/0.0.0.0
+address=/api26.amemv.com/0.0.0.0
+address=/aweme.snssdk.com/0.0.0.0
+address=/edith.snssdk.com/0.0.0.0
+address=/monorail-edge.snssdk.com/0.0.0.0
+address=/log.snssdk.com/0.0.0.0
+address=/api.bytedance.com/0.0.0.0
+address=/data.bytedance.com/0.0.0.0
+address=/tpns.bytedance.com/0.0.0.0
+address=/push.bytedance.com/0.0.0.0
 
 # 快手相关域名 (Kuaishou)
 address=/kuaishou.com/0.0.0.0
@@ -551,6 +561,15 @@ address=/ksad.com/0.0.0.0
 address=/kuaishou.com.cn/0.0.0.0
 address=/ksyungslb.com/0.0.0.0
 address=/yximgs.com/0.0.0.0
+address=/api.kuaishou.com/0.0.0.0
+address=/api-kwai.kuaishou.com/0.0.0.0
+address=/api-short-video.kuaishou.com/0.0.0.0
+address=/app.kuaishou.com/0.0.0.0
+address=/aweme.kuaishou.com/0.0.0.0
+address=/ksapi.kuaishou.com/0.0.0.0
+address=/log.kuaishou.com/0.0.0.0
+address=/push.kuaishou.com/0.0.0.0
+address=/tpns.kuaishou.com/0.0.0.0
 
 # 微信视频号相关域名 (WeChat Video)
 address=/channels.weixin.qq.com/0.0.0.0
@@ -565,34 +584,69 @@ address=/xhslink.com/0.0.0.0
 address=/xhsjpg.com/0.0.0.0
 address=/xhsdsp.com/0.0.0.0
 address=/redbook.com/0.0.0.0
+address=/api.xiaohongshu.com/0.0.0.0
+address=/edith.xiaohongshu.com/0.0.0.0
+address=/app-api.xiaohongshu.com/0.0.0.0
+address=/note.xiaohongshu.com/0.0.0.0
+address=/log.xiaohongshu.com/0.0.0.0
+address=/push.xiaohongshu.com/0.0.0.0
+address=/api.redbook.com/0.0.0.0
 
-# QQ短视频相关域名 (QQ Video)
+# 腾讯系短视频相关域名
 address=/v.qq.com/0.0.0.0
 address=/video.qq.com/0.0.0.0
 address=/liveplay.qq.com/0.0.0.0
 address=/video.gtimg.cn/0.0.0.0
+address=/weishi.com/0.0.0.0
+address=/weishi.qq.com/0.0.0.0
+
+# 微信视频号APP API
+address=/api.channels.weixin.qq.com/0.0.0.0
+address=/appmsg.channels.weixin.qq.com/0.0.0.0
+address=/finder.weixin.qq.com/0.0.0.0
+address=/video.api.weixin.qq.com/0.0.0.0
+address=/mmbizapi.weixin.qq.com/0.0.0.0
+address=/msg.weixin.qq.com/0.0.0.0
+
+# QQ短视频/微视APP API
+address=/api.v.qq.com/0.0.0.0
+address=/app.v.qq.com/0.0.0.0
+address=/video.api.qq.com/0.0.0.0
+address=/api.weishi.qq.com/0.0.0.0
+address=/app.weishi.qq.com/0.0.0.0
+address=/log.weishi.qq.com/0.0.0.0
+
 
 # 西瓜视频相关域名 (Xigua Video)
 address=/ixigua.com/0.0.0.0
 address=/toutiao.com/0.0.0.0
 address=/snssdk.com/0.0.0.0
+address=/api.ixigua.com/0.0.0.0
+address=/app.ixigua.com/0.0.0.0
+address=/video.ixigua.com/0.0.0.0
+address=/log.ixigua.com/0.0.0.0
 
 # 美拍相关域名 (Meipai)
 address=/meipai.com/0.0.0.0
 address=/meitu.com/0.0.0.0
 address=/meitudata.com/0.0.0.0
+address=/api.meipai.com/0.0.0.0
+address=/app.meipai.com/0.0.0.0
+address=/log.meipai.com/0.0.0.0
 
 # 火山小视频相关域名 (Huoshan)
 address=/huoshan.com/0.0.0.0
 address=/huoshan.tv/0.0.0.0
+address=/api.huoshan.com/0.0.0.0
+address=/app.huoshan.com/0.0.0.0
+address=/log.huoshan.com/0.0.0.0
 
 # 梨视频相关域名 (Pear Video)
 address=/pearvideo.com/0.0.0.0
 address=/pearnode.com/0.0.0.0
-
-# 微视相关域名 (Weishi)
-address=/weishi.com/0.0.0.0
-address=/weishi.qq.com/0.0.0.0
+address=/api.pearvideo.com/0.0.0.0
+address=/app.pearvideo.com/0.0.0.0
+address=/log.pearvideo.com/0.0.0.0
 
 EOF
 	fi
