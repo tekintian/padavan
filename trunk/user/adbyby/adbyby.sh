@@ -526,7 +526,6 @@ EOF
 	if [ $block_shortvideo -eq 1 ]; then
   		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo
 # 热门短视频平台域名拦截规则
-
 # 抖音相关域名 (Douyin/TikTok)
 address=/douyin.com/0.0.0.0
 address=/douyinvod.com/0.0.0.0
@@ -615,7 +614,6 @@ address=/video.api.qq.com/0.0.0.0
 address=/api.weishi.qq.com/0.0.0.0
 address=/app.weishi.qq.com/0.0.0.0
 address=/log.weishi.qq.com/0.0.0.0
-
 
 # 西瓜视频相关域名 (Xigua Video)
 address=/ixigua.com/0.0.0.0

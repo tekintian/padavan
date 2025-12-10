@@ -94,10 +94,11 @@ static const char* builtin_url_patterns[] = {
     "analysis.qq.com",
     
     // 短视频平台广告
-    "douyin.com/ad",
-    "kuaishou.com/ad",
-    "toutiao.com/ad",
-    "snssdk.com/ad",
+    "ads.douyin.com",
+    "ads.bytedance.com",
+    "ads.kuaishou.com",
+    "ads.toutiao.com",
+    "ads.snssdk.com",
     
     NULL
 };
