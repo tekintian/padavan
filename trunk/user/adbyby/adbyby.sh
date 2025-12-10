@@ -39,11 +39,13 @@ init_adbyby_env()
 	
 	# 创建基础配置文件（如果不存在）
 	if [ ! -f "/tmp/adbyby/data/lazy.txt" ]; then
-		echo "# AdByBy lazy rules" > /tmp/adbyby/data/lazy.txt
+		cp /usr/share/adbyby/data/lazy.txt /tmp/adbyby/data/lazy.txt
+		logger -t "adbyby" "拷贝data/lazy.txt规则文件"
 	fi
 	
 	if [ ! -f "/tmp/adbyby/data/video.txt" ]; then
-		echo "# AdByBy video rules" > /tmp/adbyby/data/video.txt
+		cp /usr/share/adbyby/data/video.txt /tmp/adbyby/data/video.txt
+		logger -t "adbyby" "拷贝data/video.txt规则文件"
 	fi
 	
 	logger -t "adbyby" "AdByBy环境初始化完成"
@@ -96,12 +98,7 @@ adbyby_start()
 			logger -t "adbyby" "警告：配置文件不存在 $PROG_PATH/adhook.ini"
 		fi
 	fi
-	
-	#if [ $abp_mode -eq 1 ]; then
-	#$PROG_PATH/adblock.sh &
-	#fi
-	#$PROG_PATH/adupdate.sh &
-	
+
 	add_rules
 	
 	# 启动adbyby程序
@@ -132,9 +129,9 @@ adbyby_close()
 	del_dns
 	killall -q adbyby
 	if [ $mem_mode -eq 1 ]; then
-	echo "stop mem mode"
+		echo "stop mem mode"
+		kill -9 $(ps | grep admem.sh | grep -v grep | awk '{print $1}') >/dev/null 2>&1 
 	fi
-	kill -9 $(ps | grep admem.sh | grep -v grep | awk '{print $1}') >/dev/null 2>&1 
 	/sbin/restart_dhcpd
 	logger -t "adbyby" "Adbyby已关闭。"
 
@@ -143,6 +140,13 @@ adbyby_close()
 add_rules()
 {
 	logger -t "adbyby" "正在检查规则是否需要更新!"
+	
+	# 确保规则文件存在，如果不存在则创建默认文件
+	if [ ! -f "/tmp/adbyby/data/lazy.txt" ] || [ ! -f "/tmp/adbyby/data/video.txt" ] ; then
+		logger -t "adbyby" "lazy.txt或video.txt文件不存在,初始化AdByBy环境!"
+		init_adbyby_env
+	fi
+
 	rm -f /tmp/adbyby/data/*.bak
 
 	touch /tmp/local-md5.json && md5sum /tmp/adbyby/data/lazy.txt /tmp/adbyby/data/video.txt > /tmp/local-md5.json
@@ -154,42 +158,56 @@ add_rules()
 	video_online=$(sed  's/":"/\n/g' /tmp/md5.json  |  sed  's/","/\n/g' | sed -n '4p')
 
 	if [ "$lazy_online"x != "$lazy_local"x -o "$video_online"x != "$video_local"x ]; then
-	echo "MD5 not match! Need update!"
-	logger -t "adbyby" "发现更新的规则,下载规则！"
-	touch /tmp/lazy.txt && curl -k -s -o /tmp/lazy.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt
-	touch /tmp/video.txt && curl -k -s -o /tmp/video.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt
-	touch /tmp/local-md5.json && md5sum /tmp/lazy.txt /tmp/video.txt > /tmp/local-md5.json
-	lazy_local=$(grep 'lazy' /tmp/local-md5.json | awk -F' ' '{print $1}')
-	video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')
-	if [ "$lazy_online"x == "$lazy_local"x -a "$video_online"x == "$video_local"x ]; then
-	echo "New rules MD5 match!"
-	mv /tmp/lazy.txt /tmp/adbyby/data/lazy.txt
-	mv /tmp/video.txt /tmp/adbyby/data/video.txt
-	echo $(date +"%Y-%m-%d %H:%M:%S") > /tmp/adbyby.updated
-	fi
+		echo "MD5 not match! Need update!"
+		logger -t "adbyby" "发现更新的规则,下载规则！"
+		touch /tmp/lazy.txt && curl -k -s -o /tmp/lazy.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt
+		touch /tmp/video.txt && curl -k -s -o /tmp/video.txt --connect-timeout 5 --retry 3 https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt
+		touch /tmp/local-md5.json && md5sum /tmp/lazy.txt /tmp/video.txt > /tmp/local-md5.json
+		lazy_local=$(grep 'lazy' /tmp/local-md5.json | awk -F' ' '{print $1}')
+		video_local=$(grep 'video' /tmp/local-md5.json | awk -F' ' '{print $1}')
+		if [ "$lazy_online"x == "$lazy_local"x -a "$video_online"x == "$video_local"x ]; then
+			echo "New rules MD5 match!"
+			mv /tmp/lazy.txt /tmp/adbyby/data/lazy.txt
+			mv /tmp/video.txt /tmp/adbyby/data/video.txt
+			echo $(date +"%Y-%m-%d %H:%M:%S") > /tmp/adbyby.updated
+		fi
 	else
-	echo "MD5 match! No need to update!"
-	logger -t "adbyby" "没有更新的规则,本次无需更新！"
+		echo "MD5 match! No need to update!"
+		logger -t "adbyby" "没有更新的规则,本次无需更新！"
 	fi
 
 	rm -f /tmp/lazy.txt /tmp/video.txt /tmp/local-md5.json /tmp/md5.json
 	logger -t "adbyby" "Adbyby规则更新完成"
-	lazy_version=`head -1 /tmp/adbyby/data/lazy.txt | awk -F': ' '{print $2}'`
-	video_version=`head -1 /tmp/adbyby/data/video.txt | awk -F': ' '{print $2}'`
-	# 格式化时间显示：lazy.txt 的版本号转换为 YYYY-MM-DD HH:MM
-	if [ ${#lazy_version} -eq 12 ]; then
-		formatted_ltime=`echo $lazy_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3 \4:\5/'`
+	# 检查规则文件是否存在并获取版本信息
+	if [ -f "/tmp/adbyby/data/lazy.txt" ] && [ -s "/tmp/adbyby/data/lazy.txt" ]; then
+		lazy_version=`head -1 /tmp/adbyby/data/lazy.txt | awk -F': ' '{print $2}'`
+		# 格式化时间显示：lazy.txt 的版本号转换为 YYYY-MM-DD HH:MM
+		if [ ${#lazy_version} -eq 12 ]; then
+			formatted_ltime=`echo $lazy_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3 \4:\5/'`
+		else
+			formatted_ltime=$lazy_version
+		fi
 	else
-		formatted_ltime=$lazy_version
+		formatted_ltime="规则未下载"
+		logger -t "adbyby" "警告：lazy.txt 规则文件不存在或为空"
 	fi
-	# video.txt 的版本号处理
-	if [ ${#video_version} -eq 8 ]; then
-		formatted_vtime=`echo $video_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/'`
+	
+	if [ -f "/tmp/adbyby/data/video.txt" ] && [ -s "/tmp/adbyby/data/video.txt" ]; then
+		video_version=`head -1 /tmp/adbyby/data/video.txt | awk -F': ' '{print $2}'`
+		# video.txt 的版本号处理
+		if [ ${#video_version} -eq 8 ]; then
+			formatted_vtime=`echo $video_version | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/'`
+		else
+			formatted_vtime=$video_version
+		fi
 	else
-		formatted_vtime=$video_version
+		formatted_vtime="规则未下载"
+		logger -t "adbyby" "警告：video.txt 规则文件不存在或为空"
 	fi
+	
 	nvram set adbyby_ltime="$formatted_ltime"
 	nvram set adbyby_vtime="$formatted_vtime"
+	logger -t "adbyby" "规则版本更新 - 静态规则：$formatted_ltime | 视频规则：$formatted_vtime"
 	#nvram set adbyby_rules=`grep -v '^!' /tmp/adbyby/data/rules.txt | wc -l`
 
 	#nvram set adbyby_utime=`cat /tmp/adbyby.updated 2>/dev/null`
@@ -203,20 +221,20 @@ add_rules()
 	rm -f $DATA_PATH/user.txt
 	rulesnum=`nvram get adbybyrules_staticnum_x`
 	if [ $adbyby_rules_x -eq 1 ]; then
-	for i in $(seq 1 $rulesnum)
-	do
-		j=`expr $i - 1`
-		rules_address=`nvram get adbybyrules_x$j`
-		rules_road=`nvram get adbybyrules_road_x$j`
-		if [ $rules_road -ne 0 ]; then
-			logger -t "adbyby" "正在下载和合并第三方规则"
-			curl -k -s -o /tmp/adbyby/user2.txt --connect-timeout 5 --retry 3 $rules_address
-			grep -v '^!' /tmp/adbyby/user2.txt | grep -E '^(@@\||\||[[:alnum:]])' | sort -u | grep -v "^$" >> $DATA_PATH/user3adblocks.txt
-			rm -f /tmp/adbyby/user2.txt
-		fi
-	done
-	grep -v '^!' $DATA_PATH/user3adblocks.txt | grep -v "^$" >> $DATA_PATH/user.txt
-	rm -f $DATA_PATH/user3adblocks.txt
+		for i in $(seq 1 $rulesnum)
+		do
+			j=`expr $i - 1`
+			rules_address=`nvram get adbybyrules_x$j`
+			rules_road=`nvram get adbybyrules_road_x$j`
+			if [ $rules_road -ne 0 ]; then
+				logger -t "adbyby" "正在下载和合并第三方规则"
+				curl -k -s -o /tmp/adbyby/user2.txt --connect-timeout 5 --retry 3 $rules_address
+				grep -v '^!' /tmp/adbyby/user2.txt | grep -E '^(@@\||\||[[:alnum:]])' | sort -u | grep -v "^$" >> $DATA_PATH/user3adblocks.txt
+				rm -f /tmp/adbyby/user2.txt
+			fi
+		done
+		grep -v '^!' $DATA_PATH/user3adblocks.txt | grep -v "^$" >> $DATA_PATH/user.txt
+		rm -f $DATA_PATH/user3adblocks.txt
 	fi
 	grep -v ^! $adbyby_dir/rules.txt >> $DATA_PATH/user.txt
 	nvram set adbyby_user=`cat /tmp/adbyby/data/user.txt | wc -l`
@@ -226,22 +244,21 @@ add_rules()
 add_cron()
 {
 	if [ $adbyby_update -eq 0 ]; then
-	sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
-	cat >> /etc/storage/cron/crontabs/$http_username << EOF
+		sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
+		cat >> /etc/storage/cron/crontabs/$http_username << EOF
 $adbyby_update_min $adbyby_update_hour * * * /bin/sh /usr/bin/adbyby.sh G >/dev/null 2>&1
 EOF
-	logger -t "adbyby" "设置每天$adbyby_update_hour时$adbyby_update_min分，自动更新规则！"
+		logger -t "adbyby" "设置每天$adbyby_update_hour时$adbyby_update_min分，自动更新规则！"
 	fi
-if [ $adbyby_update -eq 1 ]; then
-
-	sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
-	cat >> /etc/storage/cron/crontabs/$http_username << EOF
+	if [ $adbyby_update -eq 1 ]; then
+		sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
+		cat >> /etc/storage/cron/crontabs/$http_username << EOF
 */$adbyby_update_min */$adbyby_update_hour * * * /bin/sh /usr/bin/adbyby.sh G >/dev/null 2>&1
 EOF
-	logger -t "adbyby" "设置每隔$adbyby_update_hour时$adbyby_update_min分，自动更新规则！"
+		logger -t "adbyby" "设置每隔$adbyby_update_hour时$adbyby_update_min分，自动更新规则！"
 	fi
 	if [ $adbyby_update -eq 2 ]; then
-	sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
+		sed -i '/adbyby/d' /etc/storage/cron/crontabs/$http_username
 	fi
 }
 
@@ -520,11 +537,6 @@ adbyby_uprules()
 		fi
 	fi
 	
-	#if [ $abp_mode -eq 1 ]; then
-	#$PROG_PATH/adblock.sh &
-	#fi
-	#$PROG_PATH/adupdate.sh &
-	
 	add_rules
 	
 	# 启动adbyby程序
@@ -548,66 +560,62 @@ adbyby_uprules()
 	logger -t "adbyby" "AdByBy规则更新完成。"
 }
 
-#updateadb()
-#{
-#	/tmp/adbyby/adblock.sh &
-#}
 anti_ad(){
-anti_ad=`nvram get anti_ad`
-anti_ad_link=`nvram get anti_ad_link`
-nvram set anti_ad_count=0
-if [ "$anti_ad" = "1" ]; then
-curl -k -s -o /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf --connect-timeout 5 --retry 3 $anti_ad_link
-if [ ! -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
-	logger -t "adbyby" "anti_AD下载失败！"
-else
-	logger -t "adbyby" "anti_AD下载成功,处理中..."
-nvram set anti_ad_count=`grep -v '^#' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | wc -l`
-fi
-fi
+	anti_ad=`nvram get anti_ad`
+	anti_ad_link=`nvram get anti_ad_link`
+	nvram set anti_ad_count=0
+	if [ "$anti_ad" = "1" ]; then
+	curl -k -s -o /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf --connect-timeout 5 --retry 3 $anti_ad_link
+		if [ ! -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
+			logger -t "adbyby" "anti_AD下载失败！"
+		else
+			logger -t "adbyby" "anti_AD下载成功,处理中..."
+		nvram set anti_ad_count=`grep -v '^#' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | wc -l`
+		fi
+	fi
 }
 
 hosts_ads(){
-adbyby_hosts=`nvram get hosts_ad`
-nvram set adbyby_hostsad=0
-if [ "$adbyby_hosts" = "1" ]; then
-rm -rf $PROG_PATH/hosts
-if [ -f "/etc/storage/adbyby_host.sh" ] && [ -s "/etc/storage/adbyby_host.sh" ]; then
-	grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $PROG_PATH/hostlist.txt
-	if [ -s "$PROG_PATH/hostlist.txt" ]; then
-		for ip in `cat $PROG_PATH/hostlist.txt`
-		do
-		logger -t "adbyby" "正在下载: $ip"
-		curl -k -s -o /tmp/host.txt --connect-timeout 5 --retry 3 $ip
-		if [ ! -f "/tmp/host.txt" ]; then
-			logger -t "adbyby" "$ip 下载失败！"
-		else
-			logger -t "adbyby" "hosts下载成功,处理中..."
-			grep -v '^#' /tmp/host.txt | grep -v "^$" >> $PROG_PATH/hosts
-		fi
-		done
-		rm -f /tmp/host.txt
-		logger -t "adbyby" "正在对hosts文件进行去重处理."
-		if [ -f "$PROG_PATH/hosts" ]; then
-			sort $PROG_PATH/hosts | uniq > $PROG_PATH/hosts.tmp && mv $PROG_PATH/hosts.tmp $PROG_PATH/hosts
-			nvram set adbyby_hostsad=`grep -v '^!' $PROG_PATH/hosts | wc -l`
-			sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
-			cat >> /etc/storage/dnsmasq/dnsmasq.conf <<-EOF
-	addn-hosts=$PROG_PATH/hosts
+	adbyby_hosts=`nvram get hosts_ad`
+	nvram set adbyby_hostsad=0
+	if [ "$adbyby_hosts" = "1" ]; then
+		rm -rf $PROG_PATH/hosts
+		if [ -f "/etc/storage/adbyby_host.sh" ] && [ -s "/etc/storage/adbyby_host.sh" ]; then
+			grep -v '^#' /etc/storage/adbyby_host.sh | grep -v "^$" > $PROG_PATH/hostlist.txt
+			if [ -s "$PROG_PATH/hostlist.txt" ]; then
+				for ip in `cat $PROG_PATH/hostlist.txt`
+				do
+					logger -t "adbyby" "正在下载: $ip"
+					curl -k -s -o /tmp/host.txt --connect-timeout 5 --retry 3 $ip
+					if [ ! -f "/tmp/host.txt" ]; then
+						logger -t "adbyby" "$ip 下载失败！"
+					else
+						logger -t "adbyby" "hosts下载成功,处理中..."
+						grep -v '^#' /tmp/host.txt | grep -v "^$" >> $PROG_PATH/hosts
+					fi
+				done
+				rm -f /tmp/host.txt
+				logger -t "adbyby" "正在对hosts文件进行去重处理."
+				if [ -f "$PROG_PATH/hosts" ]; then
+					sort $PROG_PATH/hosts | uniq > $PROG_PATH/hosts.tmp && mv $PROG_PATH/hosts.tmp $PROG_PATH/hosts
+					nvram set adbyby_hostsad=`grep -v '^!' $PROG_PATH/hosts | wc -l`
+					sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
+					cat >> /etc/storage/dnsmasq/dnsmasq.conf <<-EOF
+			addn-hosts=$PROG_PATH/hosts
 EOF
+				fi
+			else
+				logger -t "adbyby" "hosts下载列表为空，跳过hosts处理"
+			fi
+		else
+			logger -t "adbyby" "hosts配置文件不存在，请先配置hosts下载列表"
 		fi
 	else
-		logger -t "adbyby" "hosts下载列表为空，跳过hosts处理"
+		# 移除dnsmasq中的hosts配置
+		sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
+		rm -f $PROG_PATH/hosts
 	fi
-else
-	logger -t "adbyby" "hosts配置文件不存在，请先配置hosts下载列表"
-fi
-else
-	# 移除dnsmasq中的hosts配置
-	sed -i '/hosts/d' /etc/storage/dnsmasq/dnsmasq.conf
-	rm -f $PROG_PATH/hosts
-fi
-rm -f $PROG_PATH/hostlist.txt
+	rm -f $PROG_PATH/hostlist.txt
 }
 
 
@@ -637,7 +645,7 @@ EOF
 
 	adbyby_blockip="/etc/storage/adbyby_blockip.sh"
 	if [ ! -f "$adbyby_blockip" ] || [ ! -s "$adbyby_blockip" ] ; then
-	cat > "$adbyby_blockip" <<-EOF
+		cat > "$adbyby_blockip" <<-EOF
 2.2.2.2
 
 EOF
@@ -646,7 +654,7 @@ EOF
 
 	adbyby_adblack="/etc/storage/adbyby_adblack.sh"
 	if [ ! -f "$adbyby_adblack" ] || [ ! -s "$adbyby_adblack" ] ; then
-	cat > "$adbyby_adblack" <<-EOF
+		cat > "$adbyby_adblack" <<-EOF
 pogothere.xyz
 evidenceguidance.com
 config.kuyun.com
@@ -657,7 +665,7 @@ EOF
 
 	adbyby_adesc="/etc/storage/adbyby_adesc.sh"
 	if [ ! -f "$adbyby_adesc" ] || [ ! -s "$adbyby_adesc" ] ; then
-	cat > "$adbyby_adesc" <<-EOF
+		cat > "$adbyby_adesc" <<-EOF
 weixin.qq.com
 qpic.cn
 imtt.qq.com
@@ -674,7 +682,7 @@ EOF
 
 	adbyby_adhost="/etc/storage/adbyby_adhost.sh"
 	if [ ! -f "$adbyby_adhost" ] || [ ! -s "$adbyby_adhost" ] ; then
-	cat > "$adbyby_adhost" <<-EOF
+		cat > "$adbyby_adhost" <<-EOF
 analytics-union.xunlei.com
 mediav.com
 doubleclick.net
@@ -687,7 +695,7 @@ EOF
 
 	adbyby_host="/etc/storage/adbyby_host.sh"
 	if [ ! -f "$adbyby_host" ] || [ ! -s "$adbyby_host" ] ; then
-	cat > "$adbyby_host" <<-EOF
+		cat > "$adbyby_host" <<-EOF
 # AdByby Hosts下载列表配置文件
 # 每行一个URL，支持http/https协议
 # 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
