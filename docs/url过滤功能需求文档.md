@@ -1,7 +1,6 @@
 
 
 
-
 url过滤功能通过在Advanced_URLFilter_Content.asp页面设置 过滤规则:
 启用网址过滤?	已启用 未启用
 
@@ -81,8 +80,36 @@ iptables -A FORWARD -p tcp --dport 443 -m sni --str "douyin.com" -j REJECT --rej
 iptables -A FORWARD -p tcp -m sni --str "news.qq.com" -j DROP
 
 
+iptables -A FORWARD -p tcp -m string --string "douyin.com" --algo bm -j REJECT --reject-with tcp-reset
+
+
+dstip = ip_conv("vts_ipaddr_x", i);
+      if (!is_valid_ipv4(dstip))
+         continue;
+
+
 
 # URL过滤功能需求文档（优化版）
+
+## 热门短视频平台拦截功能更新
+
+### 功能描述
+原"拦截抖音 APP 和网站"功能已升级为"拦截热门短视频平台 APP和网站"，支持拦截包括抖音、快手、微信视频、小红书、QQ短视频等在内的主流短视频平台。
+
+### 支持的短视频平台
+1. **抖音/TikTok系**：抖音、TikTok、西瓜视频、火山小视频等字节跳动系产品
+2. **快手系**：快手、快手极速版等
+3. **腾讯系**：微信视频号、QQ短视频、微视等
+4. **小红书系**：小红书、RED等
+5. **其他平台**：美拍、梨视频等
+
+### 技术实现
+- 配置变量：`block_shortvideo`（原`block_douyin`）
+- 规则文件：`/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo`
+- 支持DNS域名拦截，覆盖各平台的主域名、CDN域名、API域名等
+
+### 用户界面
+Web管理页面中的选项已更新为"拦截热门短视频平台 APP和网站"，用户可一键开启对所有支持短视频平台的拦截。
 ## 一、功能概述
 URL过滤功能通过`Advanced_URLFilter_Content.asp`页面配置规则，基于**内核态iptables模块**实现高效过滤，兼顾灵活性与路由器资源限制。核心支持域名/IP多格式过滤、MAC/全局模式切换、协议/路径精准匹配，所有复杂逻辑在用户空间完成计算，内核仅执行精简规则，确保上网体验无感知。
 
