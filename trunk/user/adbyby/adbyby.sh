@@ -663,7 +663,7 @@ EOF
 # Popular Online Games Blocking (Valid domains only)
 # 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
 # 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
-# Tencent Games
+# Tencent Games (应用连字符修复)
 address=/pvp.qq.com/0.0.0.0
 address=/game.qq.com/0.0.0.0
 address=/down-update.qq.com/0.0.0.0
@@ -831,6 +831,46 @@ adbyby_uprules()
 	logger -t "adbyby" "AdByBy规则更新完成。"
 }
 
+# 清理域名，处理特殊字符（如连字符等）
+cleanup_domain() {
+	local domain="$1"
+	# 移除域名前后的空白
+	domain=$(echo "$domain" | xargs)
+	# 确保域名格式正确，不包含特殊字符（除了合法的.-字符）
+	domain=$(echo "$domain" | sed 's/[^a-zA-Z0-9.-]//g')
+	# 处理连续的连字符和点号
+	domain=$(echo "$domain" | sed 's/--*/-/g' | sed 's/\.\.*/\./g')
+	# 移除开头和结尾的连字符和点号
+	domain=$(echo "$domain" | sed 's/^[-\.]*//' | sed 's/[-\.]*$//')
+	echo "$domain"
+}
+
+# 验证并修复有问题的域名规则
+# 注意：连字符域名问题应该通过dnsmasq补丁修复，而不是在此处绕过
+fix_problematic_domains() {
+	local domain="$1"
+	
+	# 基本清理：只处理明显非法的情况
+	case "$domain" in
+		*--*)
+			# 连续连字符 - 修复为单个连字符（这是合理的修复）
+			echo "$domain" | sed 's/--*/-/g'
+			;;
+		-*)
+			# 以连字符开头 - 移除开头连字符
+			echo "$domain" | sed 's/^-*//'
+			;;
+		*-)
+			# 以连字符结尾 - 移除结尾连字符
+			echo "$domain" | sed 's/-*$//'
+			;;
+		*)
+			# 正常域名，包括合法的连字符域名如 down-update.qq.com
+			echo "$domain"
+			;;
+	esac
+}
+
 anti_ad(){
 	anti_ad=`nvram get anti_ad`
 	nvram set anti_ad_count=0
@@ -847,38 +887,110 @@ anti_ad(){
 				local downloaded_files=0
 				local total_rules=0
 				
-				# 逐个下载anti-AD规则文件
-				for url in `cat $adbyby_dir/antiad_list.txt`
-				do
-					logger -t "adbyby" "正在下载anti-AD规则: $url"
-					local tempfile="/tmp/antiad_$(date +%s)_$downloaded_files.conf"
+				# 智能处理混合规则：远程URL和本地规则
+				local local_rules_count=0
+				local remote_rules_count=0
+				local local_rules_processed=0
+				
+				while IFS= read -r rule_line; do
+					# 跳过空行和注释
+					[ -z "$rule_line" ] || [ "${rule_line#\#}" != "$rule_line" ] && continue
 					
-					if curl -k -s -o "$tempfile" --connect-timeout 5 --retry 3 "$url"; then
-						if [ -f "$tempfile" ] && [ -s "$tempfile" ]; then
-							logger -t "adbyby" "anti-AD规则下载成功: $url"
-							# 合并规则到主文件
-							if [ $downloaded_files -eq 0 ]; then
-								# 第一个文件，直接拷贝
-								cp "$tempfile" /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
-							else
-								# 后续文件，追加内容（跳过可能的文件头注释）
-								grep -v '^#!' "$tempfile" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null
-							fi
-							downloaded_files=$((downloaded_files + 1))
+					# 检查规则类型并分别处理
+					case "$rule_line" in
+						http://*|https://*)
+							# 远程规则：下载处理
+							logger -t "adbyby" "正在下载远程规则: $rule_line"
+							local tempfile="/tmp/antiad_$(date +%s)_$downloaded_files.conf"
 							
-							# 统计当前文件的规则数量
-							local file_rules=$(grep -c -v '^[[:space:]]*#\|^$' "$tempfile" 2>/dev/null || echo 0)
-							total_rules=$((total_rules + file_rules))
-						else
-							logger -t "adbyby" "anti-AD规则文件为空: $url"
-						fi
-					else
-						logger -t "adbyby" "anti-AD规则下载失败: $url"
-					fi
-					
-					# 清理临时文件
-					rm -f "$tempfile"
-				done
+							if curl -k -s -o "$tempfile" --connect-timeout 5 --retry 3 "$rule_line"; then
+								if [ -f "$tempfile" ] && [ -s "$tempfile" ]; then
+									logger -t "adbyby" "远程规则下载成功: $rule_line"
+									# 追加到规则文件（跳过可能的文件头注释）
+									grep -v '^#!' "$tempfile" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null
+									downloaded_files=$((downloaded_files + 1))
+									remote_rules_count=$((remote_rules_count + 1))
+									
+									# 统计当前文件的规则数量
+									local file_rules=$(grep -c -v '^[[:space:]]*#\|^$' "$tempfile" 2>/dev/null || echo 0)
+									total_rules=$((total_rules + file_rules))
+								else
+									logger -t "adbyby" "远程规则文件为空: $rule_line"
+								fi
+							else
+								logger -t "adbyby" "远程规则下载失败: $rule_line"
+							fi
+							
+							# 清理临时文件
+							rm -f "$tempfile"
+							;;
+						address=/*|server=/*)
+							# 本地dnsmasq规则：直接写入
+							echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+							local_rules_count=$((local_rules_count + 1))
+							local_rules_processed=$((local_rules_processed + 1))
+							total_rules=$((total_rules + 1))
+							logger -t "adbyby" "添加本地规则: ${rule_line}"
+							;;
+						*)
+							# 检测是否为hosts格式规则（IP + 域名）
+							if [[ "$rule_line" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+[[:space:]]+[a-zA-Z0-9.-]+ ]]; then
+								# hosts格式规则：转换为dnsmasq格式
+								local domain=$(echo "$rule_line" | awk '{print $2}')
+								local ip=$(echo "$rule_line" | awk '{print $1}')
+								if [ -n "$domain" ] && [ -n "$ip" ]; then
+								# 清理域名，处理特殊字符
+								domain=$(cleanup_domain "$domain")
+								# 基本修复（主要是明显的非法格式）
+								domain=$(fix_problematic_domains "$domain")
+								
+								echo "address=/$domain/$ip" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+								local_rules_count=$((local_rules_count + 1))
+								local_rules_processed=$((local_rules_processed + 1))
+								total_rules=$((total_rules + 1))
+								logger -t "adbyby" "转换hosts规则: $domain -> $ip"
+								fi
+							# 检测是否为其他dnsmasq规则格式
+							elif [[ "$rule_line" =~ ^(address|server|cache-stop|rebind-domain) ]]; then
+								# 对于address和server规则，需要清理域名
+								if [[ "$rule_line" =~ ^(address|server) ]]; then
+									# 提取域名部分并清理
+									local domain=$(echo "$rule_line" | sed -n 's/.*=\/*\([^/]*\).*/\1/p')
+									if [ -n "$domain" ]; then
+										domain=$(cleanup_domain "$domain")
+										# 重新构建规则
+										if [[ "$rule_line" =~ ^address ]]; then
+											local ip=$(echo "$rule_line" | sed -n 's/.*\/\([^/]*\)$/\1/p')
+											rule_line="address=/$domain/$ip"
+										elif [[ "$rule_line" =~ ^server ]]; then
+											local target=$(echo "$rule_line" | sed -n 's/.*\/\([^/]*\)$/\1/p')
+											rule_line="server=/$domain/$target"
+										fi
+									fi
+								fi
+								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+								local_rules_count=$((local_rules_count + 1))
+								local_rules_processed=$((local_rules_processed + 1))
+								total_rules=$((total_rules + 1))
+								logger -t "adbyby" "添加dnsmasq规则: $rule_line"
+							else
+								logger -t "adbyby" "跳过无法识别的规则格式: $rule_line"
+							fi
+							;;
+						*)
+							# 其他格式：尝试作为dnsmasq规则直接添加
+							if [[ "$rule_line" =~ ^(address|server|cache-stop|rebind-domain) ]]; then
+								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+								local_rules_count=$((local_rules_count + 1))
+								local_rules_processed=$((local_rules_processed + 1))
+								total_rules=$((total_rules + 1))
+								logger -t "adbyby" "添加dnsmasq规则: $rule_line"
+							else
+								logger -t "adbyby" "跳过无法识别的规则格式: $rule_line"
+							fi
+							;;
+					esac
+				done < $adbyby_dir/antiad_list.txt
 				
 				# 处理合并后的规则文件
 				if [ $downloaded_files -gt 0 ] && [ -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
@@ -889,7 +1001,7 @@ anti_ad(){
 					# 统计最终规则数量
 					local final_rules=$(grep -c -v '^[[:space:]]*#\|^$' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null || echo 0)
 					nvram set anti_ad_count=$final_rules
-					logger -t "adbyby" "anti-AD规则处理完成: 下载$downloaded_files个文件，共$final_rules条规则（去重后）"
+					logger -t "adbyby" "anti-AD规则处理完成: 远程规则$remote_rules_count个，本地规则$local_rules_count个，总计$final_rules条规则（去重后）"
 				else
 					logger -t "adbyby" "anti-AD规则处理失败：没有成功下载任何文件"
 				fi
@@ -1055,12 +1167,27 @@ EOF
 		[ -z "$anti_ad_link" ] && anti_ad_link="https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/anti-ad.conf"
 	
 		cat > "$adbyby_antiad" <<-EOF
-# AdByBy anti-AD规则下载列表配置文件
-# 每行一个URL，支持http/https协议
-# 下载的规则文件会被合并、去重后生成anti-ad-for-dnsmasq.conf
-# 注意, 文件里面的必须是dnsmasq规则格式,如: address=/domain.com/0.0.0.0
-# 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
-# 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
+# AdByBy anti-AD规则混合配置文件
+# 支持多种规则格式混合使用：
+# 
+# 1. 远程规则（http/https开头）：自动下载并合并
+#    https://example.com/rules.conf
+#    http://192.168.1.1/local-rules.txt
+#
+# 2. 本地dnsmasq规则（address=/开头）：直接使用，无需下载
+#    address=/ads.com/0.0.0.0
+#    address=/tracker.example.com/
+#    server=/ads.google.com/#
+#
+# 3. hosts格式规则（IP+域名）：自动转换为dnsmasq格式
+#    0.0.0.0 ads.com
+#    127.0.0.1 tracker.example.com
+#
+# 4. 其他dnsmasq规则：cache-stop、rebind-domain等
+#    cache-stop=ads.google.com
+#    rebind-domain-ok=/example.com/
+#
+# 所有规则会自动合并、去重后生成anti-ad-for-dnsmasq.conf
 
 # Adbyby项目默认dnsmasq规则源
 $anti_ad_link
