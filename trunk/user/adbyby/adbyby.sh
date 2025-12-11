@@ -1201,16 +1201,8 @@ EOF
 # 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
 
 # 常见广告过滤hosts
-https://gitee.com/tekintian/adt-rules/raw/master/hosts/ads_hosts.txt
+https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/ads_hosts.txt
 
-# 游戏过滤hosts
-https://gitee.com/tekintian/adt-rules/raw/master/hosts/games_hosts.txt
-
-# 统计站点过滤hosts
-# https://gitee.com/tekintian/adt-rules/raw/master/hosts/stats_hosts.txt
-
-# adaway[https://adaway.org/hosts.txt]精简版
-# https://gitee.com/tekintian/adt-rules/raw/master/hosts/adaway_hosts.txt
 
 EOF
 		chmod 755 "$adbyby_host"
@@ -1229,8 +1221,7 @@ EOF
 # 支持多种规则格式混合使用：
 # 
 # 1. 远程规则（http/https开头）：自动下载并合并
-#    https://example.com/rules.conf
-#    http://192.168.1.1/local-rules.txt
+#   https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/games.conf
 #
 # 2. 本地dnsmasq规则（address=/开头）：直接使用，无需下载
 #    address=/ads.com/0.0.0.0

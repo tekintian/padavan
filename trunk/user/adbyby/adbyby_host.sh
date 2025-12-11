@@ -6,10 +6,4 @@
 # 此hosts规则是加载到dnsmasq的。是包含host规则的文件,非hosts文件。
 # ===== 示例hosts源 =====
 # 常见广告过滤hosts
-https://gitee.com/tekintian/adt-rules/raw/master/hosts/ads_hosts.txt
-
-# 统计站点过滤hosts
-# https://gitee.com/tekintian/adt-rules/raw/master/hosts/stats_hosts.txt
-
-# adaway(https://adaway.org/hosts.txt)精简版
-# https://gitee.com/tekintian/adt-rules/raw/master/hosts/adaway_hosts.txt
+https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/ads_hosts.txt
