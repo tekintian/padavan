@@ -133,10 +133,28 @@ is_adbyby_running()
 	pgrep -f "adbyby" > /dev/null 2>/dev/null
 }
 
-# 极简端口检查（使用ss比netstat更高效）
+# 极简端口检查（兼容多种路由器环境）
 is_8118_listening()
 {
-	ss -ln sport = :8118 2>/dev/null | grep -q ":8118"
+	# 优先使用/proc/net/tcp（最底层，最可靠，避免调用外部命令）
+	if [ -f "/proc/net/tcp" ]; then
+		# 8118的十六进制是1FB6，直接检查
+		grep "1FB6" /proc/net/tcp >/dev/null 2>&1 && return 0
+	fi
+	
+	# 备用方案：使用netstat
+	if command -v netstat >/dev/null 2>&1; then
+		# 精确匹配8118端口，避免误匹配81180等
+		# 检查 ":8118 " (带空格) 或 ":8118$" (行尾)
+		if netstat -ln 2>/dev/null | grep ":8118 " >/dev/null 2>&1; then
+			return 0
+		fi
+		if netstat -ln 2>/dev/null | grep ":8118$" >/dev/null 2>&1; then
+			return 0
+		fi
+	fi
+	
+	return 1
 }
 
 health_check_adbyby()

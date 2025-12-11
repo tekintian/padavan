@@ -1,9 +1,6 @@
 #include "proxy.h"
 #include "utils.h"
 #include "rules.h"
-
-// 外部声明规则管理器（在adbyby.c中定义）
-extern rule_manager_t* rule_manager;
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
