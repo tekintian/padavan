@@ -662,10 +662,8 @@ address=/weishi.qq.com/0.0.0.0
 # 微信视频号APP API
 address=/api.channels.weixin.qq.com/0.0.0.0
 address=/appmsg.channels.weixin.qq.com/0.0.0.0
-address=/finder.weixin.qq.com/0.0.0.0
 address=/video.api.weixin.qq.com/0.0.0.0
 address=/mmbizapi.weixin.qq.com/0.0.0.0
-address=/msg.weixin.qq.com/0.0.0.0
 
 # QQ短视频/微视APP API
 address=/api.v.qq.com/0.0.0.0
@@ -1148,7 +1146,7 @@ EOF
 	adbyby_blockip="/etc/storage/adbyby_blockip.sh"
 	if [ ! -f "$adbyby_blockip" ] || [ ! -s "$adbyby_blockip" ] ; then
 		cat > "$adbyby_blockip" <<-EOF
-2.2.2.2
+124.232.160.178
 
 EOF
 	chmod 755 "$adbyby_blockip"
