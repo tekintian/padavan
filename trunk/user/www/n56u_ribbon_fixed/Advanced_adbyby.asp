@@ -473,7 +473,7 @@ function changeBgColorrl(obj, num){
                                             <td id="adbyby_status" colspan="3"></td>
                                         </tr>
 										<tr >
-											<th width="50%">启用 Adbyby-Open 功能 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+											<th width="27%" align="right">启用 Adbyby-Open 功能 &nbsp; &nbsp;</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="adbyby_enable_on_of">
@@ -487,7 +487,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											<a class="help_tooltip" href="javascript: void(0)" onmouseover="openTooltip(this, 0, 1);">过滤方案选择:</a></th>
 											<td>
 												<select name="adbyby_set" class="input">
@@ -514,7 +514,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											拦截 Apple iOS 的OTA更新:</th>
 											<td>
 													<div class="main_itoggle">
@@ -529,7 +529,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											拦截热门短视频APP和网站:</th>
 											<td>
 													<div class="main_itoggle">
@@ -544,7 +544,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											拦截热门游戏:</th>
 											<td>
 													<div class="main_itoggle">
@@ -559,7 +559,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											<a class="help_tooltip" href="javascript: void(0)" onmouseover="openTooltip(this, 2, 1);">加载anti-AD项目规则:</a></th>
 											<td>
 													<div class="main_itoggle">
@@ -574,13 +574,13 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-                                            <th width="50%">加载anti-AD下载地址:</th>
+                                            <th width="27%" align="right">加载anti-AD下载地址:</th>
                                             <td>
-                                                <input type="text"  class="input" size="60" name="anti_ad_link" value="<% nvram_get_x("","anti_ad_link"); %>" />
+                                                <input type="text"  class="input" size="100" name="anti_ad_link" value="<% nvram_get_x("","anti_ad_link"); %>" />
                                             </td>
                                         </tr>
 										<tr>
-											<th width="50%">加载hosts规则</th>
+											<th width="27%" align="right">加载hosts规则</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="hosts_ad_on_of">
@@ -676,7 +676,7 @@ function changeBgColorrl(obj, num){
                                             <th colspan="5" id="GWStatic" style="background-color: #E3E3E3;">第三方过滤规则</th>
                                         </tr>
                                         <tr>
-                                            <th width="50%">启用第三方过滤规则</th>
+                                            <th width="27%" align="right">启用第三方过滤规则</th>
                                             <td width="50%">
                                                 <div class="main_itoggle">
                                                     <div id="adbyby_rules_x_on_of">
