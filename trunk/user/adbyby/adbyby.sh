@@ -613,23 +613,11 @@ address=/tiktokcdn.com/0.0.0.0
 address=/tiktokv.com/0.0.0.0
 address=/bytedance.com/0.0.0.0
 address=/toutiao.com/0.0.0.0
-address=/snssdk.com/0.0.0.0
 address=/amemv.com/0.0.0.0
 address=/bytecdn.com/0.0.0.0
 address=/ibytecdn.com/0.0.0.0
 address=/sglog.com/0.0.0.0
-address=/api.douyin.com/0.0.0.0
-address=/api-amemv.douyin.com/0.0.0.0
-address=/api-toutiao.douyin.com/0.0.0.0
-address=/api26.amemv.com/0.0.0.0
-address=/aweme.snssdk.com/0.0.0.0
-address=/edith.snssdk.com/0.0.0.0
-address=/monorail-edge.snssdk.com/0.0.0.0
-address=/log.snssdk.com/0.0.0.0
-address=/api.bytedance.com/0.0.0.0
-address=/data.bytedance.com/0.0.0.0
-address=/tpns.bytedance.com/0.0.0.0
-address=/push.bytedance.com/0.0.0.0
+address=/amemv.com/0.0.0.0
 
 # 快手相关域名 (Kuaishou)
 address=/kuaishou.com/0.0.0.0
@@ -638,35 +626,13 @@ address=/ksad.com/0.0.0.0
 address=/kuaishou.com.cn/0.0.0.0
 address=/ksyungslb.com/0.0.0.0
 address=/yximgs.com/0.0.0.0
-address=/api.kuaishou.com/0.0.0.0
-address=/api-kwai.kuaishou.com/0.0.0.0
-address=/api-short-video.kuaishou.com/0.0.0.0
-address=/app.kuaishou.com/0.0.0.0
-address=/aweme.kuaishou.com/0.0.0.0
-address=/ksapi.kuaishou.com/0.0.0.0
-address=/log.kuaishou.com/0.0.0.0
-address=/push.kuaishou.com/0.0.0.0
-address=/tpns.kuaishou.com/0.0.0.0
 
-# 微信视频号相关域名 (WeChat Video)
-address=/channels.weixin.qq.com/0.0.0.0
-address=/weixin.qq.com/0.0.0.0
-address=/wx.qq.com/0.0.0.0
-address=/wx.qlogo.cn/0.0.0.0
-address=/video.qq.com/0.0.0.0
-
-# 小红书相关域名 (Xiaohongshu/RED)
+# 小红书相关域名
 address=/xiaohongshu.com/0.0.0.0
 address=/xhslink.com/0.0.0.0
 address=/xhsjpg.com/0.0.0.0
 address=/xhsdsp.com/0.0.0.0
 address=/redbook.com/0.0.0.0
-address=/api.xiaohongshu.com/0.0.0.0
-address=/edith.xiaohongshu.com/0.0.0.0
-address=/app-api.xiaohongshu.com/0.0.0.0
-address=/note.xiaohongshu.com/0.0.0.0
-address=/log.xiaohongshu.com/0.0.0.0
-address=/push.xiaohongshu.com/0.0.0.0
 address=/api.redbook.com/0.0.0.0
 
 # 腾讯系短视频相关域名
@@ -676,51 +642,27 @@ address=/liveplay.qq.com/0.0.0.0
 address=/video.gtimg.cn/0.0.0.0
 address=/weishi.com/0.0.0.0
 address=/weishi.qq.com/0.0.0.0
-
-# 微信视频号APP API
-address=/api.channels.weixin.qq.com/0.0.0.0
-address=/appmsg.channels.weixin.qq.com/0.0.0.0
 address=/video.api.weixin.qq.com/0.0.0.0
 address=/mmbizapi.weixin.qq.com/0.0.0.0
-
-# QQ短视频/微视APP API
-address=/api.v.qq.com/0.0.0.0
-address=/app.v.qq.com/0.0.0.0
 address=/video.api.qq.com/0.0.0.0
-address=/api.weishi.qq.com/0.0.0.0
-address=/app.weishi.qq.com/0.0.0.0
-address=/log.weishi.qq.com/0.0.0.0
 
-# 西瓜视频相关域名 (Xigua Video)
+# 西瓜视频
 address=/ixigua.com/0.0.0.0
 address=/toutiao.com/0.0.0.0
 address=/snssdk.com/0.0.0.0
-address=/api.ixigua.com/0.0.0.0
-address=/app.ixigua.com/0.0.0.0
-address=/video.ixigua.com/0.0.0.0
-address=/log.ixigua.com/0.0.0.0
 
-# 美拍相关域名 (Meipai)
+# 美拍
 address=/meipai.com/0.0.0.0
 address=/meitu.com/0.0.0.0
 address=/meitudata.com/0.0.0.0
-address=/api.meipai.com/0.0.0.0
-address=/app.meipai.com/0.0.0.0
-address=/log.meipai.com/0.0.0.0
 
-# 火山小视频相关域名 (Huoshan)
+# 火山小视频
 address=/huoshan.com/0.0.0.0
 address=/huoshan.tv/0.0.0.0
-address=/api.huoshan.com/0.0.0.0
-address=/app.huoshan.com/0.0.0.0
-address=/log.huoshan.com/0.0.0.0
 
-# 梨视频相关域名 (Pear Video)
+# 梨视频
 address=/pearvideo.com/0.0.0.0
 address=/pearnode.com/0.0.0.0
-address=/api.pearvideo.com/0.0.0.0
-address=/app.pearvideo.com/0.0.0.0
-address=/log.pearvideo.com/0.0.0.0
 
 EOF
 	fi
@@ -753,9 +695,8 @@ address=/game.163.com/0.0.0.0
 address=/nie.163.com/0.0.0.0
 address=/g79.update.netease.com/0.0.0.0
 address=/g79.gdl.netease.com/0.0.0.0
-address=/qa.pub-api.seadra.netease.com/0.0.0.0
+address=/seadra.netease.com/0.0.0.0
 address=/nie.netease.com/0.0.0.0
-address=/api.pub.seadra.netease.com/0.0.0.0
 address=/superstar.pt.163.com/0.0.0.0
 address=/x19.update.netease.com/0.0.0.0
 address=/news-api.16163.com/0.0.0.0
@@ -1215,12 +1156,9 @@ EOF
 	if [ ! -f "$adbyby_host" ] || [ ! -s "$adbyby_host" ] ; then
 		cat > "$adbyby_host" <<-EOF
 # AdByBy Hosts下载列表配置文件
-# 每行一个URL，支持http/https协议
-# 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
 
 # 常见广告过滤hosts
 https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/ads_hosts.txt
-
 
 EOF
 		chmod 755 "$adbyby_host"
