@@ -5,9 +5,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <ctype.h>
-#include <netdb.h>
-#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

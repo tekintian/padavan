@@ -8,7 +8,6 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
-#include "proxy.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -18,10 +17,6 @@
 #include "proxy.h"
 #include "rules.h"
 #include "adhook_config.h"
-
-#define DEFAULT_PORT 8118
-#define MAX_CLIENTS 50    // 路由器资源优化：减少最大客户端数
-#define BUFFER_SIZE 2048  // 路由器优化：减小缓冲区大小
 
 static int running = 1;
 rule_manager_t* rule_manager = NULL;
@@ -194,8 +189,6 @@ void show_statistics() {
 }
 
 int main(int argc, char* argv[]) {
-    // 移除未使用的变量
-    // int opt;
     int daemon_mode = 1;
     char rules_file[256] = "/tmp/adbyby/data/rules.txt";
     char config_file[256] = "/tmp/adbyby/adhook.ini";
@@ -247,9 +240,10 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     
-    int total_rules, enabled_rules, total_hits;
-    rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
-    log_message(LOG_INFO, "Rule manager initialized: %d total rules, %d enabled", total_rules, enabled_rules);
+    // 获取统计信息
+    int init_total_rules, init_enabled_rules, init_total_hits;
+    rule_manager_get_stats(rule_manager, &init_total_rules, &init_enabled_rules, &init_total_hits);
+    log_message(LOG_INFO, "Rule manager initialized: %d total rules, %d enabled", init_total_rules, init_enabled_rules);
     
     // 设置信号处理
     signal(SIGTERM, signal_handler);
@@ -328,8 +322,9 @@ int main(int argc, char* argv[]) {
     cleanup_pid_files();
     
     // 显示最终统计
-    rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
-    log_message(LOG_INFO, "Final stats: %d total blocks", total_hits);
+    int final_total_rules, final_enabled_rules, final_total_hits;
+    rule_manager_get_stats(rule_manager, &final_total_rules, &final_enabled_rules, &final_total_hits);
+    log_message(LOG_INFO, "Final stats: %d total blocks", final_total_hits);
     
     // 清理规则管理器
     if (rule_manager) {
