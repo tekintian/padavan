@@ -224,6 +224,16 @@ init_adbyby_env()
 		logger -t "adbyby" "拷贝data/video.txt规则文件"
 	fi
 	
+	# 创建rules.txt文件（如果不存在）
+	if [ ! -f "/tmp/adbyby/data/rules.txt" ]; then
+		cp /usr/share/adbyby/data/rules.txt /tmp/adbyby/data/rules.txt 2>/dev/null || {
+			# 如果源文件不存在，创建空文件
+			touch /tmp/adbyby/data/rules.txt
+			logger -t "adbyby" "创建空的rules.txt文件"
+		}
+		logger -t "adbyby" "确保rules.txt文件存在"
+	fi
+	
 	logger -t "adbyby" "AdByBy环境初始化完成"
 }
 
@@ -934,35 +944,35 @@ anti_ad(){
 							;;
 						*)
 							# 检测是否为hosts格式规则（IP + 域名）
-							if [[ "$rule_line" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+[[:space:]]+[a-zA-Z0-9.-]+ ]]; then
+							if echo "$rule_line" | grep -q "^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*[[:space:]]*[a-zA-Z0-9.-]"; then
 								# hosts格式规则：转换为dnsmasq格式
 								local domain=$(echo "$rule_line" | awk '{print $2}')
 								local ip=$(echo "$rule_line" | awk '{print $1}')
 								if [ -n "$domain" ] && [ -n "$ip" ]; then
-								# 清理域名，处理特殊字符
-								domain=$(cleanup_domain "$domain")
-								# 基本修复（主要是明显的非法格式）
-								domain=$(fix_problematic_domains "$domain")
-								
-								echo "address=/$domain/$ip" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
-								local_rules_count=$((local_rules_count + 1))
-								local_rules_processed=$((local_rules_processed + 1))
-								total_rules=$((total_rules + 1))
-								logger -t "adbyby" "转换hosts规则: $domain -> $ip"
+									# 清理域名，处理特殊字符
+									domain=$(cleanup_domain "$domain")
+									# 基本修复（主要是明显的非法格式）
+									domain=$(fix_problematic_domains "$domain")
+									
+									echo "address=/$domain/$ip" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+									local_rules_count=$((local_rules_count + 1))
+									local_rules_processed=$((local_rules_processed + 1))
+									total_rules=$((total_rules + 1))
+									logger -t "adbyby" "转换hosts规则: $domain -> $ip"
 								fi
 							# 检测是否为其他dnsmasq规则格式
-							elif [[ "$rule_line" =~ ^(address|server|cache-stop|rebind-domain) ]]; then
+							elif echo "$rule_line" | grep -q "^[a-z]*="; then
 								# 对于address和server规则，需要清理域名
-								if [[ "$rule_line" =~ ^(address|server) ]]; then
+								if echo "$rule_line" | grep -q "^address=" || echo "$rule_line" | grep -q "^server="; then
 									# 提取域名部分并清理
 									local domain=$(echo "$rule_line" | sed -n 's/.*=\/*\([^/]*\).*/\1/p')
 									if [ -n "$domain" ]; then
 										domain=$(cleanup_domain "$domain")
 										# 重新构建规则
-										if [[ "$rule_line" =~ ^address ]]; then
+										if echo "$rule_line" | grep -q "^address="; then
 											local ip=$(echo "$rule_line" | sed -n 's/.*\/\([^/]*\)$/\1/p')
 											rule_line="address=/$domain/$ip"
-										elif [[ "$rule_line" =~ ^server ]]; then
+										elif echo "$rule_line" | grep -q "^server="; then
 											local target=$(echo "$rule_line" | sed -n 's/.*\/\([^/]*\)$/\1/p')
 											rule_line="server=/$domain/$target"
 										fi
@@ -979,7 +989,7 @@ anti_ad(){
 							;;
 						*)
 							# 其他格式：尝试作为dnsmasq规则直接添加
-							if [[ "$rule_line" =~ ^(address|server|cache-stop|rebind-domain) ]]; then
+							if echo "$rule_line" | grep -q "^[a-z]*="; then
 								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
 								local_rules_count=$((local_rules_count + 1))
 								local_rules_processed=$((local_rules_processed + 1))
