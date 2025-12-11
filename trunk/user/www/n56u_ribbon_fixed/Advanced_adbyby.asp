@@ -253,11 +253,6 @@ function change_anti_ad_enabled(){
 	var script16 = document.getElementById('script16');
 	if(script16){
 		script16.style.display = v ? 'block' : 'none';
-		// 更新切换链接的显示
-		var spoiler_link = script16.previousElementSibling;
-		if(spoiler_link && spoiler_link.tagName === 'A'){
-			spoiler_link.style.display = v ? 'inline' : 'none';
-		}
 	}
 }
 
@@ -589,6 +584,14 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
+											<td colspan="3">
+												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>anti-AD规则下载列表(一行一个地址):</span></a>
+												<div id="script16">
+													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_antiad.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_antiad.sh",""); %></textarea>
+												</div>
+											</td>
+										</tr>
+										<tr>
 											<th width="27%" align="right">加载hosts规则</th>
 											<td>
 													<div class="main_itoggle">
@@ -610,14 +613,7 @@ function changeBgColorrl(obj, num){
 												</div>
 											</td>
 										</tr>
-										<tr>
-											<td colspan="3">
-												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>anti-AD规则下载列表(一行一个地址):</span></a>
-												<div id="script16">
-													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_antiad.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_antiad.sh",""); %></textarea>
-												</div>
-											</td>
-										</tr>
+										
 										</table>
 										<table width="100%" align="center" cellpadding="4" cellspacing="0" class="table">
                                         <tr>
