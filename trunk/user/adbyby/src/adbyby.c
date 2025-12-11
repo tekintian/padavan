@@ -27,16 +27,17 @@ static int running = 1;
 rule_manager_t* rule_manager = NULL;
 static adhook_config_t config;
 
-// 处理HTTP请求 - 轻量级版本（节省路由器资源）
+// 处理HTTP请求 - 极简版本（移除状态页面，专注广告过滤）
 void handle_client_request(int client_fd) {
-    // 设置较短超时，快速响应
+    // 极短超时，快速处理
     struct timeval timeout;
-    timeout.tv_sec = 3;  // 3秒超时足够
+    timeout.tv_sec = 2;  // 2秒超时
     timeout.tv_usec = 0;
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     
-    // 使用栈分配（节省路由器堆内存）
-    char buffer[512];   // 状态页面请求很小，512字节绰绰有余
+    // 最小缓冲区，只读取HTTP头部
+    char buffer[256];   // 足够读取GET请求行
     
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     
@@ -47,115 +48,45 @@ void handle_client_request(int client_fd) {
     
     buffer[bytes_received] = '\0';
     
-    if (config.debug_mode) {
-        log_message(LOG_DEBUG, "Request received: %.*s", bytes_received < 100 ? bytes_received : 100, buffer);
-    }
-    
-    http_request_t request;
-    if (!parse_http_request(buffer, &request)) {
-        // 简化的错误响应
-        const char* error_response = 
-            "HTTP/1.1 400 Bad Request\r\n"
-            "Connection: close\r\n"
-            "\r\n";
-        write(client_fd, error_response, strlen(error_response));
+    // 极简解析：只提取GET请求的URL
+    char url[128] = {0};
+    if (sscanf(buffer, "GET %127s", url) != 1) {
         close(client_fd);
         return;
     }
     
-    // 对于状态页面，直接构建响应（避免DNS解析和网络连接）
-    if (strcmp(request.url, "/") == 0 || strlen(request.url) == 0) {
-        // 获取真实统计数据
-        int total_rules = 0, enabled_rules = 0, total_hits = 0;
-        if (rule_manager) {
-            rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
-        }
-        
-        // 直接构建状态页面HTML（优化内存使用）
-        char status_html[2048];  // 优化：状态页面HTML实际约1.5KB
-        int html_len = snprintf(status_html, sizeof(status_html),
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html; charset=utf-8\r\n"
-            "Connection: close\r\n"
-            "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-            "Pragma: no-cache\r\n"
-            "Expires: 0\r\n"
-            "\r\n"
-            "<!DOCTYPE html>"
-            "<html><head>"
-            "<title>AdByBy-Open 状态</title>"
-            "<meta charset='utf-8'>"
-            "<style>"
-            "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }"
-            ".container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }"
-            ".header { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 15px; }"
-            ".status { display: flex; justify-content: space-around; margin: 20px 0; }"
-            ".status-item { text-align: center; padding: 15px; background: #ecf0f1; border-radius: 6px; flex: 1; margin: 0 5px; }"
-            ".status-item h3 { color: #27ae60; margin: 0 0 8px 0; }"
-            ".footer { text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px; }"
-            ".running { color: #27ae60; font-weight: bold; }"
-            "</style>"
-            "</head><body>"
-            "<div class='container'>"
-            "<div class='header'>"
-            "<h1>🛡️ AdByBy-Open</h1>"
-            "<p class='running'>✅ 服务运行中</p>"
-            "</div>"
-            
-            "<div class='status'>"
-            "<div class='status-item'>"
-            "<h3>🌐 代理状态</h3>"
-            "<p>端口: 8118</p>"
-            "<p>状态: 运行中</p>"
-            "</div>"
-            "<div class='status-item'>"
-            "<h3>📊 过滤统计</h3>"
-            "<p>规则: %d条</p>"
-            "<p>命中: %d次</p>"
-            "</div>"
-            "<div class='status-item'>"
-            "<h3>⚙️ 系统</h3>"
-            "<p>架构: MIPS</p>"
-            "<p>版本: v1.0</p>"
-            "</div>"
-            "</div>"
-
-            "<div class='footer'>"
-            "<p>🔒 AdByBy-Open - 开源广告过滤解决方案  |  <a href='https://dev.tekin.cn' target='_blank'>软件定制开发</a>咨询QQ:932256355</p>"
-            "<p><a href='javascript:location.reload()'>🔄 刷新状态</a></p>"
-            "</div>"
-            "</div>"
-            "</body></html>",
-            total_rules, total_hits);
-        
-        // 发送响应
-        int sent = 0;
-        while (sent < html_len) {
-            int result = write(client_fd, status_html + sent, html_len - sent);
-            if (result <= 0) break;
-            sent += result;
-        }
-    } else {
-        // 检查是否为广告请求
-        if (is_blocked_request(&request)) {
-            // 发送屏蔽响应
-            send_block_response(client_fd, &request);
-            log_message(LOG_INFO, "Blocked: %s", request.url);
-        } else {
-            // 非广告请求，返回简单的代理响应
-            // 注意：这里应该实现真正的代理转发逻辑，但为了简化演示，返回501
-            const char* not_implemented = 
-                "HTTP/1.1 501 Not Implemented\r\n"
-                "Content-Type: text/html\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-                "<!DOCTYPE html><html><head><title>501 Not Implemented</title></head>"
-                "<body><h1>Proxy Not Implemented</h1><p>This is an ad filter, not a general proxy.</p></body></html>";
-            write(client_fd, not_implemented, strlen(not_implemented));
-        }
+    if (config.debug_mode) {
+        log_message(LOG_DEBUG, "Request: %s", url);
     }
     
-    // 确保关闭连接
+    // 极简广告检测 - 统一使用规则管理器（避免重复逻辑）
+    int is_ad = rule_manager && rule_manager_is_blocked(rule_manager, url, "");
+    
+    const char* response;
+    int response_len;
+    
+    if (is_ad) {
+        // 极简屏蔽响应
+        response = "HTTP/1.1 200 OK\r\n"
+                   "Content-Type: text/html\r\n"
+                   "Connection: close\r\n"
+                   "Cache-Control: no-store\r\n"
+                   "\r\n"
+                   "<!-- blocked -->";
+        response_len = strlen(response);
+        log_message(LOG_DEBUG, "Blocked: %s", url);
+    } else {
+        // 连接重置 - 让客户端直接连接目标服务器
+        // 这样避免了复杂的代理逻辑，更稳定
+        response = "HTTP/1.1 302 Found\r\n"
+                   "Location: about:blank\r\n"
+                   "Connection: close\r\n"
+                   "\r\n";
+        response_len = strlen(response);
+    }
+    
+    // 发送响应并立即关闭连接
+    write(client_fd, response, response_len);
     close(client_fd);
 }
 

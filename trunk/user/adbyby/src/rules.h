@@ -38,17 +38,10 @@ void rule_manager_destroy(rule_manager_t* rm);
 int rule_manager_load_rules(rule_manager_t* rm);
 int rule_manager_save_rules(rule_manager_t* rm);
 int rule_manager_add_rule(rule_manager_t* rm, const char* pattern, rule_type_t type, const char* description);
-int rule_manager_remove_rule(rule_manager_t* rm, int index);
-int rule_manager_enable_rule(rule_manager_t* rm, int index, int enabled);
-int rule_manager_update_rule(rule_manager_t* rm, int index, const char* pattern, const char* description);
 
 // 规则匹配函数
 int rule_manager_is_blocked(rule_manager_t* rm, const char* url, const char* host);
 int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_t type);
-
-// 规则更新函数
-int rule_manager_update_from_url(rule_manager_t* rm, const char* update_url);
-int rule_manager_auto_update(rule_manager_t* rm);
 
 // 规则统计函数
 void rule_manager_get_stats(rule_manager_t* rm, int* total_rules, int* enabled_rules, int* total_hits);
