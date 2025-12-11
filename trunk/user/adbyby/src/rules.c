@@ -15,45 +15,17 @@ static const char* builtin_ad_domains[] = {
     "googleadservices.com", 
     "googlesyndication.com",
     "google-analytics.com",
-    "googletagmanager.com",
-    "amazon-adsystem.com",
-    "adsco.re",
-    "adnxs.com",          // AppNexus
-    "criteo.com",         // Criteo
-    "taboola.com",        // Taboola
-    "outbrain.com",       // Outbrain
-    "adsafeprotected.com", // 广告验证
-    "moatads.com",        // 广告监测
-    "scorecardresearch.com", // 量化分析
+    "adnxs.com",
     "advertising.com",
-    "ads.yahoo.com",
-    "adserver.com",
-    "quantserve.com",
-    "serving-sys.com",
-    "turn.com",
-    "adsymptotic.com",
-    "adtech.de",
-    "rlcdn.com",
-    
     // 国内主要广告平台
-    "tanx.com",           // 阿里妈妈
-    "allyes.com",         // 好耶广告
-    "guohead.com",        // 果壳
-    "mediav.com",         // 亿玛
-    "iads.cn",            // 爱广告
-    "admaster.com.cn",    // 传漾
-    "miaozhen.com",       // 秒针
-    "dianjoy.com",        // 点乐
-    "ucweb.com",          // UC广告
-    "qutoutiao.net",      // 趣头条
-    "toutiaocdn.com",     // 今日头条CDN
-    "snssdk.com",         // 字节跳动
-    "pangolin-sdk.com",   // 穿山甲广告
+    "allyes.com",
+    "mediav.com",
+    "iads.cn",
     
     NULL
 };
 
-// 内置URL模式列表（国内环境优化）
+// 内置URL模式列表
 static const char* builtin_url_patterns[] = {
     // 通用广告路径
     "/ad.",
@@ -69,48 +41,21 @@ static const char* builtin_url_patterns[] = {
     "/beacon",
     "/pixel",
     
-    // 国际广告平台
-    "doubleclick",
-    "googlesyndication",
-    "googleads",
-    "analytics.google.com",
-    "adsco.re",
-    "amazon-adsystem",
-    "taboola",
-    "outbrain",
-    
-    // 国内广告平台相关
-    "tanx.com",
-    "pangolin-sdk",
-    "allyes.com",
-    "admaster.com.cn",
-    "miaozhen.com",
-    "mediav.com",
-    "iads.cn",
-    
-    // 统计分析相关
-    "hm.baidu.com",
-    "log.mi.com",
-    "analysis.qq.com",
-    
-    // 短视频平台广告
-    "ads.douyin.com",
-    "ads.bytedance.com",
-    "ads.kuaishou.com",
-    "ads.toutiao.com",
-    "ads.snssdk.com",
-    
     NULL
 };
 
 rule_manager_t* rule_manager_create(const char* rules_file) {
     rule_manager_t* rm = malloc(sizeof(rule_manager_t));
-    if (!rm) return NULL;
+    if (!rm) {
+        log_message(LOG_ERROR, "Failed to allocate memory for rule manager");
+        return NULL;
+    }
     
     memset(rm, 0, sizeof(rule_manager_t));
     
     if (rules_file) {
         strncpy(rm->rules_file, rules_file, sizeof(rm->rules_file) - 1);
+        rm->rules_file[sizeof(rm->rules_file) - 1] = '\0';
     } else {
         strcpy(rm->rules_file, "/tmp/adbyby/data/rules.txt");
     }
@@ -118,9 +63,13 @@ rule_manager_t* rule_manager_create(const char* rules_file) {
     rm->capacity = INITIAL_RULE_CAPACITY;
     rm->rules = malloc(sizeof(ad_rule_t) * rm->capacity);
     if (!rm->rules) {
+        log_message(LOG_ERROR, "Failed to allocate memory for rules array");
         free(rm);
         return NULL;
     }
+    
+    // 初始化规则数组
+    memset(rm->rules, 0, sizeof(ad_rule_t) * rm->capacity);
     
     // 加载内置规则
     rule_manager_add_builtin_rules(rm);
@@ -128,15 +77,28 @@ rule_manager_t* rule_manager_create(const char* rules_file) {
     // 尝试从文件加载规则
     rule_manager_load_rules(rm);
     
+    log_message(LOG_INFO, "Rule manager created with %d initial rules", rm->count);
     return rm;
 }
 
 void rule_manager_destroy(rule_manager_t* rm) {
     if (!rm) return;
     
+    log_message(LOG_INFO, "Destroying rule manager with %d rules", rm->count);
+    
     if (rm->rules) {
+        // 清理每条规则（如果有动态分配的资源）
+        for (int i = 0; i < rm->count; i++) {
+            // 当前实现中没有动态分配的字符串，但保留扩展性
+            rm->rules[i].pattern[0] = '\0';
+            rm->rules[i].hit_count = 0;
+        }
         free(rm->rules);
+        rm->rules = NULL;
     }
+    
+    rm->count = 0;
+    rm->capacity = 0;
     free(rm);
 }
 
@@ -248,31 +210,57 @@ int rule_manager_save_rules(rule_manager_t* rm) {
 }
 
 int rule_manager_add_rule(rule_manager_t* rm, const char* pattern, rule_type_t type, const char* description) {
-    if (!rm || !pattern) return 0;
+    if (!rm || !pattern || strlen(pattern) == 0) {
+        log_message(LOG_ERROR, "Invalid parameters for add_rule");
+        return 0;
+    }
+    
+    // 检查是否已存在相同规则（避免重复）
+    for (int i = 0; i < rm->count; i++) {
+        if (rm->rules[i].type == type && strcmp(rm->rules[i].pattern, pattern) == 0) {
+            log_message(LOG_DEBUG, "Rule already exists: %s", pattern);
+            rm->rules[i].enabled = 1; // 重新启用
+            return 1;
+        }
+    }
     
     // 检查是否需要扩容
     if (rm->count >= rm->capacity) {
-        rm->capacity *= 2;
-        ad_rule_t* new_rules = realloc(rm->rules, sizeof(ad_rule_t) * rm->capacity);
+        int new_capacity = rm->capacity * 2;
+        ad_rule_t* new_rules = realloc(rm->rules, sizeof(ad_rule_t) * new_capacity);
         if (!new_rules) {
-            log_message(LOG_ERROR, "Failed to expand rules array");
+            log_message(LOG_ERROR, "Failed to expand rules array to %d rules", new_capacity);
             return 0;
         }
+        // 初始化新分配的内存
+        memset(&new_rules[rm->capacity], 0, sizeof(ad_rule_t) * (new_capacity - rm->capacity));
+        
         rm->rules = new_rules;
+        rm->capacity = new_capacity;
+        log_message(LOG_INFO, "Expanded rules array to %d rules", new_capacity);
     }
     
     ad_rule_t* rule = &rm->rules[rm->count];
+    
+    // 安全地初始化规则
+    memset(rule, 0, sizeof(ad_rule_t));
     strncpy(rule->pattern, pattern, sizeof(rule->pattern) - 1);
     rule->pattern[sizeof(rule->pattern) - 1] = '\0';
     rule->type = type;
     rule->enabled = 1;
     rule->last_updated = time(NULL);
-    strncpy(rule->description, description ? description : "", sizeof(rule->description) - 1);
-    rule->description[sizeof(rule->description) - 1] = '\0';
+    
+    if (description && strlen(description) > 0) {
+        strncpy(rule->description, description, sizeof(rule->description) - 1);
+        rule->description[sizeof(rule->description) - 1] = '\0';
+    } else {
+        strcpy(rule->description, "");
+    }
+    
     rule->hit_count = 0;
     
     rm->count++;
-    log_message(LOG_INFO, "Added rule: %s (type: %d)", pattern, type);
+    log_message(LOG_DEBUG, "Added rule #%d: %s (type: %d)", rm->count, pattern, type);
     
     return 1;
 }

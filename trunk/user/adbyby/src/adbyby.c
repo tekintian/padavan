@@ -27,57 +27,94 @@ static int running = 1;
 rule_manager_t* rule_manager = NULL;
 static adhook_config_t config;
 
-// 处理HTTP请求 - 极简版本（移除状态页面，专注广告过滤）
+// 处理HTTP请求 - 改进版本，增强稳定性
 void handle_client_request(int client_fd) {
-    // 极短超时，快速处理
+    // 设置较短但合理的超时
     struct timeval timeout;
-    timeout.tv_sec = 2;  // 2秒超时
+    timeout.tv_sec = 5;  // 5秒超时（稍微增加以确保处理完整）
     timeout.tv_usec = 0;
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     
-    // 最小缓冲区，只读取HTTP头部
-    char buffer[256];   // 足够读取GET请求行
+    // 增大缓冲区以处理更完整的HTTP头部
+    char buffer[1024];   // 增加缓冲区大小
     
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     
     if (bytes_received <= 0) {
+        if (bytes_received < 0) {
+            log_message(LOG_DEBUG, "Recv error: %s", strerror(errno));
+        }
         close(client_fd);
         return;
     }
     
     buffer[bytes_received] = '\0';
     
-    // 极简解析：只提取GET请求的URL
-    char url[128] = {0};
-    if (sscanf(buffer, "GET %127s", url) != 1) {
+    // 更安全的HTTP请求解析
+    char url[512] = {0};  // 增加URL缓冲区大小
+    char method[16] = {0};
+    
+    // 使用更安全的解析方式
+    if (sscanf(buffer, "%15s %511s", method, url) != 2) {
+        log_message(LOG_DEBUG, "Invalid HTTP request");
+        close(client_fd);
+        return;
+    }
+    
+    // 只处理GET和HEAD请求（更安全）
+    if (strcmp(method, "GET") != 0 && strcmp(method, "HEAD") != 0) {
+        const char* not_allowed = "HTTP/1.1 405 Method Not Allowed\r\n"
+                                  "Connection: close\r\n"
+                                  "\r\n";
+        write(client_fd, not_allowed, strlen(not_allowed));
         close(client_fd);
         return;
     }
     
     if (config.debug_mode) {
-        log_message(LOG_DEBUG, "Request: %s", url);
+        log_message(LOG_DEBUG, "Request: %s %s", method, url);
     }
     
-    // 极简广告检测 - 统一使用规则管理器（避免重复逻辑）
-    int is_ad = rule_manager && rule_manager_is_blocked(rule_manager, url, "");
+    // 安全的广告检测
+    int is_ad = 0;
+    if (rule_manager && url[0] != '\0') {
+        // 提取主机名用于更精确的匹配
+        char host[256] = {0};
+        char* host_start = strstr(buffer, "Host:");
+        if (host_start) {
+            host_start += 5; // 跳过"Host:"
+            while (*host_start == ' ' || *host_start == '\t') host_start++;
+            char* host_end = strchr(host_start, '\r');
+            if (!host_end) host_end = strchr(host_start, '\n');
+            if (host_end) {
+                int host_len = host_end - host_start;
+                if (host_len > 0 && host_len < (int)sizeof(host)) {
+                    strncpy(host, host_start, host_len);
+                    host[host_len] = '\0';
+                }
+            }
+        }
+        
+        is_ad = rule_manager_is_blocked(rule_manager, url, host);
+    }
     
     const char* response;
     int response_len;
     
     if (is_ad) {
-        // 极简屏蔽响应
+        // 改进的屏蔽响应
         response = "HTTP/1.1 200 OK\r\n"
                    "Content-Type: text/html\r\n"
                    "Connection: close\r\n"
-                   "Cache-Control: no-store\r\n"
+                   "Cache-Control: no-store, no-cache\r\n"
+                   "Pragma: no-cache\r\n"
                    "\r\n"
-                   "<!-- blocked -->";
+                   "<!-- adbyby-blocked -->";
         response_len = strlen(response);
         log_message(LOG_DEBUG, "Blocked: %s", url);
     } else {
-        // 连接重置 - 让客户端直接连接目标服务器
-        // 这样避免了复杂的代理逻辑，更稳定
+        // 允许通过的响应
         response = "HTTP/1.1 302 Found\r\n"
                    "Location: about:blank\r\n"
                    "Connection: close\r\n"
@@ -85,15 +122,30 @@ void handle_client_request(int client_fd) {
         response_len = strlen(response);
     }
     
-    // 发送响应并立即关闭连接
-    write(client_fd, response, response_len);
+    // 安全的响应发送
+    ssize_t sent = write(client_fd, response, response_len);
+    if (sent != response_len) {
+        log_message(LOG_DEBUG, "Incomplete response sent: %zd/%d", sent, response_len);
+    }
+    
     close(client_fd);
+}
+
+// 清理PID文件的函数
+void cleanup_pid_files() {
+    unlink("/var/run/adbyby.pid");
+    unlink("/tmp/adbyby.pid");
+    unlink("/tmp/adbyby/adbyby.pid");
+    log_message(LOG_INFO, "PID files cleaned up");
 }
 
 // 信号处理
 void signal_handler(int sig) {
     log_message(LOG_INFO, "Received signal %d, shutting down...", sig);
     running = 0;
+    
+    // 立即清理PID文件，避免健康检查误判
+    cleanup_pid_files();
 }
 
 // 创建PID文件
@@ -226,14 +278,27 @@ int main(int argc, char* argv[]) {
     
     log_message(LOG_INFO, "AdByBy-Open started on port %d", config.listen_port);
     
-    // 主循环 - 轻量级单线程处理（适合路由器环境）
+    // 主循环 - 改进的单线程处理（增强稳定性）
     while (running) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                continue; // 被信号中断，继续循环
+            }
+            if (errno == EMFILE || errno == ENFILE) {
+                // 文件描述符耗尽，短暂休息
+                log_message(LOG_WARN, "File descriptor limit reached, waiting...");
+                usleep(100000); // 等待100ms
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 非阻塞模式下没有连接，短暂休息
+                usleep(10000); // 等待10ms
+                continue;
+            }
             log_message(LOG_ERROR, "Accept failed: %s", strerror(errno));
             break;
         }
@@ -244,24 +309,34 @@ int main(int argc, char* argv[]) {
                    ntohs(client_addr.sin_port));
         }
         
-        // 单线程处理（节省路由器资源）
+        // 增强的客户端处理（带错误恢复）
         handle_client_request(client_fd);
+        
+        // 每处理10个连接检查一次运行状态
+        static int connection_count = 0;
+        if (++connection_count >= 10) {
+            connection_count = 0;
+            // 短暂休眠，避免CPU占用过高
+            usleep(1000); // 1ms
+        }
     }
     
     // 清理
     close(server_fd);
     
-    // 清理所有可能的PID文件
-    unlink("/var/run/adbyby.pid");
-    unlink("/tmp/adbyby.pid");
-    unlink("/tmp/adbyby/adbyby.pid");
+    // 再次确保PID文件被清理
+    cleanup_pid_files();
     
     // 显示最终统计
     rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);
     log_message(LOG_INFO, "Final stats: %d total blocks", total_hits);
     
-    rule_manager_destroy(rule_manager);
-    log_message(LOG_INFO, "AdByBy-Open stopped");
+    // 清理规则管理器
+    if (rule_manager) {
+        rule_manager_destroy(rule_manager);
+    }
+    
+    log_message(LOG_INFO, "AdByBy-Open stopped cleanly");
     
     return 0;
 }
