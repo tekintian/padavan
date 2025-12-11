@@ -1252,6 +1252,8 @@ $anti_ad_link
 
 # 游戏相关规则
 # https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/games.conf
+# 电商平台广告规则
+# https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/shop.conf
 
 EOF
 		chmod 755 "$adbyby_antiad"
