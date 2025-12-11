@@ -1250,6 +1250,8 @@ EOF
 # Adbyby项目默认dnsmasq规则源
 $anti_ad_link
 
+# 游戏相关规则
+# https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/games.conf
 
 EOF
 		chmod 755 "$adbyby_antiad"
