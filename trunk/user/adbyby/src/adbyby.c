@@ -18,7 +18,8 @@
 #include "rules.h"
 #include "adhook_config.h"
 
-static int running = 1;
+static volatile int running = 1;  // 添加volatile确保信号可见性
+static int server_fd = -1;         // 全局server_fd，用于信号处理
 rule_manager_t* rule_manager = NULL;
 static adhook_config_t config;
 
@@ -138,6 +139,13 @@ void cleanup_pid_files() {
 void signal_handler(int sig) {
     log_message(LOG_INFO, "Received signal %d, shutting down...", sig);
     running = 0;
+    
+    // 立即关闭监听socket，强制释放端口
+    if (server_fd >= 0) {
+        close(server_fd);
+        server_fd = -1;
+        log_message(LOG_INFO, "Server socket closed immediately");
+    }
     
     // 立即清理PID文件，避免健康检查误判
     cleanup_pid_files();
@@ -263,7 +271,7 @@ int main(int argc, char* argv[]) {
     }
     
     // 初始化代理服务器
-    int server_fd = init_proxy(config.listen_port);
+    server_fd = init_proxy(config.listen_port);
     if (server_fd < 0) {
         log_message(LOG_ERROR, "Failed to initialize proxy server");
         rule_manager_destroy(rule_manager);
@@ -279,6 +287,10 @@ int main(int argc, char* argv[]) {
         
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) {
+            if (!running) {
+                // 如果收到退出信号，直接退出
+                break;
+            }
             if (errno == EINTR) {
                 continue; // 被信号中断，继续循环
             }
@@ -292,6 +304,10 @@ int main(int argc, char* argv[]) {
                 // 非阻塞模式下没有连接，短暂休息
                 usleep(10000); // 等待10ms
                 continue;
+            }
+            if (errno == EBADF) {
+                // socket已关闭（信号处理导致），正常退出
+                break;
             }
             log_message(LOG_ERROR, "Accept failed: %s", strerror(errno));
             break;
@@ -316,7 +332,10 @@ int main(int argc, char* argv[]) {
     }
     
     // 清理
-    close(server_fd);
+    if (server_fd >= 0) {
+        close(server_fd);
+        server_fd = -1;
+    }
     
     // 再次确保PID文件被清理
     cleanup_pid_files();

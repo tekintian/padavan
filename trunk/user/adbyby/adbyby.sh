@@ -124,13 +124,25 @@ is_adbyby_running()
 		if [ -f "$pid_file" ]; then
 			local pid=$(cat "$pid_file" 2>/dev/null)
 			if [ -n "$pid" ] && [ -d "/proc/$pid" ] 2>/dev/null; then
-				return 0
+				# 进程存在，进一步检查端口
+				if is_8118_listening; then
+					return 0
+				else
+					# 进程存在但端口未监听，说明服务异常
+					return 1
+				fi
 			fi
 		fi
 	done
 	
 	# 回退到进程检查
-	pgrep -f "adbyby" > /dev/null 2>/dev/null
+	if pgrep -f "adbyby" > /dev/null 2>/dev/null; then
+		# 进程存在，检查端口
+		is_8118_listening
+	else
+		# 进程不存在
+		return 1
+	fi
 }
 
 # 极简端口检查（兼容多种路由器环境）
@@ -379,12 +391,57 @@ adbyby_close()
 	del_rule
 	del_cron
 	del_dns
-	killall -q adbyby
+	
+	# 强制终止所有相关进程（包括子进程和僵尸进程）
+	logger -t "adbyby" "正在强制终止adbyby相关进程..."
+	killall -q -9 adbyby 2>/dev/null
+	killall -q -9 -r ".*adbyby.*" 2>/dev/null
+	
 	# 清理PID文件
 	cleanup_pid_files
+	
+	# 强制关闭8118端口的所有连接
+	logger -t "adbyby" "正在清理8118端口连接..."
+	
+	# 方法1: 使用fuser关闭端口占用
+	if command -v fuser >/dev/null 2>&1; then
+		fuser -k 8118/tcp 2>/dev/null
+	fi
+	
+	# 方法2: 查找占用8118端口的进程并终止
+	local pid_on_8118=$(netstat -tlpn 2>/dev/null | grep ":8118 " | awk '/LISTEN/ {split($7,a,"/"); print a[1]}' | head -1)
+	if [ -n "$pid_on_8118" ] && [ "$pid_on_8118" != "-" ]; then
+		logger -t "adbyby" "发现8118端口被进程$pid_on_8118占用，正在终止..."
+		kill -9 "$pid_on_8118" 2>/dev/null
+	fi
+	
+	# 方法3: 使用ss命令（更现代的替代方案）
+	if command -v ss >/dev/null 2>&1; then
+		local pids_ss=$(ss -tlpn 2>/dev/null | grep ":8118 " | awk '/LISTEN/ {split($7,a,"/"); print a[1]}' | grep -E '^[0-9]+$')
+		for pid in $pids_ss; do
+			if [ -n "$pid" ]; then
+				logger -t "adbyby" "使用ss发现8118端口被进程$pid占用，正在终止..."
+				kill -9 "$pid" 2>/dev/null
+			fi
+		done
+	fi
+	
+	# 等待端口释放
+	sleep 2
+	
+	# 验证8118端口是否已释放
+	if netstat -ln 2>/dev/null | grep ":8118 " >/dev/null; then
+		logger -t "adbyby" "警告：8118端口仍被占用，尝试强制清理..."
+		# 最后的手段：使用iptables拒绝所有到8118的连接
+		iptables -t filter -I INPUT -p tcp --dport 8118 -j DROP 2>/dev/null
+		iptables -t filter -I OUTPUT -p tcp --dport 8118 -j DROP 2>/dev/null
+		sleep 1
+		iptables -t filter -D INPUT -p tcp --dport 8118 -j DROP 2>/dev/null
+		iptables -t filter -D OUTPUT -p tcp --dport 8118 -j DROP 2>/dev/null
+	fi
+	
 	/sbin/restart_dhcpd
 	logger -t "adbyby" "Adbyby已关闭。"
-
 }
 
 add_rules()

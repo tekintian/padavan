@@ -20,8 +20,14 @@ int init_proxy(int port) {
         return -1;
     }
     
+    // 设置socket选项：允许地址重用但确保端口能快速释放
     int opt_val = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt_val, sizeof(opt_val));
+    
+    // 在支持的平台设置更短的TIME_WAIT
+#ifdef SO_REUSEPORT
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt_val, sizeof(opt_val));
+#endif
     
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));

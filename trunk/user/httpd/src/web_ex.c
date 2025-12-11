@@ -2262,7 +2262,23 @@ static int adbyby_action_hook(int eid, webs_t wp, int argc, char **argv)
 
 static int adbyby_status_hook(int eid, webs_t wp, int argc, char **argv)
 {
-	int ad_status_code = pids("adbyby") || pids("/usr/share/adbyby/adbyby");
+	// 增强状态检测：同时检查进程和端口
+	int process_running = pids("adbyby") || pids("/usr/share/adbyby/adbyby");
+	int port_listening = 0;
+	
+	// 检查8118端口是否被监听
+	FILE *fp = popen("netstat -ln 2>/dev/null | grep ':8118 ' | grep -c 'LISTEN'", "r");
+	if (fp) {
+		char result[16];
+		if (fgets(result, sizeof(result), fp)) {
+			port_listening = (atoi(result) > 0);
+		}
+		pclose(fp);
+	}
+	
+	// 只有进程存在且端口监听才认为是运行状态
+	int ad_status_code = process_running && port_listening;
+	
 	websWrite(wp, "function adbyby_status() { return %d;}\n", ad_status_code);
 	return 0;
 }
