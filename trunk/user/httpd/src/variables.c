@@ -1159,6 +1159,7 @@
 			{"scripts.adbyby_adblack.sh", "File", NULL, EVM_RESTART_ADBYBY},
 			{"scripts.adbyby_adesc.sh", "File", NULL, EVM_RESTART_ADBYBY},
 			{"scripts.adbyby_adhost.sh", "File", NULL, EVM_RESTART_ADBYBY},
+			{"scripts.adbyby_antiad.sh", "File", NULL, EVM_RESTART_ADBYBY},
 			{"scripts.adbyby_config_script.sh", "File", NULL, EVM_RESTART_ADBYBY},
 			{"scripts.adbyby_host.sh", "File", NULL, EVM_RESTART_ADBYBY},
 			{"AdIPList", "Group", ARGV((char*)variables_AdbybyConf_AdIPList, "8", "55", "adbybyip_staticnum_x"), EVM_RESTART_ADBYBY},

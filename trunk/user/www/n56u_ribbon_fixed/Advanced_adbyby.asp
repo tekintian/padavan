@@ -95,6 +95,7 @@ function initial(){
 	showMRULESList();
 	change_adbyby_ip_enabled();
 	change_adbyby_rules_enabled();
+	change_anti_ad_enabled();
 	if (!login_safe())
 		textarea_scripts_enabled(0);
 		//load_body();
@@ -107,6 +108,7 @@ function textarea_scripts_enabled(v){
 	inputCtrl(document.form['scripts.adbyby_adesc.sh'], v);
 	inputCtrl(document.form['scripts.adbyby_adhost.sh'], v);
 	inputCtrl(document.form['scripts.adbyby_host.sh'], v);
+	inputCtrl(document.form['scripts.adbyby_antiad.sh'], v);
 }
 
 function applyRule(){
@@ -243,6 +245,20 @@ function change_adbyby_rules_enabled(){
 	showhide_div('row_rules_caption', v);
 	showhide_div('row_rules_header', v);
 	showhide_div('row_rules_body', v);
+}
+
+function change_anti_ad_enabled(){
+	var v = document.form.anti_ad[0].checked;
+	// 控制anti-AD规则下载列表的显示
+	var script16 = document.getElementById('script16');
+	if(script16){
+		script16.style.display = v ? 'block' : 'none';
+		// 更新切换链接的显示
+		var spoiler_link = script16.previousElementSibling;
+		if(spoiler_link && spoiler_link.tagName === 'A'){
+			spoiler_link.style.display = v ? 'inline' : 'none';
+		}
+	}
 }
 
 function done_validating(action){
@@ -559,8 +575,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="27%" align="right">
-											<a class="help_tooltip" href="javascript: void(0)" onmouseover="openTooltip(this, 2, 1);">加载anti-AD项目规则:</a></th>
+											<th width="27%" align="right">启用anti-AD规则管理</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="anti_ad_on_of">
@@ -568,17 +583,11 @@ function changeBgColorrl(obj, num){
 													</div>
 												</div>
 												<div style="position: absolute; margin-left: -10000px;">
-													<input type="radio" value="1" name="anti_ad" id="anti_ad_1" class="input" value="1" <% nvram_match_x("", "anti_ad", "1", "checked"); %> /><#checkbox_Yes#>
-													<input type="radio" value="0" name="anti_ad" id="anti_ad_0" class="input" value="0" <% nvram_match_x("", "anti_ad", "0", "checked"); %> /><#checkbox_No#>
+													<input type="radio" value="1" name="anti_ad" id="anti_ad_1" class="input" value="1" <% nvram_match_x("", "anti_ad", "1", "checked"); %> onclick="change_anti_ad_enabled()" /><#checkbox_Yes#>
+													<input type="radio" value="0" name="anti_ad" id="anti_ad_0" class="input" value="0" <% nvram_match_x("", "anti_ad", "0", "checked"); %> onclick="change_anti_ad_enabled()" /><#checkbox_No#>
 												</div>
 											</td>
 										</tr>
-										<tr>
-                                            <th width="27%" align="right">加载anti-AD下载地址:</th>
-                                            <td>
-                                                <input type="text"  class="input" size="100" name="anti_ad_link" value="<% nvram_get_x("","anti_ad_link"); %>" />
-                                            </td>
-                                        </tr>
 										<tr>
 											<th width="27%" align="right">加载hosts规则</th>
 											<td>
@@ -598,6 +607,14 @@ function changeBgColorrl(obj, num){
 												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script15')"><span>hosts规则下载列表(一行一个地址):</span></a>
 												<div id="script15">
 													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_host.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_host.sh",""); %></textarea>
+												</div>
+											</td>
+										</tr>
+										<tr>
+											<td colspan="3">
+												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>anti-AD规则下载列表(一行一个地址):</span></a>
+												<div id="script16">
+													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_antiad.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_antiad.sh",""); %></textarea>
 												</div>
 											</td>
 										</tr>

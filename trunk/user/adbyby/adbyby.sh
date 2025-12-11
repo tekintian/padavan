@@ -833,18 +833,73 @@ adbyby_uprules()
 
 anti_ad(){
 	anti_ad=`nvram get anti_ad`
-	anti_ad_link=`nvram get anti_ad_link`
 	nvram set anti_ad_count=0
 	# 参数验证，确保数值类型
 	[ -z "$anti_ad" ] && anti_ad=0
 	if [ "$anti_ad" = "1" ]; then
-	curl -k -s -o /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf --connect-timeout 5 --retry 3 $anti_ad_link
-		if [ ! -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
-			logger -t "adbyby" "anti_AD下载失败！"
+		# 清空之前的anti-AD规则文件
+		rm -f /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+		
+		# 检查anti-AD规则下载列表是否存在
+		if [ -f "/etc/storage/adbyby_antiad.sh" ] && [ -s "/etc/storage/adbyby_antiad.sh" ]; then
+			grep -v '^#' /etc/storage/adbyby_antiad.sh | grep -v "^$" > $adbyby_dir/antiad_list.txt
+			if [ -s "$adbyby_dir/antiad_list.txt" ]; then
+				local downloaded_files=0
+				local total_rules=0
+				
+				# 逐个下载anti-AD规则文件
+				for url in `cat $adbyby_dir/antiad_list.txt`
+				do
+					logger -t "adbyby" "正在下载anti-AD规则: $url"
+					local tempfile="/tmp/antiad_$(date +%s)_$downloaded_files.conf"
+					
+					if curl -k -s -o "$tempfile" --connect-timeout 5 --retry 3 "$url"; then
+						if [ -f "$tempfile" ] && [ -s "$tempfile" ]; then
+							logger -t "adbyby" "anti-AD规则下载成功: $url"
+							# 合并规则到主文件
+							if [ $downloaded_files -eq 0 ]; then
+								# 第一个文件，直接拷贝
+								cp "$tempfile" /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+							else
+								# 后续文件，追加内容（跳过可能的文件头注释）
+								grep -v '^#!' "$tempfile" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null
+							fi
+							downloaded_files=$((downloaded_files + 1))
+							
+							# 统计当前文件的规则数量
+							local file_rules=$(grep -c -v '^[[:space:]]*#\|^$' "$tempfile" 2>/dev/null || echo 0)
+							total_rules=$((total_rules + file_rules))
+						else
+							logger -t "adbyby" "anti-AD规则文件为空: $url"
+						fi
+					else
+						logger -t "adbyby" "anti-AD规则下载失败: $url"
+					fi
+					
+					# 清理临时文件
+					rm -f "$tempfile"
+				done
+				
+				# 处理合并后的规则文件
+				if [ $downloaded_files -gt 0 ] && [ -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
+					# 去重处理
+					sort /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | uniq > /tmp/anti_ad_sorted.conf
+					mv /tmp/anti_ad_sorted.conf /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+					
+					# 统计最终规则数量
+					local final_rules=$(grep -c -v '^[[:space:]]*#\|^$' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null || echo 0)
+					nvram set anti_ad_count=$final_rules
+					logger -t "adbyby" "anti-AD规则处理完成: 下载$downloaded_files个文件，共$final_rules条规则（去重后）"
+				else
+					logger -t "adbyby" "anti-AD规则处理失败：没有成功下载任何文件"
+				fi
+			else
+				logger -t "adbyby" "anti-AD规则下载列表为空，跳过处理"
+			fi
 		else
-			logger -t "adbyby" "anti_AD下载成功,处理中..."
-			nvram set anti_ad_count=`grep -v '^#' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | wc -l`
+			logger -t "adbyby" "anti-AD规则下载列表文件不存在，请先配置规则列表"
 		fi
+
 	fi
 }
 
@@ -971,7 +1026,7 @@ EOF
 	adbyby_host="/etc/storage/adbyby_host.sh"
 	if [ ! -f "$adbyby_host" ] || [ ! -s "$adbyby_host" ] ; then
 		cat > "$adbyby_host" <<-EOF
-# AdByby Hosts下载列表配置文件
+# AdByBy Hosts下载列表配置文件
 # 每行一个URL，支持http/https协议
 # 以下是一些常用的hosts源示例（默认注释掉，请根据需要启用）
 
@@ -988,7 +1043,31 @@ https://gitee.com/tekintian/adt-rules/raw/master/hosts/games_hosts.txt
 # https://gitee.com/tekintian/adt-rules/raw/master/hosts/adaway_hosts.txt
 
 EOF
-	chmod 755 "$adbyby_host"
+		chmod 755 "$adbyby_host"
+	fi
+
+	adbyby_antiad="/etc/storage/adbyby_antiad.sh"
+	if [ ! -f "$adbyby_antiad" ] || [ ! -s "$adbyby_antiad" ] ; then
+		# 兼容旧版本：如果没有配置新列表，但存在旧配置，则使用旧配置
+		local anti_ad_link="$(nvram get anti_ad_link)"
+		
+		# 如果系统默认配置为空，则使用默认链接
+		[ -z "$anti_ad_link" ] && anti_ad_link="https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/anti-ad.conf"
+	
+		cat > "$adbyby_antiad" <<-EOF
+# AdByBy anti-AD规则下载列表配置文件
+# 每行一个URL，支持http/https协议
+# 下载的规则文件会被合并、去重后生成anti-ad-for-dnsmasq.conf
+# 注意, 文件里面的必须是dnsmasq规则格式,如: address=/domain.com/0.0.0.0
+# 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
+# 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
+
+# Adbyby项目默认dnsmasq规则源
+$anti_ad_link
+
+
+EOF
+		chmod 755 "$adbyby_antiad"
 	fi
 }
 case $1 in
@@ -1038,5 +1117,7 @@ echo "  G               - 更新规则并重启"
 echo "  debug           - 显示调试信息"
 echo "  init            - 初始化环境"
 echo "  health_check    - 执行智能健康检查（自适应频率）"
+echo ""
+echo "注意：anti-AD规则现在支持多源配置，请通过Web界面管理规则列表"
 ;;
 esac

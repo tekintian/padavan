@@ -125,6 +125,7 @@ ifeq ($(BUILD_MODE),romfs)
 	$(ROMFSINST) "$(THISDIR)/adbyby_adesc.sh" /etc_ro/ || true
 	$(ROMFSINST) "$(THISDIR)/adbyby_adhost.sh" /etc_ro/ || true
 	$(ROMFSINST) "$(THISDIR)/adbyby_host.sh" /etc_ro/ || true
+	$(ROMFSINST) "$(THISDIR)/adbyby_antiad.sh" /etc_ro/ || true
 	$(ROMFSINST) "$(THISDIR)/adbyby_blockip.sh" /etc_ro/ || true
 	# 复制主脚本到/usr/bin
 	$(ROMFSINST) -p +x "$(THISDIR)/adbyby.sh" /usr/bin/adbyby.sh || true
