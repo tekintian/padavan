@@ -11,3 +11,4 @@ toolchain/toolchain-*/
 *.xz
 /trunk/user/adbyby/adbyby
 /trunk/user/adbyby/src/adbyby
+/trunk/user/adbyby/share/adbyby

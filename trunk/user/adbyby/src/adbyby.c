@@ -98,12 +98,24 @@ void signal_handler(int sig) {
 
 // 创建PID文件
 int create_pid_file() {
-    FILE* pidfile = fopen("/var/run/adbyby.pid", "w");
-    if (pidfile) {
-        fprintf(pidfile, "%d", getpid());
-        fclose(pidfile);
-        return 1;
+    // 尝试多个可能的PID文件位置
+    const char* pid_paths[] = {
+        "/var/run/adbyby.pid",
+        "/tmp/adbyby.pid",
+        "/tmp/adbyby/adbyby.pid"
+    };
+    
+    for (int i = 0; i < 3; i++) {
+        FILE* pidfile = fopen(pid_paths[i], "w");
+        if (pidfile) {
+            fprintf(pidfile, "%d", getpid());
+            fclose(pidfile);
+            log_message(LOG_INFO, "PID file created: %s", pid_paths[i]);
+            return 1;
+        }
     }
+    
+    log_message(LOG_ERROR, "Failed to create PID file in any location");
     return 0;
 }
 
@@ -191,15 +203,17 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
     
-    // 创建PID文件
-    create_pid_file();
-    
     // 如果是守护进程模式，fork到后台
     if (daemon_mode) {
         if (fork() > 0) {
             exit(0); // 父进程退出
         }
         setsid(); // 创建新的会话
+        // 在子进程中创建PID文件（确保PID正确）
+        create_pid_file();
+    } else {
+        // 非守护进程模式也创建PID文件
+        create_pid_file();
     }
     
     // 初始化代理服务器
@@ -236,7 +250,11 @@ int main(int argc, char* argv[]) {
     
     // 清理
     close(server_fd);
+    
+    // 清理所有可能的PID文件
     unlink("/var/run/adbyby.pid");
+    unlink("/tmp/adbyby.pid");
+    unlink("/tmp/adbyby/adbyby.pid");
     
     // 显示最终统计
     rule_manager_get_stats(rule_manager, &total_rules, &enabled_rules, &total_hits);

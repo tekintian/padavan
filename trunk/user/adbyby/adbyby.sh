@@ -117,8 +117,20 @@ update_health_state()
 # 轻量级进程检查（比pgrep更高效）
 is_adbyby_running()
 {
-	# 使用/proc检查，比pgrep更快更轻
-	[ -d "/proc/$(cat /var/run/adbyby.pid 2>/dev/null)" ] 2>/dev/null
+	# 检查多个可能的PID文件位置
+	local pid_files="/var/run/adbyby.pid /tmp/adbyby.pid /tmp/adbyby/adbyby.pid"
+	
+	for pid_file in $pid_files; do
+		if [ -f "$pid_file" ]; then
+			local pid=$(cat "$pid_file" 2>/dev/null)
+			if [ -n "$pid" ] && [ -d "/proc/$pid" ] 2>/dev/null; then
+				return 0
+			fi
+		fi
+	done
+	
+	# 回退到进程检查
+	pgrep -f "adbyby" > /dev/null 2>/dev/null
 }
 
 # 极简端口检查（使用ss比netstat更高效）
@@ -159,6 +171,8 @@ health_check_adbyby()
 		
 		# 强制清理可能的僵尸进程
 		killall -9 -q adbyby 2>/dev/null
+		# 清理PID文件
+		cleanup_pid_files
 		sleep 1
 		
 		# 重新启动
@@ -208,6 +222,7 @@ init_adbyby_env()
 	mkdir -p /etc/storage/dnsmasq-adbyby.d
 	mkdir -p /tmp/dnsmasq.d
 	mkdir -p /etc/storage/cron/crontabs
+	mkdir -p /var/run
 	
 	# 设置权限
 	chmod -R 755 /tmp/adbyby 2>/dev/null
@@ -292,16 +307,26 @@ adbyby_start()
 	
 	# 启动adbyby程序
 	cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
-	sleep 1
+	sleep 2
 	
-	# 检查程序是否启动成功
-	if pgrep -f "adbyby" > /dev/null; then
-		logger -t "adbyby" "AdByBy程序启动成功"
-		# 初始化健康状态
-		echo "0" > $HEALTH_STATE_FILE
+	# 检查程序是否启动成功（优先检查PID文件）
+	local startup_success=0
+	if is_adbyby_running; then
+		logger -t "adbyby" "AdByBy程序启动成功（PID文件检查）"
+		startup_success=1
+	elif pgrep -f "adbyby" > /dev/null; then
+		logger -t "adbyby" "AdByBy程序启动成功（进程检查）"
+		startup_success=1
 	else
 		logger -t "adbyby" "AdByBy程序启动失败"
 		return 1
+	fi
+	
+	if [ $startup_success -eq 1 ]; then
+		# 初始化健康状态
+		echo "0" > $HEALTH_STATE_FILE
+		# 额外等待确保程序完全初始化
+		sleep 1
 	fi
 	
 	add_dns
@@ -318,12 +343,27 @@ adbyby_start()
 	logger -t "adbyby" "Adbyby启动完成。"
 }
 
+# 清理所有可能的PID文件
+cleanup_pid_files()
+{
+	local pid_files="/var/run/adbyby.pid /tmp/adbyby.pid /tmp/adbyby/adbyby.pid"
+	
+	for pid_file in $pid_files; do
+		if [ -f "$pid_file" ]; then
+			rm -f "$pid_file" 2>/dev/null
+			logger -t "adbyby" "清理PID文件: $pid_file"
+		fi
+	done
+}
+
 adbyby_close()
 {
 	del_rule
 	del_cron
 	del_dns
 	killall -q adbyby
+	# 清理PID文件
+	cleanup_pid_files
 	/sbin/restart_dhcpd
 	logger -t "adbyby" "Adbyby已关闭。"
 
@@ -820,16 +860,26 @@ adbyby_uprules()
 	
 	# 启动adbyby程序
 	cd $adbyby_dir && $PROG_PATH/adbyby &>/dev/null &
-	sleep 1
+	sleep 2
 	
-	# 检查程序是否启动成功
-	if pgrep -f "adbyby" > /dev/null; then
-		logger -t "adbyby" "AdByBy程序启动成功"
-		# 初始化健康状态
-		echo "0" > $HEALTH_STATE_FILE
+	# 检查程序是否启动成功（优先检查PID文件）
+	local startup_success=0
+	if is_adbyby_running; then
+		logger -t "adbyby" "AdByBy程序启动成功（PID文件检查）"
+		startup_success=1
+	elif pgrep -f "adbyby" > /dev/null; then
+		logger -t "adbyby" "AdByBy程序启动成功（进程检查）"
+		startup_success=1
 	else
 		logger -t "adbyby" "AdByBy程序启动失败"
 		return 1
+	fi
+	
+	if [ $startup_success -eq 1 ]; then
+		# 初始化健康状态
+		echo "0" > $HEALTH_STATE_FILE
+		# 额外等待确保程序完全初始化
+		sleep 1
 	fi
 	
 	add_dns
