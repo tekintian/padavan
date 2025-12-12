@@ -75,12 +75,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/ # 统一存放下载的产物，避免文件冲突
-      - name: Set Tag Name
+      - name: Set Tag Name and Build Time
         run: |
           # 优化标签：添加提交短哈希，避免重复（比如一天多次构建）
           COMMIT_SHORT=$(git rev-parse --short HEAD)
           TAG_NAME="firmware-$(date +%Y%m%d)-$COMMIT_SHORT"
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          
+          # 获取构建时间并设置为环境变量
+          BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S %Z')
+          echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
       - uses: rickstaa/action-create-tag@v1
         with:
           tag: ${{ env.TAG_NAME }}
@@ -89,12 +93,19 @@ jobs:
         with:
           commit: ${{ github.sha }}
           tag: ${{ env.TAG_NAME }}
-          name: "Firmware Build ${{ env.TAG_NAME }}" # 发布名称更清晰
+          name: "Padavan Build ${{ env.TAG_NAME }}" # 发布名称更清晰
           body: |
             ## 自动构建固件发布
+            该发布为自动构建，包含以下固件：
+            - K2P 标准固件,包含所有默认功能
+            - K2P-NANO  精简版本固件,包含广告管理
+            - K2P-TINY  极精简版本固件.不包含广告管理
+            - K2P-USB  带 USB 端口的固件(只有改造过的机器才支持)
+            
+            构建详情：
             - 分支：${{ github.ref_name }}
             - 提交：${{ github.sha }}
-            - 构建时间：$(date +'%Y-%m-%d %H:%M:%S %Z')
+            - 构建时间：${{ env.BUILD_TIME }}
           artifacts: "artifacts/**/*.trx" # 正确匹配所有下载的 trx 文件
           allowUpdates: true
           draft: false
