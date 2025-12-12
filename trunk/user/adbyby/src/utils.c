@@ -85,17 +85,22 @@ int parse_url(const char* url, url_info_t* info) {
     if (scheme_end) {
         *scheme_end = '\0';
         strncpy(info->scheme, current_pos, sizeof(info->scheme) - 1);
+        info->scheme[sizeof(info->scheme) - 1] = '\0';
         current_pos = scheme_end + 3;
     } else {
-        strcpy(info->scheme, "http");
+        strncpy(info->scheme, "http", sizeof(info->scheme) - 1);
+        info->scheme[sizeof(info->scheme) - 1] = '\0';
     }
     
     char* path_start = strchr(current_pos, '/');
+    // 解析路径
     if (path_start) {
         *path_start = '\0';
-        strcpy(info->path, path_start + 1);
+        strncpy(info->path, path_start + 1, sizeof(info->path) - 1);
+        info->path[sizeof(info->path) - 1] = '\0';
     } else {
-        strcpy(info->path, "");
+        strncpy(info->path, "", sizeof(info->path) - 1);
+        info->path[sizeof(info->path) - 1] = '\0';
     }
     
     char* port_start = strchr(current_pos, ':');
@@ -103,8 +108,10 @@ int parse_url(const char* url, url_info_t* info) {
         *port_start = '\0';
         info->port = atoi(port_start + 1);
         strncpy(info->host, current_pos, sizeof(info->host) - 1);
+        info->host[sizeof(info->host) - 1] = '\0';
     } else {
         strncpy(info->host, current_pos, sizeof(info->host) - 1);
+        info->host[sizeof(info->host) - 1] = '\0';
         info->port = (strcmp(info->scheme, "https") == 0) ? 443 : 80;
     }
     
@@ -112,7 +119,11 @@ int parse_url(const char* url, url_info_t* info) {
     char* query_start = strchr(info->path, '?');
     if (query_start) {
         *query_start = '\0';
-        strcpy(info->query, query_start + 1);
+        strncpy(info->query, query_start + 1, sizeof(info->query) - 1);
+        info->query[sizeof(info->query) - 1] = '\0';
+    } else {
+        strncpy(info->query, "", sizeof(info->query) - 1);
+        info->query[sizeof(info->query) - 1] = '\0';
     }
     
     return 1;
@@ -141,37 +152,8 @@ static const char* ad_domains[] = {
     "googlesyndication.com",
     "google-analytics.com",
     "googletagmanager.com",
-    "facebook.com/tr",
     "amazon-adsystem.com",
     "adsco.re",
-    
-    // 国内主要广告平台
-    "tanx.com",           // 阿里妈妈
-    "allyes.com",         // 好耶广告
-    "guohead.com",        // 果壳
-    "mediav.com",         // 亿玛
-    "iads.cn",            // 爱广告
-    "admaster.com.cn",    // 传漾
-    "miaozhen.com",       // 秒针
-    "pangolin-sdk.com",   // 穿山甲广告
-    "gdt.qq.com",         // 腾讯广告
-    "e.qq.com",           // 腾讯效果广告
-    "ad.qq.com",          // 腾讯广告
-    
-    // 程序化广告平台
-    "adnxs.com",          // AppNexus
-    "taboola.com",        // Taboola
-    "outbrain.com",       // Outbrain
-    "adsafeprotected.com", // 广告验证
-    "moatads.com",        // 广告监测
-    "scorecardresearch.com", // 量化分析
-    
-    // 数据统计和分析
-    "hm.baidu.com",       // 百度统计
-    "cnzz.com",           // CNZZ统计
-    "51.la",              // 51LA统计
-    "log.mi.com",         // 小米统计
-    "analysis.qq.com",    // 腾讯分析
     
     NULL
 };
@@ -195,8 +177,7 @@ int is_ad_domain(const char* domain) {
     // 检查高优先级广告关键词（明确广告标识）
     const char* high_priority_keywords[] = {
         "doubleclick", "googlesyndication", "googleads", "tanx", "pangolin",
-        "admaster", "adsystem", "adserver", "miaozhen", "dianjoy", "iads",
-        "guanggao", "advertisement", NULL
+        "admaster", "adsystem", "adserver", "advertisement", NULL
     };
     
     for (int i = 0; high_priority_keywords[i]; i++) {
@@ -205,10 +186,9 @@ int is_ad_domain(const char* domain) {
         }
     }
     
-    // 检查中优先级关键词（可能误报的统计类）
+    // 检查中优先级关键词（移除可能误报的统计类）
     const char* medium_priority_keywords[] = {
-        "analytics", "tracking", "stat", "tongji", "tracker",
-        "ad-", "ad_", "-ad", "_ad", NULL
+        "ad-", "-ad", "-ads", NULL
     };
     
     for (int i = 0; medium_priority_keywords[i]; i++) {
@@ -219,7 +199,7 @@ int is_ad_domain(const char* domain) {
     
     // 低优先级关键词（容易误报的）
     const char* low_priority_keywords[] = {
-        "ad", "ads", "gg", NULL
+        "ad", "ads", NULL
     };
     
     for (int i = 0; low_priority_keywords[i]; i++) {

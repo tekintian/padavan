@@ -8,19 +8,41 @@
 #define INITIAL_RULE_CAPACITY 500  // 优化：减少初始内存占用
 #define MAX_RULE_LENGTH 512
 
+// 辅助函数：不区分大小写的字符串查找（模拟strcasestr）
+static char* strcasestr_custom(const char* haystack, const char* needle) {
+    if (!haystack || !needle) return NULL;
+    
+    size_t haystack_len = strlen(haystack);
+    size_t needle_len = strlen(needle);
+    
+    if (needle_len == 0) return (char*)haystack;
+    if (needle_len > haystack_len) return NULL;
+    
+    for (size_t i = 0; i <= haystack_len - needle_len; i++) {
+        size_t j;
+        for (j = 0; j < needle_len; j++) {
+            if (tolower((unsigned char)haystack[i + j]) != tolower((unsigned char)needle[j])) {
+                break;
+            }
+        }
+        if (j == needle_len) {
+            return (char*)(haystack + i);
+        }
+    }
+    
+    return NULL;
+}
+
 // 内置广告域名列表（与utils.c保持一致）
 static const char* builtin_ad_domains[] = {
-    // 国际主要广告平台
+     // 国际主要广告平台
     "doubleclick.net",
     "googleadservices.com", 
     "googlesyndication.com",
     "google-analytics.com",
-    "adnxs.com",
-    "advertising.com",
-    // 国内主要广告平台
-    "allyes.com",
-    "mediav.com",
-    "iads.cn",
+    "googletagmanager.com",
+    "amazon-adsystem.com",
+    "adsco.re",
     
     NULL
 };
@@ -33,16 +55,40 @@ static const char* builtin_url_patterns[] = {
     "/advertisement",
     "/adserver",
     "/advertising",
-    "/banner",
-    "/popup",
-    "/popunder",
-    "/tracking",
-    "/analytics",
-    "/beacon",
-    "/pixel",
     
     NULL
 };
+
+// 辅助函数：将通配符模式转换为正则表达式
+static char* wildcard_to_regex(const char* pattern) {
+    if (!pattern) return NULL;
+    
+    char* regex_pattern = malloc(strlen(pattern) * 2 + 3);
+    if (!regex_pattern) return NULL;
+    
+    char* dst = regex_pattern;
+    *dst++ = '^';
+    
+    for (const char* src = pattern; *src; src++) {
+        if (*src == '*') {
+            *dst++ = '.';
+            *dst++ = '*';
+        } else if (*src == '?') {
+            *dst++ = '.';
+        } else if (*src == '.' || *src == '+' || *src == '(' || *src == ')' || 
+                   *src == '[' || *src == ']' || *src == '{' || *src == '}' || 
+                   *src == '\\' || *src == '^' || *src == '$' || *src == '|') {
+            *dst++ = '\\';
+            *dst++ = *src;
+        } else {
+            *dst++ = *src;
+        }
+    }
+    *dst++ = '$';
+    *dst = '\0';
+    
+    return regex_pattern;
+}
 
 rule_manager_t* rule_manager_create(const char* rules_file) {
     rule_manager_t* rm = malloc(sizeof(rule_manager_t));
@@ -57,7 +103,8 @@ rule_manager_t* rule_manager_create(const char* rules_file) {
         strncpy(rm->rules_file, rules_file, sizeof(rm->rules_file) - 1);
         rm->rules_file[sizeof(rm->rules_file) - 1] = '\0';
     } else {
-        strcpy(rm->rules_file, "/tmp/adbyby/data/rules.txt");
+        strncpy(rm->rules_file, "/tmp/adbyby/data/rules.txt", sizeof(rm->rules_file) - 1);
+        rm->rules_file[sizeof(rm->rules_file) - 1] = '\0';
     }
     
     rm->capacity = INITIAL_RULE_CAPACITY;
@@ -77,7 +124,6 @@ rule_manager_t* rule_manager_create(const char* rules_file) {
     // 尝试从文件加载规则
     rule_manager_load_rules(rm);
     
-    log_message(LOG_INFO, "Rule manager created with %d initial rules", rm->count);
     return rm;
 }
 
@@ -87,11 +133,14 @@ void rule_manager_destroy(rule_manager_t* rm) {
     log_message(LOG_INFO, "Destroying rule manager with %d rules", rm->count);
     
     if (rm->rules) {
-        // 清理每条规则（如果有动态分配的资源）
+        // 清理每条规则
         for (int i = 0; i < rm->count; i++) {
-            // 当前实现中没有动态分配的字符串，但保留扩展性
-            rm->rules[i].pattern[0] = '\0';
-            rm->rules[i].hit_count = 0;
+            // 释放预编译的正则表达式
+            if (rm->rules[i].regex) {
+                regfree(rm->rules[i].regex);
+                free(rm->rules[i].regex);
+                rm->rules[i].regex = NULL;
+            }
         }
         free(rm->rules);
         rm->rules = NULL;
@@ -121,7 +170,7 @@ int rule_manager_load_rules(rule_manager_t* rm) {
         }
         
         // 移除换行符
-        line[strcspn(line, "\r\n")] = 0;
+        line[strcspn(line, "\r\n")] = '\0';
         
         if (strlen(line) == 0) continue;
         
@@ -140,40 +189,24 @@ int rule_manager_load_rules(rule_manager_t* rm) {
             if (pipe2) {
                 *pipe2 = '\0';
                 strncpy(type_str, pipe1 + 1, sizeof(type_str) - 1);
+                type_str[sizeof(type_str) - 1] = '\0';
                 strncpy(description, pipe2 + 1, sizeof(description) - 1);
+                description[sizeof(description) - 1] = '\0';
             } else {
                 strncpy(type_str, pipe1 + 1, sizeof(type_str) - 1);
+                type_str[sizeof(type_str) - 1] = '\0';
             }
         } else {
             strncpy(pattern, line, sizeof(pattern) - 1);
-            strcpy(type_str, "0");
+            pattern[sizeof(pattern) - 1] = '\0';
+            strncpy(type_str, "0", sizeof(type_str) - 1);
+            type_str[sizeof(type_str) - 1] = '\0';
         }
         
         rule_type_t type = atoi(type_str);
         
-        // 检查是否需要扩容
-        if (rm->count >= rm->capacity) {
-            rm->capacity *= 2;
-            ad_rule_t* new_rules = realloc(rm->rules, sizeof(ad_rule_t) * rm->capacity);
-            if (!new_rules) {
-                log_message(LOG_ERROR, "Failed to expand rules array");
-                break;
-            }
-            rm->rules = new_rules;
-        }
-        
-        // 添加规则
-        ad_rule_t* rule = &rm->rules[rm->count];
-        strncpy(rule->pattern, pattern, sizeof(rule->pattern) - 1);
-        rule->pattern[sizeof(rule->pattern) - 1] = '\0';
-        rule->type = type;
-        rule->enabled = 1;
-        rule->last_updated = time(NULL);
-        strncpy(rule->description, description, sizeof(rule->description) - 1);
-        rule->description[sizeof(rule->description) - 1] = '\0';
-        rule->hit_count = 0;
-        
-        rm->count++;
+        // 使用优化后的函数添加规则（包含预编译）
+        rule_manager_add_rule(rm, pattern, type, description);
         loaded_count++;
     }
     
@@ -249,15 +282,45 @@ int rule_manager_add_rule(rule_manager_t* rm, const char* pattern, rule_type_t t
     rule->type = type;
     rule->enabled = 1;
     rule->last_updated = time(NULL);
+    rule->regex = NULL;
     
     if (description && strlen(description) > 0) {
         strncpy(rule->description, description, sizeof(rule->description) - 1);
         rule->description[sizeof(rule->description) - 1] = '\0';
     } else {
-        strcpy(rule->description, "");
+        strncpy(rule->description, "", sizeof(rule->description) - 1);
+        rule->description[sizeof(rule->description) - 1] = '\0';
     }
     
     rule->hit_count = 0;
+    
+    // 预编译正则表达式（如果需要）
+    if (type == RULE_TYPE_REGEX) {
+        rule->regex = malloc(sizeof(regex_t));
+        if (rule->regex) {
+            int result = regcomp(rule->regex, rule->pattern, REG_EXTENDED | REG_NOSUB);
+            if (result != 0) {
+                log_message(LOG_ERROR, "Failed to compile regex pattern: %s", rule->pattern);
+                free(rule->regex);
+                rule->regex = NULL;
+            }
+        }
+    } else if (type == RULE_TYPE_WILDCARD) {
+        // 转换通配符到正则表达式并预编译
+        char* regex_pattern = wildcard_to_regex(rule->pattern);
+        if (regex_pattern) {
+            rule->regex = malloc(sizeof(regex_t));
+            if (rule->regex) {
+                int result = regcomp(rule->regex, regex_pattern, REG_EXTENDED | REG_NOSUB | REG_ICASE);
+                if (result != 0) {
+                    log_message(LOG_ERROR, "Failed to compile wildcard pattern: %s", rule->pattern);
+                    free(rule->regex);
+                    rule->regex = NULL;
+                }
+            }
+            free(regex_pattern);
+        }
+    }
     
     rm->count++;
     log_message(LOG_DEBUG, "Added rule #%d: %s (type: %d)", rm->count, pattern, type);
@@ -265,51 +328,65 @@ int rule_manager_add_rule(rule_manager_t* rm, const char* pattern, rule_type_t t
     return 1;
 }
 
-int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_t type) {
+int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_t type, regex_t* precompiled_regex) {
     if (!text || !pattern) return 0;
     
     switch (type) {
         case RULE_TYPE_SIMPLE:
-            return strstr(text, pattern) != NULL;
+            // 简单字符串匹配，不区分大小写
+            return strcasestr_custom(text, pattern) != NULL;
             
-        case RULE_TYPE_DOMAIN:
-            // 检查域名匹配
-            if (strcmp(text, pattern) == 0) return 1;
-            if (ends_with(text, pattern)) {
-                int text_len = strlen(text);
-                int pattern_len = strlen(pattern);
-                if (text_len > pattern_len && text[text_len - pattern_len - 1] == '.') {
-                    return 1;
-                }
+        case RULE_TYPE_REGEX:
+            // 使用预编译的正则表达式
+            if (precompiled_regex) {
+                return regexec(precompiled_regex, text, 0, NULL, 0) == 0;
+            }
+            // 降级处理：动态编译（仅用于兼容旧代码）
+            regex_t regex;
+            int result = regcomp(&regex, pattern, REG_EXTENDED | REG_NOSUB);
+            if (result == 0) {
+                result = regexec(&regex, text, 0, NULL, 0);
+                regfree(&regex);
+                return result == 0;
             }
             return 0;
             
+        case RULE_TYPE_DOMAIN: {
+            // 域名匹配：
+            // 1. 精确匹配
+            // 2. 后缀匹配（确保是完整的子域名）
+            if (strcasecmp(text, pattern) == 0) {
+                return 1;
+            }
+            
+            size_t text_len = strlen(text);
+            size_t pattern_len = strlen(pattern);
+            
+            if (text_len > pattern_len && 
+                strcasecmp(text + text_len - pattern_len, pattern) == 0 && 
+                text[text_len - pattern_len - 1] == '.') {
+                return 1;
+            }
+            
+            return 0;
+        }
+            
+        case RULE_TYPE_URL: {
+            // URL匹配：可以是路径、文件名等
+            return strcasestr_custom(text, pattern) != NULL;
+        }
+            
         case RULE_TYPE_WILDCARD: {
-            // 简单的通配符匹配
-            char* regex_pattern = malloc(strlen(pattern) * 2 + 3);
+            // 使用预编译的正则表达式
+            if (precompiled_regex) {
+                return regexec(precompiled_regex, text, 0, NULL, 0) == 0;
+            }
+            // 降级处理：动态转换和编译（仅用于兼容旧代码）
+            char* regex_pattern = wildcard_to_regex(pattern);
             if (!regex_pattern) return 0;
             
-            char* dst = regex_pattern;
-            *dst++ = '^';
-            
-            for (const char* src = pattern; *src; src++) {
-                if (*src == '*') {
-                    *dst++ = '.';
-                    *dst++ = '*';
-                } else if (*src == '?') {
-                    *dst++ = '.';
-                } else if (*src == '.') {
-                    *dst++ = '\\';
-                    *dst++ = '.';
-                } else {
-                    *dst++ = *src;
-                }
-            }
-            *dst++ = '$';
-            *dst = '\0';
-            
             regex_t regex;
-            int result = regcomp(&regex, regex_pattern, REG_EXTENDED | REG_NOSUB);
+            int result = regcomp(&regex, regex_pattern, REG_EXTENDED | REG_NOSUB | REG_ICASE);
             if (result == 0) {
                 result = regexec(&regex, text, 0, NULL, 0);
                 regfree(&regex);
@@ -318,9 +395,9 @@ int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_
             free(regex_pattern);
             return result == 0;
         }
-        
+            
         default:
-            return strstr(text, pattern) != NULL;
+            return strcasestr_custom(text, pattern) != NULL;
     }
 }
 
@@ -334,18 +411,18 @@ int rule_manager_is_blocked(rule_manager_t* rm, const char* url, const char* hos
         int matched = 0;
         
         if (rule->type == RULE_TYPE_DOMAIN) {
-            if (host && rule_manager_match_pattern(host, rule->pattern, rule->type)) {
+            if (host && rule_manager_match_pattern(host, rule->pattern, rule->type, rule->regex)) {
                 matched = 1;
             }
         } else if (rule->type == RULE_TYPE_URL) {
-            if (url && rule_manager_match_pattern(url, rule->pattern, rule->type)) {
+            if (url && rule_manager_match_pattern(url, rule->pattern, rule->type, rule->regex)) {
                 matched = 1;
             }
         } else {
             // 通用文本匹配
-            if (url && rule_manager_match_pattern(url, rule->pattern, rule->type)) {
+            if (url && rule_manager_match_pattern(url, rule->pattern, rule->type, rule->regex)) {
                 matched = 1;
-            } else if (host && rule_manager_match_pattern(host, rule->pattern, rule->type)) {
+            } else if (host && rule_manager_match_pattern(host, rule->pattern, rule->type, rule->regex)) {
                 matched = 1;
             }
         }

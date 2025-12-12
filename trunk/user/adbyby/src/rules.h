@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <regex.h>
 
 // 规则类型
 typedef enum {
@@ -21,6 +22,7 @@ typedef struct {
     time_t last_updated;
     char description[256];
     int hit_count;  // 匹配次数统计
+    regex_t* regex; // 预编译的正则表达式（优化性能）
 } ad_rule_t;
 
 // 规则管理器
@@ -41,7 +43,7 @@ int rule_manager_add_rule(rule_manager_t* rm, const char* pattern, rule_type_t t
 
 // 规则匹配函数
 int rule_manager_is_blocked(rule_manager_t* rm, const char* url, const char* host);
-int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_t type);
+int rule_manager_match_pattern(const char* text, const char* pattern, rule_type_t type, regex_t* precompiled_regex);
 
 // 规则统计函数
 void rule_manager_get_stats(rule_manager_t* rm, int* total_rules, int* enabled_rules, int* total_hits);

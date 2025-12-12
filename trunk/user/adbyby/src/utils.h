@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 
 // 日志级别
 typedef enum {
@@ -26,8 +27,8 @@ int is_empty_string(const char* str);
 // URL解析函数
 typedef struct {
     char scheme[16];
-    char host[256];
-    int port;
+    char host[254];
+    uint16_t port;
     char path[1024];
     char query[1024];
 } url_info_t;
