@@ -2,6 +2,16 @@ name: toolchain
 
 on: 
   workflow_dispatch:
+    inputs:
+      platform:
+        description: '选择要构建的平台'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - linux
+          - macos
   # push:
   #   tags: ["*"]
 
@@ -17,20 +27,30 @@ jobs:
     strategy:
       matrix:
         include:
+          # Linux平台
           - os: ubuntu-22.04
             target: mipsel-linux-uclibc
             platform: linux
+            should_build: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
           - os: ubuntu-22.04
             target: mipsel-linux-musl
             platform: linux
+            should_build: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
+          # macOS平台
           - os: macos-12
             target: mipsel-linux-uclibc
             platform: darwin
+            should_build: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
           - os: macos-12
             target: mipsel-linux-musl
             platform: darwin
+            should_build: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
     steps:
       - uses: actions/checkout@v4
+      # 根据选择的平台决定是否跳过此构建
+      - name: Check if should build
+        if: ${{ matrix.should_build == false }}
+        run: echo "Skipping build for ${{ matrix.target }} on ${{ matrix.os }}" && exit 0
       - name: Prepare (Ubuntu)
         if: matrix.os == 'ubuntu-22.04'
         run: |
