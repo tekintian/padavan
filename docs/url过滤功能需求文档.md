@@ -105,7 +105,7 @@ dstip = ip_conv("vts_ipaddr_x", i);
 
 ### 技术实现
 - 配置变量：`block_shortvideo`（原`block_douyin`）
-- 规则文件：`/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo`
+- 规则文件：`/etc/storage/dnsmasq-adbyby.d/shortvideo-block.conf`
 - 支持DNS域名拦截，覆盖各平台的主域名、CDN域名、API域名等
 
 ### 用户界面

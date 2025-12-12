@@ -1148,7 +1148,6 @@
 			{"anti_ad", "", NULL, EVM_RESTART_ADBYBY},
 			{"anti_ad_link", "", NULL, EVM_RESTART_ADBYBY},
 			{"adbyby_set", "", NULL, EVM_RESTART_ADBYBY},
-			{"adbyby_adb_update", "", NULL, EVM_RESTART_ADBYBY},
 			{"adbyby_update", "", NULL, EVM_RESTART_ADBYBY},
 			{"adbyby_update_hour", "", NULL, EVM_RESTART_ADBYBY},
 			{"adbyby_update_min", "", NULL, EVM_RESTART_ADBYBY},

@@ -27,11 +27,11 @@
 
 ---
 
-### **2. `anti-ad-for-dnsmasq.conf` - dnsmasq地址规则**
+### **2. `antiad.conf` - dnsmasq地址规则**
 
 **生效逻辑：**
 ```bash
-# 文件位置: /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+# 文件位置: /etc/storage/dnsmasq-adbyby.d/antiad.conf
 # 生效方式: dnsmasq自动加载 conf-dir 下的所有.conf文件
 ```
 
@@ -86,7 +86,7 @@ echo "addn-hosts=$DATA_PATH/hosts" >> dnsmasq.conf
 anti_ad_link → 单一下载源
 
 # 2. 下载dnsmasq格式规则
-curl → /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+curl → /etc/storage/dnsmasq-adbyby.d/antiad.conf
 
 # 3. 自动生效
 dnsmasq自动加载 conf-dir 下的所有.conf文件

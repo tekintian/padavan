@@ -22,7 +22,6 @@ padavan项目中adbyby相关的主要文件包括：
 #### 脚本和配置文件
 - `trunk/user/adbyby/adbyby.sh` - 主控制脚本
 - `trunk/user/adbyby/share/adhook.ini` - 原版配置文件
-- `trunk/user/adbyby/share/adblock.sh` - 广告屏蔽脚本
 
 #### 编译配置
 - `trunk/user/cflags.mk` - 编译标志定义

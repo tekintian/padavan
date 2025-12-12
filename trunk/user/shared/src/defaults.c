@@ -663,7 +663,6 @@ struct nvram_pair router_defaults[] = {
 	/*Adbyby Open*/
 	{ "adbyby_enable", "0" },
 	{ "adbyby_set", "0" },
-	{ "adbyby_adb_update", "0" },
 	{ "adbyby_update", "2" },
 	{ "hosts_ad", "1" },
 	{ "adbyby_update_hour", "03" },

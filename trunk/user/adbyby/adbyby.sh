@@ -648,18 +648,40 @@ add_dns()
 	[ -z "$block_shortvideo" ] && block_shortvideo=0
 	[ -z "$block_games" ] && block_games=0
 	awk '!/^$/&&!/^#/{printf("ipset=/%s/'"adbyby_esc"'\n",$0)}' $adbyby_dir/adesc.conf > /etc/storage/dnsmasq-adbyby.d/06-dnsmasq.esc
-	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $adbyby_dir/adblack.conf > /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
-	[ $block_ios -eq 1 ] && cat <<-EOF >> /etc/storage/dnsmasq-adbyby.d/07-dnsmasq.black
-# Apple iOS OTA Update Blocking (Valid domains only)
-address=/mesu.apple.com/0.0.0.0
-address=/appldnld.apple.com/0.0.0.0
-address=/updates-http.cdn-apple.com/0.0.0.0
-address=/xp.apple.com/0.0.0.0
-address=/gs.apple.com/0.0.0.0
-address=/iosapps.itunes.apple.com/0.0.0.0
+	awk '!/^$/&&!/^#/{printf("address=/%s/'"0.0.0.0"'\n",$0)}' $adbyby_dir/adblack.conf > /etc/storage/dnsmasq-adbyby.d/apple-block.conf
+	[ $block_ios -eq 1 ] && cat <<-EOF >> /etc/storage/dnsmasq-adbyby.d/apple-block.conf
+# ========== 屏蔽苹果系统更新检测/下载 ==========
+address=/swscan.apple.com/127.0.0.1
+address=/swdist.apple.com/127.0.0.1
+address=/swdownload.apple.com/127.0.0.1
+address=/swcdn.apple.com/127.0.0.1
+address=/updates.cdn-apple.com/127.0.0.1
+address=/updates-http.cdn-apple.com/127.0.0.1
+address=/mesu.apple.com/127.0.0.1
+address=/gdmf.apple.com/127.0.0.1
+address=/xp.apple.com/127.0.0.1
+address=/appldnld.apple.com/127.0.0.1
+
+# ========== 屏蔽苹果隐私数据/统计/诊断上传 ==========
+# 崩溃/诊断报告
+address=/radarsubmissions.apple.com/127.0.0.1
+address=/iphonesubmissions.apple.com/127.0.0.1
+address=/cssubmissions.apple.com/127.0.0.1
+# 分析/遥测/统计
+address=/analytics.apple.com/127.0.0.1
+address=/speedtracer.apple.com/127.0.0.1
+address=/tracerx-radars.apple.com/127.0.0.1
+address=/feedbackassistant.apple.com/127.0.0.1
+address=/diag.apple.com/127.0.0.1
+# 额外隐私相关（广告/追踪）
+address=/adservices.apple.com/127.0.0.1
+address=/metrics.apple.com/127.0.0.1
+address=/iadsdk.apple.com/127.0.0.1
+address=/appleadservices.com/127.0.0.1
+
 EOF
 	if [ $block_shortvideo -eq 1 ]; then
-  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/08-dnsmasq.shortvideo
+  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/shortvideo-block.conf
 # 热门短视频平台域名拦截规则
 # 抖音相关域名 (Douyin/TikTok)
 address=/douyin.com/0.0.0.0
@@ -724,11 +746,11 @@ address=/pearnode.com/0.0.0.0
 EOF
 	fi
 	if [ $block_games -eq 1 ]; then
-  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/09-dnsmasq.games
+  		cat <<-EOF >/etc/storage/dnsmasq-adbyby.d/games-block.conf
 # Popular Online Games Blocking (Valid domains only)
 # 匹配域名 + 所有子域名 → address=/domain.com/0.0.0.0
 # 加 ^ 表示精确匹配（不匹配子域名） → address=/^domain.com/0.0.0.0
-# Tencent Games (应用连字符修复)
+# Tencent Games
 address=/pvp.qq.com/0.0.0.0
 address=/game.qq.com/0.0.0.0
 address=/down-update.qq.com/0.0.0.0
@@ -952,7 +974,7 @@ anti_ad(){
 	[ -z "$anti_ad" ] && anti_ad=0
 	if [ "$anti_ad" = "1" ]; then
 		# 清空之前的anti-AD规则文件
-		rm -f /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+		rm -f /etc/storage/dnsmasq-adbyby.d/antiad.conf
 		
 		# 检查anti-AD规则下载列表是否存在
 		if [ -f "/etc/storage/adbyby_antiad.sh" ] && [ -s "/etc/storage/adbyby_antiad.sh" ]; then
@@ -981,7 +1003,7 @@ anti_ad(){
 								if [ -f "$tempfile" ] && [ -s "$tempfile" ]; then
 									logger -t "adbyby" "远程规则下载成功: $rule_line"
 									# 追加到规则文件（跳过可能的文件头注释）
-									grep -v '^#!' "$tempfile" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null
+									grep -v '^#!' "$tempfile" >> /etc/storage/dnsmasq-adbyby.d/antiad.conf 2>/dev/null
 									downloaded_files=$((downloaded_files + 1))
 									remote_rules_count=$((remote_rules_count + 1))
 									
@@ -1000,7 +1022,7 @@ anti_ad(){
 							;;
 						address=/*|server=/*)
 							# 本地dnsmasq规则：直接写入
-							echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+							echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/antiad.conf
 							local_rules_count=$((local_rules_count + 1))
 							local_rules_processed=$((local_rules_processed + 1))
 							total_rules=$((total_rules + 1))
@@ -1018,7 +1040,7 @@ anti_ad(){
 									# 基本修复（主要是明显的非法格式）
 									domain=$(fix_problematic_domains "$domain")
 									
-									echo "address=/$domain/$ip" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+									echo "address=/$domain/$ip" >> /etc/storage/dnsmasq-adbyby.d/antiad.conf
 									local_rules_count=$((local_rules_count + 1))
 									local_rules_processed=$((local_rules_processed + 1))
 									total_rules=$((total_rules + 1))
@@ -1042,7 +1064,7 @@ anti_ad(){
 										fi
 									fi
 								fi
-								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/antiad.conf
 								local_rules_count=$((local_rules_count + 1))
 								local_rules_processed=$((local_rules_processed + 1))
 								total_rules=$((total_rules + 1))
@@ -1054,7 +1076,7 @@ anti_ad(){
 						*)
 							# 其他格式：尝试作为dnsmasq规则直接添加
 							if echo "$rule_line" | grep -q "^[a-z]*="; then
-								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+								echo "$rule_line" >> /etc/storage/dnsmasq-adbyby.d/antiad.conf
 								local_rules_count=$((local_rules_count + 1))
 								local_rules_processed=$((local_rules_processed + 1))
 								total_rules=$((total_rules + 1))
@@ -1067,13 +1089,13 @@ anti_ad(){
 				done < $adbyby_dir/antiad_list.txt
 				
 				# 处理合并后的规则文件
-				if [ $downloaded_files -gt 0 ] && [ -f "/etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf" ]; then
+				if [ $downloaded_files -gt 0 ] && [ -f "/etc/storage/dnsmasq-adbyby.d/antiad.conf" ]; then
 					# 去重处理
-					sort /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf | uniq > /tmp/anti_ad_sorted.conf
-					mv /tmp/anti_ad_sorted.conf /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf
+					sort /etc/storage/dnsmasq-adbyby.d/antiad.conf | uniq > /tmp/antiad_sorted.conf
+					mv /tmp/antiad_sorted.conf /etc/storage/dnsmasq-adbyby.d/antiad.conf
 					
 					# 统计最终规则数量
-					local final_rules=$(grep -c -v '^[[:space:]]*#\|^$' /etc/storage/dnsmasq-adbyby.d/anti-ad-for-dnsmasq.conf 2>/dev/null || echo 0)
+					local final_rules=$(grep -c -v '^[[:space:]]*#\|^$' /etc/storage/dnsmasq-adbyby.d/antiad.conf 2>/dev/null || echo 0)
 					nvram set anti_ad_count=$final_rules
 					logger -t "adbyby" "anti-AD规则处理完成: 远程规则$remote_rules_count个，本地规则$local_rules_count个，总计$final_rules条规则（去重后）"
 				else
@@ -1249,7 +1271,7 @@ EOF
 #    cache-stop=ads.google.com
 #    rebind-domain-ok=/example.com/
 #
-# 所有规则会自动合并、去重后生成anti-ad-for-dnsmasq.conf
+# 所有规则会自动合并、去重后生成antiad.conf
 
 # Adbyby项目默认dnsmasq规则源
 $anti_ad_link
