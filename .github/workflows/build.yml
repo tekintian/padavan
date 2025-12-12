@@ -15,7 +15,7 @@ jobs:
         # 构建目标可选: K2P, K2P-NANO, K2P-TINY, K2P-USB 
         # 还有 trunk/configs/templates/ 下的其他 xxx.config 配置中的名称xxx即为构建目标可选,
         # 如: K2P-NANO.config 文件,构建目标即 K2P-NANO
-        target: [K2P]
+        target: [ K2P, K2P-NANO, K2P-TINY, K2P-USB]
         toolchain: [mipsel-linux-musl]
     steps:
       - uses: actions/checkout@v3
