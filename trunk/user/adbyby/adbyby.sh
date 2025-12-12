@@ -1193,9 +1193,8 @@ EOF
 	adbyby_adblack="/etc/storage/adbyby_adblack.sh"
 	if [ ! -f "$adbyby_adblack" ] || [ ! -s "$adbyby_adblack" ] ; then
 		cat > "$adbyby_adblack" <<-EOF
-pogothere.xyz
-evidenceguidance.com
-config.kuyun.com
+kuyun.com
+adroll.com
 
 EOF
 	chmod 755 "$adbyby_adblack"
