@@ -473,7 +473,7 @@ function changeBgColorrl(obj, num){
 									<div>Open 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
 									<div>专业软件研发定制:<a href="https://dev.tekin.cn" target="_blank">https://dev.tekin.cn</a> | QQ: 932256355 </div>
 									<div>Adbyby-Open项目地址:<a href="https://gitee.com/tekintian/adbyby-open" target="_blank">https://gitee.com/tekintian/adbyby-open</a>   |  <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">adbyby规则</a>  |  <a href="https://gitee.com/tekintian/adt-rules/blob/master/adbyby/ADByBy_%E8%AF%AD%E6%B3%95%E6%89%8B%E5%86%8C.md" target="_blank">adbyby自定义规则手册</a></div>
-									<div>静态规则： <% nvram_get_x("", "adbyby_ltime"); %>  | 视频规则：<% nvram_get_x("", "adbyby_vtime"); %></div>
+									<div><a href="https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt" target="_blank">静态规则</a>： <% nvram_get_x("", "adbyby_ltime"); %>  | <a href="https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt" target="_blank">视频规则</a> ：<% nvram_get_x("", "adbyby_vtime"); %></div>
 									<div>Anti-AD规则：<% nvram_get_x("", "anti_ad_count"); %> 条 | Hosts AD：<% nvram_get_x("", "adbyby_hostsad"); %> 条</div>
 									<div>第三方规则： <% nvram_get_x("", "adbyby_user"); %> 条</div>
 									<div> </div>
