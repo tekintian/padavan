@@ -6,9 +6,9 @@ adbyby_enable=$(uci get adbyby.@adbyby[0].enable)
 
 if [ $adbyby_enable -eq 1 ]; then
 	if pidof adbyby>/dev/null; then
-	  /etc/init.d/adbyby reload_rule
+	  /usr/bin/adbyby.sh reload_rule
 	 else
-	   /etc/init.d/adbyby restart
+	   /usr/bin/adbyby.sh restart
   fi
 fi
 

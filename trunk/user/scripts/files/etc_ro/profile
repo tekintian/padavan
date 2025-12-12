@@ -1,5 +1,8 @@
 # /etc/profile
 
+# Set timezone from /etc/TZ if it exists
+[ -r /etc/TZ ] && export TZ=$(cat /etc/TZ)
+
 # If running interactively, then
 if [ "$PS1" ] ; then
     export PS1='\h:\w \$ '

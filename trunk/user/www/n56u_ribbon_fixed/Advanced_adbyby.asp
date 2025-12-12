@@ -30,9 +30,9 @@ $j(document).ready(function() {
 	init_itoggle('hosts_ad');
 	init_itoggle('anti_ad');
 	init_itoggle('block_ios');
-	init_itoggle('block_douyin');
+	init_itoggle('block_shortvideo');
+	init_itoggle('block_games');
 	init_itoggle('tv_hosts');
-	init_itoggle('adbyby_adb_update');
 	init_itoggle('adbyby_ip_x', change_adbyby_ip_enabled);
 	init_itoggle('adbyby_rules_x', change_adbyby_rules_enabled);
 	var i=0;
@@ -94,6 +94,7 @@ function initial(){
 	showMRULESList();
 	change_adbyby_ip_enabled();
 	change_adbyby_rules_enabled();
+	change_anti_ad_enabled();
 	if (!login_safe())
 		textarea_scripts_enabled(0);
 		//load_body();
@@ -106,6 +107,7 @@ function textarea_scripts_enabled(v){
 	inputCtrl(document.form['scripts.adbyby_adesc.sh'], v);
 	inputCtrl(document.form['scripts.adbyby_adhost.sh'], v);
 	inputCtrl(document.form['scripts.adbyby_host.sh'], v);
+	inputCtrl(document.form['scripts.adbyby_antiad.sh'], v);
 }
 
 function applyRule(){
@@ -242,6 +244,15 @@ function change_adbyby_rules_enabled(){
 	showhide_div('row_rules_caption', v);
 	showhide_div('row_rules_header', v);
 	showhide_div('row_rules_body', v);
+}
+
+function change_anti_ad_enabled(){
+	var v = document.form.anti_ad[0].checked;
+	// 控制anti-AD规则下载列表的显示
+	var script16 = document.getElementById('script16');
+	if(script16){
+		script16.style.display = v ? 'block' : 'none';
+	}
 }
 
 function done_validating(action){
@@ -458,12 +469,13 @@ function changeBgColorrl(obj, num){
                         </div>
 								<div class="row-fluid">
 									<div id="tabMenu" class="submenuBlock"></div>
-									<div class="alert alert-info" style="margin: 10px;">广告屏蔽大师 Plus + 可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站<br />
-									<div>Plus + 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
-									<div>anti-AD项目地址:<a href="https://github.com/privacy-protection-tools/anti-AD">https://github.com/privacy-protection-tools/anti-AD</a></div>
-									<div>静态规则：【<% nvram_get_x("", "adbyby_ltime"); %>】 | 视频规则：【<% nvram_get_x("", "adbyby_vtime"); %>】</div>
-									<div>anti-AD规则：【<% nvram_get_x("", "anti_ad_count"); %>】条 | Hosts AD：【<% nvram_get_x("", "adbyby_hostsad"); %>】条</div>
-									<div>第三方规则：【<% nvram_get_x("", "adbyby_user"); %>】条</div>
+									<div class="alert alert-info" style="margin: 10px;">开源广告管理Adbyby Open可以全面过滤各种横幅、弹窗、视频广告，同时阻止跟踪、隐私窃取及各种恶意网站, C语言实现,100%完全开源,高效安全,可靠!<br />
+									<div>Open 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
+									<div>专业软件研发定制:<a href="https://dev.tekin.cn" target="_blank">https://dev.tekin.cn</a> | QQ: 932256355 </div>
+									<div>Adbyby-Open项目地址:<a href="https://gitee.com/tekintian/adbyby-open" target="_blank">https://gitee.com/tekintian/adbyby-open</a>   |  <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">adbyby规则</a>  |  <a href="https://gitee.com/tekintian/adt-rules/blob/master/adbyby/ADByBy_%E8%AF%AD%E6%B3%95%E6%89%8B%E5%86%8C.md" target="_blank">adbyby自定义规则手册</a></div>
+									<div><a href="https://gitee.com/tekintian/adt-rules/raw/master/adbyby/lazy.txt" target="_blank">静态规则</a>： <% nvram_get_x("", "adbyby_ltime"); %>  | <a href="https://gitee.com/tekintian/adt-rules/raw/master/adbyby/video.txt" target="_blank">视频规则</a> ：<% nvram_get_x("", "adbyby_vtime"); %></div>
+									<div>Anti-AD规则：<% nvram_get_x("", "anti_ad_count"); %> 条 | Hosts AD：<% nvram_get_x("", "adbyby_hostsad"); %> 条</div>
+									<div>第三方规则： <% nvram_get_x("", "adbyby_user"); %> 条</div>
 									<div> </div>
 									</div>
 									<table width="100%" align="center" cellpadding="4" cellspacing="0" class="table">
@@ -471,7 +483,7 @@ function changeBgColorrl(obj, num){
                                             <td id="adbyby_status" colspan="3"></td>
                                         </tr>
 										<tr >
-											<th width="50%">启用 Adbyby 功能 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</th>
+											<th width="27%" align="right">启用Adbyby-Open功能</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="adbyby_enable_on_of">
@@ -485,7 +497,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
+											<th width="27%" align="right">
 											<a class="help_tooltip" href="javascript: void(0)" onmouseover="openTooltip(this, 0, 1);">过滤方案选择:</a></th>
 											<td>
 												<select name="adbyby_set" class="input">
@@ -512,8 +524,8 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
-											拦截 Apple iOS 的OTA更新:</th>
+											<th width="27%" align="right">
+											拦截Apple iOS/Macos更新:</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="block_ios_on_of">
@@ -527,23 +539,37 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
-											拦截 抖音 APP 和网站:</th>
+											<th width="27%" align="right">
+											拦截热门短视频APP和网站:</th>
 											<td>
 													<div class="main_itoggle">
-													<div id="block_douyin_on_of">
-														<input type="checkbox" id="block_douyin_fake" <% nvram_match_x("", "block_douyin", "1", "value=1 checked"); %><% nvram_match_x("", "block_douyin", "0", "value=0"); %>  />
+													<div id="block_shortvideo_on_of">
+														<input type="checkbox" id="block_shortvideo_fake" <% nvram_match_x("", "block_shortvideo", "1", "value=1 checked"); %><% nvram_match_x("", "block_shortvideo", "0", "value=0"); %>  />
 													</div>
 												</div>
 												<div style="position: absolute; margin-left: -10000px;">
-													<input type="radio" value="1" name="block_douyin" id="block_douyin_1" class="input" value="1" <% nvram_match_x("", "block_douyin", "1", "checked"); %> /><#checkbox_Yes#>
-													<input type="radio" value="0" name="block_douyin" id="block_douyin_0" class="input" value="0" <% nvram_match_x("", "block_douyin", "0", "checked"); %> /><#checkbox_No#>
+													<input type="radio" value="1" name="block_shortvideo" id="block_shortvideo_1" class="input" value="1" <% nvram_match_x("", "block_shortvideo", "1", "checked"); %> /><#checkbox_Yes#>
+													<input type="radio" value="0" name="block_shortvideo" id="block_shortvideo_0" class="input" value="0" <% nvram_match_x("", "block_shortvideo", "0", "checked"); %> /><#checkbox_No#>
 												</div>
 											</td>
 										</tr>
 										<tr>
-											<th width="50%">
-											<a class="help_tooltip" href="javascript: void(0)" onmouseover="openTooltip(this, 2, 1);">加载anti-AD项目规则:</a></th>
+											<th width="27%" align="right">
+											拦截热门游戏:</th>
+											<td>
+													<div class="main_itoggle">
+													<div id="block_games_on_of">
+														<input type="checkbox" id="block_games_fake" <% nvram_match_x("", "block_games", "1", "value=1 checked"); %><% nvram_match_x("", "block_games", "0", "value=0"); %>  />
+													</div>
+												</div>
+												<div style="position: absolute; margin-left: -10000px;">
+													<input type="radio" value="1" name="block_games" id="block_games_1" class="input" value="1" <% nvram_match_x("", "block_games", "1", "checked"); %> /><#checkbox_Yes#>
+													<input type="radio" value="0" name="block_games" id="block_games_0" class="input" value="0" <% nvram_match_x("", "block_games", "0", "checked"); %> /><#checkbox_No#>
+												</div>
+											</td>
+										</tr>
+										<tr>
+											<th width="27%" align="right">启用Anti-AD规则管理</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="anti_ad_on_of">
@@ -551,19 +577,21 @@ function changeBgColorrl(obj, num){
 													</div>
 												</div>
 												<div style="position: absolute; margin-left: -10000px;">
-													<input type="radio" value="1" name="anti_ad" id="anti_ad_1" class="input" value="1" <% nvram_match_x("", "anti_ad", "1", "checked"); %> /><#checkbox_Yes#>
-													<input type="radio" value="0" name="anti_ad" id="anti_ad_0" class="input" value="0" <% nvram_match_x("", "anti_ad", "0", "checked"); %> /><#checkbox_No#>
+													<input type="radio" value="1" name="anti_ad" id="anti_ad_1" class="input" value="1" <% nvram_match_x("", "anti_ad", "1", "checked"); %> onclick="change_anti_ad_enabled()" /><#checkbox_Yes#>
+													<input type="radio" value="0" name="anti_ad" id="anti_ad_0" class="input" value="0" <% nvram_match_x("", "anti_ad", "0", "checked"); %> onclick="change_anti_ad_enabled()" /><#checkbox_No#>
 												</div>
 											</td>
 										</tr>
 										<tr>
-                                            <th width="50%">加载anti-AD下载地址:</th>
-                                            <td>
-                                                <input type="text"  class="input" size="60" name="anti_ad_link" value="<% nvram_get_x("","anti_ad_link"); %>" />
-                                            </td>
-                                        </tr>
+											<td colspan="3">
+												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>Anti-AD规则下载列表(一行一个地址):</span></a>
+												<div id="script16">
+													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_antiad.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_antiad.sh",""); %></textarea>
+												</div>
+											</td>
+										</tr>
 										<tr>
-											<th width="50%">加载hosts规则</th>
+											<th width="27%" align="right">加载hosts规则</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="hosts_ad_on_of">
@@ -584,6 +612,7 @@ function changeBgColorrl(obj, num){
 												</div>
 											</td>
 										</tr>
+										
 										</table>
 										<table width="100%" align="center" cellpadding="4" cellspacing="0" class="table">
                                         <tr>
@@ -656,10 +685,10 @@ function changeBgColorrl(obj, num){
                                     </table>
 									 <table width="100%" align="center" cellpadding="5" cellspacing="0" class="table">
                                         <tr>
-                                            <th colspan="5" id="GWStatic" style="background-color: #E3E3E3;">第三方过滤规则</th>
+                                            <th colspan="5" id="GWStatic" style="background-color: #E3E3E3;">第三方过滤规则- <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">规则说明</a></th>
                                         </tr>
                                         <tr>
-                                            <th width="50%">启用第三方过滤规则</th>
+                                            <th width="27%" align="right">启用第三方过滤规则</th>
                                             <td width="50%">
                                                 <div class="main_itoggle">
                                                     <div id="adbyby_rules_x_on_of">

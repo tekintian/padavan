@@ -1,0 +1,88 @@
+Textsearch Algorithm Stress Test & Benchmark
+===========================================
+
+============================================================
+STRESS TEST: Different Text Sizes
+============================================================
+
+Text size: 1000 bytes
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          target          10000      585             0.059      10000
+BM           target          10000      355             0.035      10000
+WILDCARD     target          10000      392             0.039      10000
+
+Text size: 10000 bytes
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          target          10000      436             0.044      10000
+BM           target          10000      409             0.041      10000
+WILDCARD     target          10000      403             0.040      10000
+
+Text size: 100000 bytes
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          target          10000      497             0.050      10000
+BM           target          10000      430             0.043      10000
+WILDCARD     target          10000      440             0.044      10000
+
+Text size: 1000000 bytes
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          target          1000       46              0.046      1000
+BM           target          1000       40              0.040      1000
+WILDCARD     target          1000       37              0.037      1000
+
+============================================================
+STRESS TEST: Different Pattern Types
+============================================================
+
+Testing pattern: "testing" (Simple word)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          testing         10000      44753           4.475      10000
+BM           testing         10000      16611           1.661      10000
+WILDCARD     testing         10000      55222           5.522      10000
+
+Testing pattern: "algorithm" (Simple word 2)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          algorithm       10000      391410          39.141     10000
+BM           algorithm       10000      84185           8.418      10000
+WILDCARD     algorithm       10000      217419          21.742     10000
+
+Testing pattern: "performance" (Simple word 3)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+KMP          performance     10000      424759          42.476     10000
+BM           performance     10000      90371           9.037      10000
+WILDCARD     performance     10000      367167          36.717     10000
+
+Testing pattern: "*" (Wildcard - match all)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+WILDCARD     *               10000      205             0.021      10000
+
+Testing pattern: "t*" (Wildcard - starts with t)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+WILDCARD     t*              10000      11961           1.196      10000
+
+Testing pattern: "*ing" (Wildcard - ends with ing)
+
+Algorithm    Pattern         Iter       Total (μs)     Avg (μs)  Success
+----------   -------         ----       -----------     --------   ------
+WILDCARD     *ing            10000      45387           4.539      10000
+
+Testing pattern: "*ing" (Wildcard - contains ing)
+
+Algorith

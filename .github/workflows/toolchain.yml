@@ -2,41 +2,122 @@ name: toolchain
 
 on: 
   workflow_dispatch:
-  # push:
-  #   tags: ["*"]
+  push:
+    tags: ["*"]
+
+env:
+  CT_VERSION: 1.26.0
 
 jobs:
   build:
     name: build
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    env:
+      TZ: Asia/Shanghai
     strategy:
       matrix:
-        target: [mipsel-linux-uclibc, mipsel-linux-musl]
+        include:
+          - os: ubuntu-22.04
+            target: mipsel-linux-uclibc
+            platform: linux
+          - os: ubuntu-22.04
+            target: mipsel-linux-musl
+            platform: linux
+          - os: macos-12
+            target: mipsel-linux-uclibc
+            platform: darwin
+          - os: macos-12
+            target: mipsel-linux-musl
+            platform: darwin
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare
+      - name: Prepare (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt update
           sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
             fakeroot kmod cpio git python3-docutils gettext automake autopoint \
             texinfo build-essential help2man pkg-config zlib1g-dev libgmp3-dev \
             libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
+      - name: Prepare (macOS)
+        if: matrix.os == 'macos-12'
+        run: |
+          # Install required packages via Homebrew
+          brew install coreutils gnu-sed gawk flex bison gettext texinfo help2man \
+            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz
+          # Set GNU tool paths
+          echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "/usr/local/opt/gettext/bin" >> $GITHUB_PATH
+      - name: Set macOS Target Compatibility
+        if: matrix.os == 'macos-12'
+        run: |
+          # Set deployment target for macOS 10.15 compatibility
+          echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+          echo "CFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          echo "CXXFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          echo "LDFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
       - name: Build
         run: |
+          # Configure for macOS 10.15 compatibility if on Darwin
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            export MACOSX_DEPLOYMENT_TARGET=10.15
+            export CFLAGS="-mmacosx-version-min=10.15"
+            export CXXFLAGS="-mmacosx-version-min=10.15"
+            export LDFLAGS="-mmacosx-version-min=10.15"
+            # Ensure we use GNU tools
+            export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:$PATH"
+          fi
+          
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}.tar.xz *
+          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
         env:
           CT_TARGET: ${{ matrix.target }}
-          CT_VERSION: 1.26.0
+          PLATFORM: ${{ matrix.platform }}
         working-directory: toolchain
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain
-          path: toolchain/${{ matrix.target }}.tar.xz
-      - uses: svenstaro/upload-release-action@2.2.0
+          name: toolchain-${{ matrix.target }}-${{ matrix.platform }}
+          path: toolchain/${{ matrix.target }}-${{ matrix.platform }}-v${{ env.CT_VERSION }}.tar.xz
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: toolchain/${{ matrix.target }}.tar.xz
-          tag: toolchain
-          overwrite: true
+          path: artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Toolchain Release ${{ github.ref_name }}
+          body: |
+            ## Padavan Toolchain Release ${{ github.ref_name }}
+            
+            This release contains cross-compilation toolchains for Padavan firmware development.
+            
+            ### Available Toolchains:
+            
+            #### Linux Platforms:
+            - `mipsel-linux-uclibc-linux-v${{ env.CT_VERSION }}.tar.xz` - uClibc-based toolchain for Linux
+            - `mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz` - musl-based toolchain for Linux
+            
+            #### macOS Platforms:
+            - `mipsel-linux-uclibc-darwin-v${{ env.CT_VERSION }}.tar.xz` - uClibc-based toolchain for macOS
+            - `mipsel-linux-musl-darwin-v${{ env.CT_VERSION }}.tar.xz` - musl-based toolchain for macOS
+            
+            ### Usage:
+            1. Download the appropriate toolchain for your platform
+            2. Extract to your development directory
+            3. Set environment variables to use the toolchain
+            
+            For detailed usage instructions, please refer to the project documentation.
+            
+            ---
+            *Built with Crosstool-NG v${{ env.CT_VERSION }}*
+          files: artifacts/**/*.tar.xz
+          draft: false
+          prerelease: false

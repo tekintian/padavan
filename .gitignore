@@ -1,3 +1,14 @@
 .vscode
 toolchain/crosstool-ng-*/
 toolchain/toolchain-*/
+/debug
+/mipsel-linux-musl_4.4.x.tar.xz
+/tdebug
+*.log
+/files
+/trunk/user/iptables/Makefile.bak
+/trunk/user/iptables/temp.txt
+*.xz
+/trunk/user/adbyby/adbyby
+/trunk/user/adbyby/src/adbyby
+/trunk/user/adbyby/share/adbyby

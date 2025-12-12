@@ -1,0 +1,208 @@
+# GitHub Actions CI 完整模拟环境（包含 actions-runner）
+# 基于 .github/workflows/build.yml 的 ubuntu:22.04
+FROM ubuntu:22.04
+
+LABEL maintainer="TEKINTIAN <tekintian@gmail.com>"
+LABEL description="GitHub Actions CI 完整模拟环境 - 包含真实的 actions-runner"
+LABEL version="ci-sim-full-1.0"
+
+# 环境变量（模拟 GitHub Actions）
+ENV DEBIAN_FRONTEND=noninteractive \
+    LC_ALL=en_US.UTF-8 \
+    LANG=en_US.UTF-8 \
+    LANGUAGE=en_US.UTF-8 \
+    TZ=Asia/Shanghai
+
+# 简化的环境变量（避免路径污染）
+ENV GITHUB_ACTIONS="true" \
+    CI="true" \
+    GITHUB_REPOSITORY="padavan" \
+    GITHUB_REF="refs/heads/dev"
+
+# Padavan 构建环境变量
+ENV ROOTDIR="/padavan/trunk" \
+    INCLUDE_DIR="/padavan/trunk/include" \
+    LINUXDIR="/padavan/trunk/linux-3.4.x" \
+    ROMFSDIR="/padavan/trunk/target" \
+    TOOLCHAIN="/padavan/toolchain"
+
+# ccache 配置（修复路径污染问题）
+ENV CCACHE_DIR="/tmp/ccache" \
+    CCACHE_BASEDIR="/padavan" \
+    CCACHE_COMPILERCHECK="content" \
+    CCACHE_MAXSIZE="2G" \
+    CCACHE_SLOPPINESS="include_file_mtime,include_file_ctime,time_macros" \
+    CONFIG_CCACHE="y"
+
+# 构建参数
+ARG APT_MIRROR_HOST=mirrors.aliyun.com
+
+# 第一步：安装基础依赖
+RUN set -eux && \
+    # 替换 APT 镜像源
+    sed -i "s|archive.ubuntu.com|${APT_MIRROR_HOST}|g; s|security.ubuntu.com|${APT_MIRROR_HOST}|g" /etc/apt/sources.list && \
+    # 安装编译依赖（与 build.yml 第37行一致）
+    apt update -y -q && \
+    apt install -y -q --no-install-recommends \
+        # build.yml 指定的工具
+        libtool-bin gperf python3-docutils autopoint gettext ccache \
+        # autotools (修复 aclocal 缺失问题)
+        autotools-dev autoconf-archive automake \
+        # 编译工具链
+        build-essential cmake autoconf automake libtool \
+        bison flex bc texinfo help2man \
+        # 系统库依赖
+        zlib1g-dev libssl-dev libncurses5-dev libncursesw5-dev \
+        libgmp3-dev libmpc-dev libmpfr-dev libltdl-dev \
+        # GitHub Actions runner 依赖
+        dotnet-sdk-6.0 \
+        # 其他工具
+        locales git curl wget unzip cpio fakeroot kmod vim nano htop xxd && \
+    # 配置时区和编码
+    ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    echo ${TZ} > /etc/timezone && \
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen && \
+    # 创建 automake 符号链接（兼容不同版本）
+    ACLOCAL_VERSION=$(ls /usr/bin/aclocal-* 2>/dev/null | head -n1 | sed 's/.*aclocal-//' || echo "1.16") && \
+    AUTOMAKE_VERSION=$(ls /usr/bin/automake-* 2>/dev/null | head -n1 | sed 's/.*automake-//' || echo "1.16") && \
+    ln -sf /usr/bin/aclocal-${ACLOCAL_VERSION} /usr/bin/aclocal-1.17 && \
+    ln -sf /usr/bin/automake-${AUTOMAKE_VERSION} /usr/bin/automake-1.17 && \
+    echo "✅ 创建符号链接: aclocal-${ACLOCAL_VERSION} -> aclocal-1.17" && \
+    echo "✅ 创建符号链接: automake-${AUTOMAKE_VERSION} -> automake-1.17" && \
+    # 清理缓存
+    apt autoremove -y && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# 第二步：创建 GitHub Actions 目录结构（关键！模拟污染路径）
+RUN set -eux && \
+    # 创建工作目录（避免 CI 路径污染）
+    mkdir -p /tmp/ccache && \
+    mkdir -p /padavan/trunk && \
+    # 创建 runner 用户（模拟 GitHub Actions）
+    useradd -m -s /bin/bash runner && \
+    # 设置权限
+    chown -R runner:runner /tmp/ccache && \
+    chown -R runner:runner /padavan && \
+
+# 第三步：复制本地文件（从 files 文件夹）
+COPY files/ /tmp/local-files/
+
+RUN set -eux && \
+    # 安装 GitHub Actions runner（仅解压，跳过配置以避免 API 调用）
+    if [ -f "/tmp/local-files/actions-runner-linux-x64-2.311.0.tar.gz" ]; then \
+        mkdir -p /opt/actions-runner && \
+        tar -xzf /tmp/local-files/actions-runner-linux-x64-2.311.0.tar.gz -C /opt/actions-runner && \
+        chown -R runner:runner /opt/actions-runner && \
+        # 创建模拟的 runner 配置文件
+        echo '{"runnerName":"docker-test-runner","runnerGroup":"default","poolId":1,"agentId":999999}' > /opt/actions-runner/.runner && \
+        echo "✅ GitHub Actions runner 解压完成（离线模拟模式）"; \
+    else \
+        echo "⚠️  GitHub Actions runner 文件不存在，跳过安装"; \
+    fi && \
+    # 安装工具链
+    if [ -f "/tmp/local-files/mipsel-linux-musl_4.4.x.tar.xz" ]; then \
+        mkdir -p /usr/local/mipsel-toolchain-4.4.x && \
+        tar -xJf /tmp/local-files/mipsel-linux-musl_4.4.x.tar.xz -C /usr/local/mipsel-toolchain-4.4.x && \
+        chmod +x -R /usr/local/mipsel-toolchain-4.4.x/bin/ && \
+        mkdir -p /padavan/toolchain/toolchain-mipsel && \
+        ln -s /usr/local/mipsel-toolchain-4.4.x /padavan/toolchain/toolchain-mipsel/toolchain-4.4.x; \
+        echo "✅ 工具链安装完成"; \
+    else \
+        echo "⚠️  工具链文件不存在：/tmp/local-files/mipsel-linux-musl_4.4.x.tar.xz"; \
+    fi && \
+    # 安装 Go（如果存在）
+    if [ -f "/tmp/local-files/go*.linux-amd64.tar.gz" ]; then \
+        tar -C /usr/local -xzf /tmp/local-files/go*.linux-amd64.tar.gz && \
+        echo "✅ Go 安装完成"; \
+    else \
+        echo "⚠️  Go 文件不存在，跳过安装"; \
+    fi && \
+    # 安装 Node.js（如果存在）
+    if [ -f "/tmp/local-files/node*-linux-x64.tar.xz" ]; then \
+        tar -C /usr/local -xf /tmp/local-files/node*-linux-x64.tar.xz && \
+        echo "✅ Node.js 安装完成"; \
+    else \
+        echo "⚠️  Node.js 文件不存在，跳过安装"; \
+    fi && \
+    # 清理临时文件
+    rm -rf /tmp/local-files
+
+# 第四步：设置环境变量 PATH
+ENV PATH="/usr/local/go/bin:/usr/local/node/bin:/usr/local/mipsel-toolchain-4.4.x/bin:/padavan/toolchain/toolchain-mipsel/toolchain-4.4.x/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# 第五步：验证环境并创建测试脚本
+RUN set -eux && \
+    echo "======================================" && \
+    echo "✅ GitHub Actions CI 完整模拟环境就绪！" && \
+    echo "🏃‍♂️ Runner 用户：runner" && \
+    echo "📁 工作目录：${GITHUB_WORKSPACE}" && \
+    echo "💨 ccache 版本：$(ccache --version | head -n1)" && \
+    echo "🔗 编译器：$(mipsel-linux-musl-gcc --version 2>/dev/null | head -n1 || echo '未安装')" && \
+    echo "🔧 Go 版本：$(go version 2>/dev/null || echo '未安装')" && \
+    echo "📦 Node 版本：$(node --version 2>/dev/null || echo '未安装')" && \
+    echo "🤖 Actions Runner：$(/opt/actions-runner/run.sh --version 2>/dev/null || echo '未安装')" && \
+    echo "🌐 PATH：${PATH}" && \
+    echo "📊 CCACHE_DIR：${CCACHE_DIR}" && \
+    echo "🔥 CI 污染路径：${GITHUB_WORKSPACE}" && \
+    echo "======================================" && \
+    # 创建测试脚本来验证环境污染
+    echo '#!/bin/bash' > /tmp/test_ci_pollution.sh && \
+    echo 'echo "=== CI 环境污染测试 ==="' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "🏃‍♂️ 用户：$(whoami)"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "📁 工作目录：$(pwd)"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "CCACHE_DIR: $CCACHE_DIR"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "CCACHE_BASEDIR: $CCACHE_BASEDIR"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "ROOTDIR: $ROOTDIR"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "INCLUDE_DIR: $INCLUDE_DIR"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "PATH: $PATH"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "which ccache: $(which ccache)"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "which sed: $(which sed)"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "🔧 编译器测试：$(mipsel-linux-musl-gcc --version | head -n1 2>/dev/null || echo "未找到")"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "💨 ccache 状态："' >> /tmp/test_ci_pollution.sh && \
+    echo 'ccache -s 2>/dev/null || echo "ccache 未配置"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "🤖 Actions Runner 状态："' >> /tmp/test_ci_pollution.sh && \
+    echo 'ps aux | grep -i runner || echo "runner 进程未运行"' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "📋 环境变量检查："' >> /tmp/test_ci_pollution.sh && \
+    echo 'env | grep -E "(GITHUB|CCACHE|CI|ROOTDIR|INCLUDE_DIR)" | sort' >> /tmp/test_ci_pollution.sh && \
+    echo 'echo "=== 测试完成 ==="' >> /tmp/test_ci_pollution.sh && \
+    chmod +x /tmp/test_ci_pollution.sh && \
+    # 创建编译测试脚本（日志保存到挂载目录）
+    echo '#!/bin/bash' > /tmp/test_iptables_compile.sh && \
+    echo 'echo "=== iptables 编译测试 ==="' >> /tmp/test_iptables_compile.sh && \
+    echo 'cd /padavan/trunk/user/iptables' >> /tmp/test_iptables_compile.sh && \
+    echo 'echo "🧹 清理环境..."' >> /tmp/test_iptables_compile.sh && \
+    echo 'make clean || true' >> /tmp/test_iptables_compile.sh && \
+    echo 'echo "🔧 开始编译 iptables..."' >> /tmp/test_iptables_compile.sh && \
+    echo 'make 2>&1 | tee /padavan/logs/iptables_compile.log' >> /tmp/test_iptables_compile.sh && \
+    echo 'echo "📋 编译日志保存到：/padavan/logs/iptables_compile.log"' >> /tmp/test_iptables_compile.sh && \
+    echo 'echo "=== 编译测试完成 ==="' >> /tmp/test_iptables_compile.sh && \
+    chmod +x /tmp/test_iptables_compile.sh && \
+    # 创建日志目录
+    mkdir -p /padavan/logs
+
+# 设置工作目录
+WORKDIR /padavan
+
+# 切换到 runner 用户
+USER runner
+
+# 启动命令
+CMD ["/bin/bash", "-c", \
+    "echo '=== GitHub Actions CI 完整模拟环境 ==='; \
+     echo '🏃‍♂️ 用户：$(whoami)'; \
+     echo '📁 工作目录：$(pwd)'; \
+     echo '🔧 模拟 CI 环境：GITHUB_ACTIONS=${GITHUB_ACTIONS}'; \
+     echo '💨 ccache 配置：CCACHE_DIR=${CCACHE_DIR}'; \
+     echo '🔥 污染路径：${GITHUB_WORKSPACE}'; \
+     echo '🤖 Actions Runner：已安装'; \
+     echo '📋 用法：'; \
+     echo '  1. 测试环境污染：/tmp/test_ci_pollution.sh'; \
+     echo '  2. 测试 iptables 编译：/tmp/test_iptables_compile.sh'; \
+     echo '  3. 编译完整固件：make K2P'; \
+     echo '  4. 查看 runner 状态：ps aux | grep runner'; \
+     echo '  5. 进入容器后查看编译日志：cat /padavan/logs/iptables_compile.log'; \
+     echo '======================================'; \
+     /bin/bash"]

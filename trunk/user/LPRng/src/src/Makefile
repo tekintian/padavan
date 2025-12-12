@@ -36,7 +36,7 @@ top_builddir=..
 # what C compiler to use.
 #CC:=mipsel-uclibc-gcc
 #CC:=gcc
-#CC:=mipsel-linux-gcc
+#CC:=mipsel-linux-musl-gcc
 
 # what command to use to "ranlib" or "lorder" the library.
 #RANLIB=mipsel-uclibc-ranlib
@@ -47,7 +47,7 @@ top_builddir=..
 # what C preprocessor to use.
 #CPP:=mipsel-uclibc-gcc -E
 #CPP:=gcc -E
-#CPP:=mipsel-linux-gcc -E
+#CPP:=mipsel-linux-musl-gcc -E
 CPP:= $(CC) -E
 
 # how to install stuff.
@@ -59,7 +59,7 @@ SHELL = /bin/sh
 # loader for c programs
 #LDCC=mipsel-uclibc-gcc
 #LDCC=gcc
-#LDCC=mipsel-linux-gcc
+#LDCC=mipsel-linux-musl-gcc
 LDCC=$(CC)
 
 # any libs that need to be used to get these programs to compile:

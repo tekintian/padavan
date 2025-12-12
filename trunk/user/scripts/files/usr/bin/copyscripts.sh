@@ -57,6 +57,10 @@ if [ ! -f "/etc/storage/adbyby_host.sh" ] ; then
 cp -rf /etc_ro/adbyby_host.sh /etc/storage/
 chmod 755 "/etc/storage/adbyby_host.sh"
 fi
+if [ ! -f "/etc/storage/adbyby_antiad.sh" ] ; then
+cp -rf /etc_ro/adbyby_antiad.sh /etc/storage/
+chmod 755 "/etc/storage/adbyby_antiad.sh"
+fi
 if [ ! -f "/etc/storage/adbyby_blockip.sh" ] ; then
 cp -rf /etc_ro/adbyby_blockip.sh /etc/storage/
 chmod 755 "/etc/storage/adbyby_blockip.sh"

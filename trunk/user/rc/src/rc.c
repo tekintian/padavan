@@ -583,6 +583,7 @@ setkernel_tz(void)
 	localtime_r(&now, &local);
 
 	gm.tm_isdst = local.tm_isdst;
+
 	tz.tz_minuteswest = (mktime(&gm) - mktime(&local)) / 60;
 
 	if (tz_minuteswest_last == tz.tz_minuteswest)

@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
     strategy:
       matrix:
         target: [K2, K2-TINY]
@@ -56,6 +58,8 @@ jobs:
   publish:
     needs: [build]
     runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v3

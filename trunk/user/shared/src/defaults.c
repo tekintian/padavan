@@ -660,10 +660,9 @@ struct nvram_pair router_defaults[] = {
 	{ "ss_keyword", "过期时间/剩余流量" },
 #endif
 	
-	/*Adbyby PlUS+*/
+	/*Adbyby Open*/
 	{ "adbyby_enable", "0" },
 	{ "adbyby_set", "0" },
-	{ "adbyby_adb_update", "0" },
 	{ "adbyby_update", "2" },
 	{ "hosts_ad", "1" },
 	{ "adbyby_update_hour", "03" },
@@ -673,7 +672,8 @@ struct nvram_pair router_defaults[] = {
 	{ "adbybyip_staticnum_x", "0" },
 	{ "adbybyrules_staticnum_x", "0" },
 	{ "block_ios", "0" },
-	{ "block_douyin", "0" },
+	{ "block_shortvideo", "0" },
+	{ "block_games", "0" },
 	{ "anti_ad", "0" },
 	{ "anti_ad_link", "https://gitee.com/tekintian/adt-rules/raw/master/dnsmasq/anti-ad.conf" },
 	{ "anti_ad_count", "0" },

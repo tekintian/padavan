@@ -47,7 +47,7 @@ sleep 20
 fi
 
 if [ $(nvram get adbyby_enable) = 1 ] ; then
-logger -t "自动启动" "正在启动adbyby plus+"
+logger -t "自动启动" "正在启动Adbyby Open"
 /usr/bin/adbyby.sh start
 fi
 

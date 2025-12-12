@@ -69,7 +69,7 @@ AR_FLAGS="cru"
 
 # The default C compiler.
 #CC="mipsel-uclibc-gcc"
-#CC="mipsel-linux-gcc"
+#CC="mipsel-linux-musl-gcc"
 
 # Is the compiler the GNU C compiler?
 with_gcc=yes

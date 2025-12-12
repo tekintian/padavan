@@ -49,11 +49,11 @@ LIBS=
 #
 # what C compiler to use.
 #
-CC=mipsel-linux-gcc
+CC=mipsel-linux-musl-gcc
 
 # what C preprocessor to use.
 #
-CPP=mipsel-linux-gcc -E $(CCOPTFLAGS)
+CPP=mipsel-linux-musl-gcc -E $(CCOPTFLAGS)
 
 # how to install stuff.
 #

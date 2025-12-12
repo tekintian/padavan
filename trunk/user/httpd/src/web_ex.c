@@ -163,8 +163,16 @@ sys_script(char *name)
 	{
 		if (SystemCmd[0] && get_login_safe()) {
 			char path_env[64];
+			char tz_env[64];
+			
+			// 设置PATH环境变量
 			snprintf(path_env, sizeof(path_env), "PATH=%s", SYS_EXEC_PATH_OPT);
 			putenv(path_env);
+			
+			// 设置时区环境变量
+			snprintf(tz_env, sizeof(tz_env), "TZ=%s", nvram_safe_get("time_zone_x"));
+			putenv(tz_env);
+			
 			doSystem("%s >/tmp/syscmd.log 2>&1\n", SystemCmd);
 			SystemCmd[0] = '\0';
 		} else {
@@ -2254,7 +2262,23 @@ static int adbyby_action_hook(int eid, webs_t wp, int argc, char **argv)
 
 static int adbyby_status_hook(int eid, webs_t wp, int argc, char **argv)
 {
-	int ad_status_code = pids("adbyby");
+	// 增强状态检测：同时检查进程和端口
+	int process_running = pids("adbyby") || pids("/usr/share/adbyby/adbyby");
+	int port_listening = 0;
+	
+	// 检查8118端口是否被监听
+	FILE *fp = popen("netstat -ln 2>/dev/null | grep ':8118 ' | grep -c 'LISTEN'", "r");
+	if (fp) {
+		char result[16];
+		if (fgets(result, sizeof(result), fp)) {
+			port_listening = (atoi(result) > 0);
+		}
+		pclose(fp);
+	}
+	
+	// 只有进程存在且端口监听才认为是运行状态
+	int ad_status_code = process_running && port_listening;
+	
 	websWrite(wp, "function adbyby_status() { return %d;}\n", ad_status_code);
 	return 0;
 }
