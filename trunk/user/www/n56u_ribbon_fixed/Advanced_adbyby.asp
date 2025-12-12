@@ -33,7 +33,6 @@ $j(document).ready(function() {
 	init_itoggle('block_shortvideo');
 	init_itoggle('block_games');
 	init_itoggle('tv_hosts');
-	init_itoggle('adbyby_adb_update');
 	init_itoggle('adbyby_ip_x', change_adbyby_ip_enabled);
 	init_itoggle('adbyby_rules_x', change_adbyby_rules_enabled);
 	var i=0;
@@ -474,9 +473,9 @@ function changeBgColorrl(obj, num){
 									<div>Open 版本可以和 Hosts 结合方式运行，过滤广告不损失带宽</div>
 									<div>专业软件研发定制:<a href="https://dev.tekin.cn" target="_blank">https://dev.tekin.cn</a> | QQ: 932256355 </div>
 									<div>Adbyby-Open项目地址:<a href="https://gitee.com/tekintian/adbyby-open" target="_blank">https://gitee.com/tekintian/adbyby-open</a>   |  <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">adbyby规则</a>  |  <a href="https://gitee.com/tekintian/adt-rules/blob/master/adbyby/ADByBy_%E8%AF%AD%E6%B3%95%E6%89%8B%E5%86%8C.md" target="_blank">adbyby自定义规则手册</a></div>
-									<div>静态规则：【<% nvram_get_x("", "adbyby_ltime"); %>】 | 视频规则：【<% nvram_get_x("", "adbyby_vtime"); %>】</div>
-									<div>anti-AD规则：【<% nvram_get_x("", "anti_ad_count"); %>】条 | Hosts AD：【<% nvram_get_x("", "adbyby_hostsad"); %>】条</div>
-									<div>第三方规则：【<% nvram_get_x("", "adbyby_user"); %>】条</div>
+									<div>静态规则： <% nvram_get_x("", "adbyby_ltime"); %>  | 视频规则：<% nvram_get_x("", "adbyby_vtime"); %></div>
+									<div>Anti-AD规则：<% nvram_get_x("", "anti_ad_count"); %> 条 | Hosts AD：<% nvram_get_x("", "adbyby_hostsad"); %> 条</div>
+									<div>第三方规则： <% nvram_get_x("", "adbyby_user"); %> 条</div>
 									<div> </div>
 									</div>
 									<table width="100%" align="center" cellpadding="4" cellspacing="0" class="table">
@@ -484,7 +483,7 @@ function changeBgColorrl(obj, num){
                                             <td id="adbyby_status" colspan="3"></td>
                                         </tr>
 										<tr >
-											<th width="27%" align="right">启用 Adbyby-Open 功能 &nbsp; &nbsp;</th>
+											<th width="27%" align="right">启用Adbyby-Open功能</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="adbyby_enable_on_of">
@@ -526,7 +525,7 @@ function changeBgColorrl(obj, num){
 										</tr>
 										<tr>
 											<th width="27%" align="right">
-											拦截 Apple iOS 的OTA更新:</th>
+											拦截Apple iOS/Macos更新:</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="block_ios_on_of">
@@ -570,7 +569,7 @@ function changeBgColorrl(obj, num){
 											</td>
 										</tr>
 										<tr>
-											<th width="27%" align="right">启用anti-AD规则管理</th>
+											<th width="27%" align="right">启用Anti-AD规则管理</th>
 											<td>
 													<div class="main_itoggle">
 													<div id="anti_ad_on_of">
@@ -585,7 +584,7 @@ function changeBgColorrl(obj, num){
 										</tr>
 										<tr>
 											<td colspan="3">
-												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>anti-AD规则下载列表(一行一个地址):</span></a>
+												<i class="icon-hand-right"></i> <a href="javascript:spoiler_toggle('script16')"><span>Anti-AD规则下载列表(一行一个地址):</span></a>
 												<div id="script16">
 													<textarea rows="8" wrap="off" spellcheck="false" maxlength="314571" class="span12" name="scripts.adbyby_antiad.sh" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("scripts.adbyby_antiad.sh",""); %></textarea>
 												</div>
