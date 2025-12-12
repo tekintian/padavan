@@ -685,7 +685,7 @@ function changeBgColorrl(obj, num){
                                     </table>
 									 <table width="100%" align="center" cellpadding="5" cellspacing="0" class="table">
                                         <tr>
-                                            <th colspan="5" id="GWStatic" style="background-color: #E3E3E3;">第三方过滤规则</th>
+                                            <th colspan="5" id="GWStatic" style="background-color: #E3E3E3;">第三方过滤规则- <a href="https://gitee.com/tekintian/adt-rules/tree/master/adbyby" target="_blank">规则说明</a></th>
                                         </tr>
                                         <tr>
                                             <th width="27%" align="right">启用第三方过滤规则</th>
