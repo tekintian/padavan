@@ -20,63 +20,6 @@ debug_adbyby_status()
 	fi
 	logger -t "adbyby" "=== 调试信息结束 ==="
 }
-
-# 检查8118代理状态
-debug_8118_status()
-{
-	logger -t "adbyby" "=== 8118代理状态检查 ==="
-	
-	# 检查adbyby进程
-	if pgrep -f "adbyby" > /dev/null; then
-		ADBYBY_PID=$(pgrep -f "adbyby")
-		logger -t "adbyby" "AdByBy进程运行中，PID: $ADBYBY_PID"
-		
-		# 检查进程状态
-		if ps -p $ADBYBY_PID > /dev/null 2>&1; then
-			logger -t "adbyby" "AdByBy进程状态正常"
-		else
-			logger -t "adbyby" "AdByBy进程状态异常"
-		fi
-		
-		# 检查端口监听
-		if netstat -ln | grep ":8118" > /dev/null 2>&1; then
-			logger -t "adbyby" "8118端口正在监听"
-			netstat -ln | grep ":8118" | while read line; do
-				logger -t "adbyby" "端口状态: $line"
-			done
-		else
-			logger -t "adbyby" "8118端口未在监听"
-		fi
-		
-		# 检查配置文件
-		if [ -f "/tmp/adbyby/adhook.ini" ]; then
-			logger -t "adbyby" "配置文件存在: /tmp/adbyby/adhook.ini"
-			if grep -q "listen-address=0.0.0.0:8118" "/tmp/adbyby/adhook.ini"; then
-				logger -t "adbyby" "配置文件监听地址正确"
-			else
-				logger -t "adbyby" "配置文件监听地址异常"
-			fi
-		else
-			logger -t "adbyby" "配置文件不存在: /tmp/adbyby/adhook.ini"
-		fi
-		
-		# 检查防火墙规则
-		if iptables -t nat -L PREROUTING | grep ADBYBY > /dev/null 2>&1; then
-			logger -t "adbyby" "防火墙规则存在"
-		else
-			logger -t "adbyby" "防火墙规则不存在"
-		fi
-		
-		# 注意：状态页面功能已移除，不再进行HTTP请求测试
-		# 只检查端口监听状态，避免TIME_WAIT连接
-		
-	else
-		logger -t "adbyby" "AdByBy进程未运行"
-	fi
-	
-	logger -t "adbyby" "=== 8118代理状态检查结束 ==="
-}
-
 # 智能健康检查和自动重启adbyby - 自适应频率（移除状态页面依赖）
 HEALTH_STATE_FILE="/tmp/adbyby_health.state"
 CONSECUTIVE_FAILURES=0
@@ -125,7 +68,7 @@ is_adbyby_running()
 			local pid=$(cat "$pid_file" 2>/dev/null)
 			if [ -n "$pid" ] && [ -d "/proc/$pid" ] 2>/dev/null; then
 				# 进程存在，进一步检查端口
-				if is_8118_listening; then
+				if is_port_listening; then
 					return 0
 				else
 					# 进程存在但端口未监听，说明服务异常
@@ -138,7 +81,7 @@ is_adbyby_running()
 	# 回退到进程检查
 	if pgrep -f "adbyby" > /dev/null 2>/dev/null; then
 		# 进程存在，检查端口
-		is_8118_listening
+		is_port_listening
 	else
 		# 进程不存在
 		return 1
@@ -146,7 +89,7 @@ is_adbyby_running()
 }
 
 # 极简端口检查（兼容多种路由器环境）
-is_8118_listening()
+is_port_listening()
 {
 	# 优先使用/proc/net/tcp（最底层，最可靠，避免调用外部命令）
 	if [ -f "/proc/net/tcp" ]; then
@@ -180,7 +123,7 @@ health_check_adbyby()
 		failure_reason="进程不存在"
 	else
 		# 进程存在，检查端口（使用更高效的ss命令）
-		if ! is_8118_listening; then
+		if ! is_port_listening; then
 			service_ok=0
 			failure_reason="进程存在但端口未监听"
 		fi
@@ -210,7 +153,7 @@ health_check_adbyby()
 		sleep 2
 		
 		# 验证启动是否成功
-		if is_adbyby_running && is_8118_listening; then
+		if is_adbyby_running && is_port_listening; then
 			logger -t "adbyby" "健康检查：服务重启成功"
 		else
 			logger -t "adbyby" "健康检查：服务重启失败，需要人工干预"
