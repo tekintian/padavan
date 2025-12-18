@@ -89,13 +89,30 @@ jobs:
           # Add binutils to PATH
           echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
           
+      - name: Download and extract crosstool-ng
+        env:
+          CT_TARGET: mipsel-linux-uclibc
+          CT_VERSION: 1.26.0
+        run: |
+          cd toolchain
+          TOPDIR=${CURDIR}
+          CT_DIR=${TOPDIR}/crosstool-ng-${CT_VERSION}
+          CT_URL=https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-${CT_VERSION}/crosstool-ng-${CT_VERSION}.tar.xz
+          
+          if [ ! -d ${CT_DIR} ]; then
+            echo "Downloading crosstool-ng-${CT_VERSION}..."
+            curl -fSsLo- ${CT_URL} | tar Jx
+          fi
+          
       - name: Patch case-sensitive checks for macOS
+        env:
+          CT_VERSION: 1.26.0
         run: |
           # Patch crosstool-NG.sh to bypass case-sensitivity checks
-          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-1.26.0/scripts/crosstool-NG.sh
-          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-1.26.0/scripts/crosstool-NG.sh
+          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
           
-      - name: Build
+      - name: Build toolchain
         env:
           CT_TARGET: mipsel-linux-uclibc
           CT_VERSION: 1.26.0
@@ -112,8 +129,19 @@ jobs:
           export CONFIG_SHELL=$BASH_PATH
           export BASH=$BASH_PATH
           
-          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
-          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          # Copy configs and build
+          CT_DIR=crosstool-ng-${CT_VERSION}
+          cp -r configs/${CT_TARGET} ${CT_DIR}/samples
+          (cd ${CT_DIR}; \
+            ${BASH_PATH} ./bootstrap && \
+            ${BASH_PATH} ./configure --enable-local && \
+            make && \
+            ./ct-ng ${CT_TARGET} && \
+            ./ct-ng build \
+          )
+          
+          # Package the toolchain
+          cd ${CT_DIR}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
       
       - uses: actions/upload-artifact@v4
@@ -138,13 +166,30 @@ jobs:
           # Add binutils to PATH
           echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
           
+      - name: Download and extract crosstool-ng
+        env:
+          CT_TARGET: mipsel-linux-musl
+          CT_VERSION: 1.26.0
+        run: |
+          cd toolchain
+          TOPDIR=${CURDIR}
+          CT_DIR=${TOPDIR}/crosstool-ng-${CT_VERSION}
+          CT_URL=https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-${CT_VERSION}/crosstool-ng-${CT_VERSION}.tar.xz
+          
+          if [ ! -d ${CT_DIR} ]; then
+            echo "Downloading crosstool-ng-${CT_VERSION}..."
+            curl -fSsLo- ${CT_URL} | tar Jx
+          fi
+          
       - name: Patch case-sensitive checks for macOS
+        env:
+          CT_VERSION: 1.26.0
         run: |
           # Patch crosstool-NG.sh to bypass case-sensitivity checks
-          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-1.26.0/scripts/crosstool-NG.sh
-          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-1.26.0/scripts/crosstool-NG.sh
+          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
           
-      - name: Build
+      - name: Build toolchain
         env:
           CT_TARGET: mipsel-linux-musl
           CT_VERSION: 1.26.0
@@ -161,8 +206,19 @@ jobs:
           export CONFIG_SHELL=$BASH_PATH
           export BASH=$BASH_PATH
           
-          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
-          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          # Copy configs and build
+          CT_DIR=crosstool-ng-${CT_VERSION}
+          cp -r configs/${CT_TARGET} ${CT_DIR}/samples
+          (cd ${CT_DIR}; \
+            ${BASH_PATH} ./bootstrap && \
+            ${BASH_PATH} ./configure --enable-local && \
+            make && \
+            ./ct-ng ${CT_TARGET} && \
+            ./ct-ng build \
+          )
+          
+          # Package the toolchain
+          cd ${CT_DIR}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
       
       - uses: actions/upload-artifact@v4
