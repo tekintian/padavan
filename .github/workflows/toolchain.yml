@@ -81,13 +81,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Prepare macOS Environment
+      - name: Prepare macOS Environment (Install all dependencies)
         run: |
-          # Install required packages
+          # Install all required and potentially needed packages
           brew update
-          brew install bash coreutils gnu-sed gawk git gettext libtool automake gmp mpfr libmpc zlib xz openssl@1.1 binutils
-          # Add binutils to PATH
+          brew install \
+            bash \
+            coreutils \
+            gnu-sed \
+            gawk \
+            git \
+            gettext \
+            libtool \
+            automake \
+            autoconf \
+            gmp \
+            mpfr \
+            libmpc \
+            zlib \
+            xz \
+            openssl@1.1 \
+            binutils \
+            texinfo \
+            bison \
+            flex \
+            help2man \
+            ncurses \
+            ccache \
+            pkg-config
+          
+          # Add GNU tools to PATH
+          echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/gettext/bin" >> $GITHUB_PATH
           echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/texinfo/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/flex/bin" >> $GITHUB_PATH
           
       - name: Download and extract crosstool-ng
         env:
@@ -123,7 +153,7 @@ jobs:
           # 移除了 CFLAGS 和 CXXFLAGS 的设置
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/opt/homebrew/opt/texinfo/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
           # Dynamically find bash path
           BASH_PATH=$(which bash)
           export CONFIG_SHELL=$BASH_PATH
@@ -158,13 +188,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Prepare macOS Environment
+      - name: Prepare macOS Environment (Install all dependencies)
         run: |
-          # Install required packages
+          # Install all required and potentially needed packages
           brew update
-          brew install bash coreutils gnu-sed gawk git gettext libtool automake gmp mpfr libmpc zlib xz openssl@1.1 binutils
-          # Add binutils to PATH
+          brew install \
+            bash \
+            coreutils \
+            gnu-sed \
+            gawk \
+            git \
+            gettext \
+            libtool \
+            automake \
+            autoconf \
+            gmp \
+            mpfr \
+            libmpc \
+            zlib \
+            xz \
+            openssl@1.1 \
+            binutils \
+            texinfo \
+            bison \
+            flex \
+            help2man \
+            ncurses \
+            ccache \
+            pkg-config
+          
+          # Add GNU tools to PATH
+          echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/gettext/bin" >> $GITHUB_PATH
           echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/texinfo/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/opt/flex/bin" >> $GITHUB_PATH
           
       - name: Download and extract crosstool-ng
         env:
@@ -200,7 +260,7 @@ jobs:
           # 移除了 CFLAGS 和 CXXFLAGS 的设置
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/opt/homebrew/opt/texinfo/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
           # Dynamically find bash path
           BASH_PATH=$(which bash)
           export CONFIG_SHELL=$BASH_PATH
