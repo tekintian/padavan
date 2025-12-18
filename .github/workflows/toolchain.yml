@@ -99,6 +99,8 @@ jobs:
           echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gettext/bin" >> $GITHUB_PATH
+          # Add binutils path to PATH (keg-only package)
+          echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
           # Add both possible bash paths to PATH
           echo "/usr/local/bin" >> $GITHUB_PATH
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
@@ -121,7 +123,7 @@ jobs:
           export CXXFLAGS="-mmacosx-version-min=10.15"
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
           # Dynamically find bash path
           BASH_PATH=$(which bash)
           export CONFIG_SHELL=$BASH_PATH
@@ -157,6 +159,8 @@ jobs:
           echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gettext/bin" >> $GITHUB_PATH
+          # Add binutils path to PATH (keg-only package)
+          echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
           # Add both possible bash paths to PATH
           echo "/usr/local/bin" >> $GITHUB_PATH
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
@@ -179,7 +183,7 @@ jobs:
           export CXXFLAGS="-mmacosx-version-min=10.15"
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
           # Dynamically find bash path
           BASH_PATH=$(which bash)
           export CONFIG_SHELL=$BASH_PATH
