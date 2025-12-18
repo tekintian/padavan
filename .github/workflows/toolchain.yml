@@ -138,9 +138,9 @@ jobs:
         env:
           CT_VERSION: 1.26.0
         run: |
-          # Patch crosstool-NG.sh to bypass case-sensitivity checks
-          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+           # Patch crosstool-NG.sh to bypass case-sensitivity checks
+           sed -i '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+           sed -i '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
           
       - name: Build toolchain
         env:
