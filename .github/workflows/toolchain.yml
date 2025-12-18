@@ -19,48 +19,78 @@ env:
   CT_VERSION: 1.26.0
 
 jobs:
-  build:
-    name: build
-    runs-on: ${{ matrix.os }}
+  # Linux 平台作业
+  build-linux-uclibc:
+    name: Build Linux uClibc Toolchain
+    runs-on: ubuntu-22.04
     env:
       TZ: Asia/Shanghai
-    strategy:
-      matrix:
-        include:
-          # Linux平台
-          - os: ubuntu-22.04
-            target: mipsel-linux-uclibc
-            platform: linux
-            should_build: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
-          - os: ubuntu-22.04
-            target: mipsel-linux-musl
-            platform: linux
-            should_build: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
-          # macOS平台
-          - os: macos-14
-            target: mipsel-linux-uclibc
-            platform: darwin
-            should_build: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
-          - os: macos-14
-            target: mipsel-linux-musl
-            platform: darwin
-            should_build: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
+    # 只在选择 Linux 或 all 时运行
+    if: github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all'
     steps:
       - uses: actions/checkout@v4
-      # 根据选择的平台决定是否跳过此构建
-      - name: Check if should build
-        if: ${{ matrix.should_build == false }}
-        run: echo "Skipping build for ${{ matrix.target }} on ${{ matrix.os }}" && exit 0
       - name: Prepare (Ubuntu)
-        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt update
           sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
             fakeroot kmod cpio git python3-docutils gettext automake autopoint \
             texinfo build-essential help2man pkg-config zlib1g-dev libgmp3-dev \
             libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
+      - name: Build
+        run: |
+          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
+          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
+        env:
+          CT_TARGET: mipsel-linux-uclibc
+          PLATFORM: linux
+        working-directory: toolchain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-mipsel-linux-uclibc-linux
+          path: toolchain/mipsel-linux-uclibc-linux-v${{ env.CT_VERSION }}.tar.xz
+
+  build-linux-musl:
+    name: Build Linux musl Toolchain
+    runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
+    # 只在选择 Linux 或 all 时运行
+    if: github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare (Ubuntu)
+        run: |
+          sudo apt update
+          sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
+            fakeroot kmod cpio git python3-docutils gettext automake autopoint \
+            texinfo build-essential help2man pkg-config zlib1g-dev libgmp3-dev \
+            libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
+      - name: Build
+        run: |
+          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
+          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
+        env:
+          CT_TARGET: mipsel-linux-musl
+          PLATFORM: linux
+        working-directory: toolchain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-mipsel-linux-musl-linux
+          path: toolchain/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
+
+  # macOS 平台作业
+  build-macos-uclibc:
+    name: Build macOS uClibc Toolchain
+    runs-on: macos-14
+    env:
+      TZ: Asia/Shanghai
+    # 只在选择 macOS 或 all 时运行
+    if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
+    steps:
+      - uses: actions/checkout@v4
       - name: Prepare (macOS)
-        if: matrix.os == 'macos-14'
         run: |
           # Install required packages via Homebrew
           brew install coreutils gnu-sed gawk flex bison gettext texinfo help2man \
@@ -73,7 +103,6 @@ jobs:
           echo "/usr/local/bin" >> $GITHUB_PATH
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
       - name: Set macOS Target Compatibility
-        if: matrix.os == 'macos-14'
         run: |
           # Set deployment target for macOS 10.15 compatibility
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
@@ -86,34 +115,95 @@ jobs:
           echo "BASH=$BASH_PATH" >> $GITHUB_ENV
       - name: Build
         run: |
-          # Configure for macOS 10.15 compatibility if on Darwin
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            export MACOSX_DEPLOYMENT_TARGET=10.15
-            export CFLAGS="-mmacosx-version-min=10.15"
-            export CXXFLAGS="-mmacosx-version-min=10.15"
-            export LDFLAGS="-mmacosx-version-min=10.15"
-            # Ensure we use GNU tools and bash 5
-            export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
-            # Dynamically find bash path
-            BASH_PATH=$(which bash)
-            export CONFIG_SHELL=$BASH_PATH
-            export BASH=$BASH_PATH
-          fi
+          # Configure for macOS 10.15 compatibility
+          export MACOSX_DEPLOYMENT_TARGET=10.15
+          export CFLAGS="-mmacosx-version-min=10.15"
+          export CXXFLAGS="-mmacosx-version-min=10.15"
+          export LDFLAGS="-mmacosx-version-min=10.15"
+          # Ensure we use GNU tools and bash 5
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          # Dynamically find bash path
+          BASH_PATH=$(which bash)
+          export CONFIG_SHELL=$BASH_PATH
+          export BASH=$BASH_PATH
           
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
         env:
-          CT_TARGET: ${{ matrix.target }}
-          PLATFORM: ${{ matrix.platform }}
+          CT_TARGET: mipsel-linux-uclibc
+          PLATFORM: darwin
         working-directory: toolchain
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain-${{ matrix.target }}-${{ matrix.platform }}
-          path: toolchain/${{ matrix.target }}-${{ matrix.platform }}-v${{ env.CT_VERSION }}.tar.xz
+          name: toolchain-mipsel-linux-uclibc-darwin
+          path: toolchain/mipsel-linux-uclibc-darwin-v${{ env.CT_VERSION }}.tar.xz
+
+  build-macos-musl:
+    name: Build macOS musl Toolchain
+    runs-on: macos-14
+    env:
+      TZ: Asia/Shanghai
+    # 只在选择 macOS 或 all 时运行
+    if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare (macOS)
+        run: |
+          # Install required packages via Homebrew
+          brew install coreutils gnu-sed gawk flex bison gettext texinfo help2man \
+            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz bash binutils
+          # Set GNU tool paths
+          echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "/usr/local/opt/gettext/bin" >> $GITHUB_PATH
+          # Add both possible bash paths to PATH
+          echo "/usr/local/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+      - name: Set macOS Target Compatibility
+        run: |
+          # Set deployment target for macOS 10.15 compatibility
+          echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+          echo "CFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          echo "CXXFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          echo "LDFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          # Set bash path for crosstool-ng (dynamically find bash)
+          BASH_PATH=$(which bash)
+          echo "CONFIG_SHELL=$BASH_PATH" >> $GITHUB_ENV
+          echo "BASH=$BASH_PATH" >> $GITHUB_ENV
+      - name: Build
+        run: |
+          # Configure for macOS 10.15 compatibility
+          export MACOSX_DEPLOYMENT_TARGET=10.15
+          export CFLAGS="-mmacosx-version-min=10.15"
+          export CXXFLAGS="-mmacosx-version-min=10.15"
+          export LDFLAGS="-mmacosx-version-min=10.15"
+          # Ensure we use GNU tools and bash 5
+          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+          # Dynamically find bash path
+          BASH_PATH=$(which bash)
+          export CONFIG_SHELL=$BASH_PATH
+          export BASH=$BASH_PATH
+          
+          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
+          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
+        env:
+          CT_TARGET: mipsel-linux-musl
+          PLATFORM: darwin
+        working-directory: toolchain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-mipsel-linux-musl-darwin
+          path: toolchain/mipsel-linux-musl-darwin-v${{ env.CT_VERSION }}.tar.xz
+
   release:
     name: Release
-    needs: build
+    needs: 
+      - build-linux-uclibc
+      - build-linux-musl
+      - build-macos-uclibc
+      - build-macos-musl
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
     steps:
