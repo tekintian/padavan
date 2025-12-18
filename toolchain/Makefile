@@ -30,14 +30,14 @@ build:
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
-		$(BASH) ./ct-ng $(CT_TARGET) && \
-		$(BASH) ./ct-ng build \
+		./ct-ng $(CT_TARGET) && \
+		./ct-ng build \
 	)
 
 clean:
 	@if [ -d $(CT_DIR) ]; then \
 		cd $(CT_DIR); \
-		if [ -f ct-ng ]; then $(BASH) ./ct-ng distclean; fi; \
+		if [ -f ct-ng ]; then ./ct-ng distclean; fi; \
 		if [ -f Makefile ]; then make distclean; fi; \
 	fi
 	@if [ -d $(CT_PREFIX) ]; then rm -rf $(CT_PREFIX); fi
