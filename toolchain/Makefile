@@ -7,6 +7,9 @@ CT_URL        := https://github.com/crosstool-ng/crosstool-ng/releases/download/
 TOOLCHAIN_URL := https://github.com/tekintian/padavan/releases/download/toolchain/$(CT_TARGET).tar.xz
 CT_LOCAL_FILE := $(TOPDIR)/files/crosstool-ng-$(CT_VERSION).tar.xz
 
+# 使用环境变量中的bash路径，默认使用/bin/bash
+BASH := $(or $(BASH),/bin/bash)
+
 all: build
 
 build:
@@ -24,17 +27,17 @@ build:
 	@echo "Building toolchain..."
 	cp -r $(TOPDIR)/configs/$(CT_TARGET) $(CT_DIR)/samples
 	@(cd $(CT_DIR); \
-		./bootstrap && \
-		./configure --enable-local && \
+		$(BASH) ./bootstrap && \
+		$(BASH) ./configure --enable-local && \
 		make && \
-		./ct-ng $(CT_TARGET) && \
-		./ct-ng build \
+		$(BASH) ./ct-ng $(CT_TARGET) && \
+		$(BASH) ./ct-ng build \
 	)
 
 clean:
 	@if [ -d $(CT_DIR) ]; then \
 		cd $(CT_DIR); \
-		if [ -f ct-ng ]; then ./ct-ng distclean; fi; \
+		if [ -f ct-ng ]; then $(BASH) ./ct-ng distclean; fi; \
 		if [ -f Makefile ]; then make distclean; fi; \
 	fi
 	@if [ -d $(CT_PREFIX) ]; then rm -rf $(CT_PREFIX); fi

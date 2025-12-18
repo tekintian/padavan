@@ -64,11 +64,13 @@ jobs:
         run: |
           # Install required packages via Homebrew
           brew install coreutils gnu-sed gawk flex bison gettext texinfo help2man \
-            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz
+            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz bash
           # Set GNU tool paths
           echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gettext/bin" >> $GITHUB_PATH
+          # Add bash to PATH
+          echo "/usr/local/bin" >> $GITHUB_PATH
       - name: Set macOS Target Compatibility
         if: matrix.os == 'macos-14'
         run: |
@@ -77,6 +79,9 @@ jobs:
           echo "CFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
           echo "CXXFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
           echo "LDFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          # Set bash path for crosstool-ng
+          echo "CONFIG_SHELL=/usr/local/bin/bash" >> $GITHUB_ENV
+          echo "BASH=/usr/local/bin/bash" >> $GITHUB_ENV
       - name: Build
         run: |
           # Configure for macOS 10.15 compatibility if on Darwin
@@ -85,8 +90,10 @@ jobs:
             export CFLAGS="-mmacosx-version-min=10.15"
             export CXXFLAGS="-mmacosx-version-min=10.15"
             export LDFLAGS="-mmacosx-version-min=10.15"
-            # Ensure we use GNU tools
-            export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:$PATH"
+            # Ensure we use GNU tools and bash 5
+            export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/usr/local/bin:$PATH"
+            export CONFIG_SHELL=/usr/local/bin/bash
+            export BASH=/usr/local/bin/bash
           fi
           
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
