@@ -108,8 +108,7 @@ jobs:
         run: |
           # Set deployment target for macOS 10.15 compatibility
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
-          echo "CFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
-          echo "CXXFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          # 移除了 CFLAGS 和 CXXFLAGS 的设置
           echo "LDFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
           # Set bash path for crosstool-ng (dynamically find bash)
           BASH_PATH=$(which bash)
@@ -119,8 +118,7 @@ jobs:
         run: |
           # Configure for macOS 10.15 compatibility
           export MACOSX_DEPLOYMENT_TARGET=10.15
-          export CFLAGS="-mmacosx-version-min=10.15"
-          export CXXFLAGS="-mmacosx-version-min=10.15"
+          # 移除了 CFLAGS 和 CXXFLAGS 的设置
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
           export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
@@ -168,8 +166,7 @@ jobs:
         run: |
           # Set deployment target for macOS 10.15 compatibility
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
-          echo "CFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
-          echo "CXXFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
+          # 移除了 CFLAGS 和 CXXFLAGS 的设置
           echo "LDFLAGS=-mmacosx-version-min=10.15" >> $GITHUB_ENV
           # Set bash path for crosstool-ng (dynamically find bash)
           BASH_PATH=$(which bash)
@@ -179,8 +176,7 @@ jobs:
         run: |
           # Configure for macOS 10.15 compatibility
           export MACOSX_DEPLOYMENT_TARGET=10.15
-          export CFLAGS="-mmacosx-version-min=10.15"
-          export CXXFLAGS="-mmacosx-version-min=10.15"
+          # 移除了 CFLAGS 和 CXXFLAGS 的设置
           export LDFLAGS="-mmacosx-version-min=10.15"
           # Ensure we use GNU tools and bash 5
           export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
