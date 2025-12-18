@@ -64,7 +64,7 @@ jobs:
         run: |
           # Install required packages via Homebrew
           brew install coreutils gnu-sed gawk flex bison gettext texinfo help2man \
-            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz bash
+            pkg-config gmp libmpc mpfr ncurses libtool autoconf automake wget curl xz bash binutils
           # Set GNU tool paths
           echo "/usr/local/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
           echo "/usr/local/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
