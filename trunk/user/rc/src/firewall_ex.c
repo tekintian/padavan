@@ -764,27 +764,33 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 				}
 			}
 			
-			// 第二轮：为每个MAC生成规则（先时间规则，最后DROP规则）
+			// 第二轮：为每个MAC生成规则（先DHCP放行规则，再时间规则，最后DROP规则）
 			for (int j = 0; j < mac_count; j++) {
 				mac_entry_t *entry = &mac_entries[j];
-				
-				logmessage("MAC Filter", "DEBUG: Processing MAC %s with %d time rules", 
+
+				logmessage("MAC Filter", "DEBUG: Processing MAC %s with %d time rules",
 						   entry->mac, entry->time_rule_count);
-				
+
+				// 🔥 修复：在拒绝模式下，首先放行DHCP流量（UDP端口67/68）
+				// 这样即使在拒绝时间段内，设备也能获取IP地址
+				fprintf(fp, "-A %s -m mac --mac-source %s -p udp --dport 67:68 -j RETURN\n",
+						dtype, entry->mac);
+				logmessage("MAC Filter", "DEBUG: Added DHCP allow rule for MAC %s", entry->mac);
+
 				// 生成所有时间允许规则
 				for (int r = 0; r < entry->time_rule_count; r++) {
-					fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n", 
+					fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n",
 							dtype, entry->mac, entry->time_rules[r]);
-					
-					logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s", 
+
+					logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s",
 							   entry->mac, entry->time_rules[r]);
 				}
-				
+
 				// 最后添加DROP规则（确保是该MAC的最后一条规则）
 				if (entry->time_rule_count > 0) {
-					fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n", 
+					fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n",
 							dtype, entry->mac, logdrop);
-					
+
 					logmessage("MAC Filter", "DEBUG: Added DROP rule for MAC %s", entry->mac);
 				}
 			}
