@@ -30,7 +30,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev gawk git ccache bison flex texinfo help2man libtool automake libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev liblzma-dev libssl-dev
-      
+          # Verify libtool installation
+          which libtool && libtool --version || echo "libtool not found in PATH"
+
       - name: Build
         env:
           CT_TARGET: mipsel-linux-uclibc
@@ -59,7 +61,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev gawk git ccache bison flex texinfo help2man libtool automake libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev liblzma-dev libssl-dev
-      
+          # Verify libtool installation
+          which libtool && libtool --version || echo "libtool not found in PATH"
+
       - name: Build
         env:
           CT_TARGET: mipsel-linux-musl
@@ -203,11 +207,9 @@ jobs:
         run: |
           cd toolchain
 
-          # Simplified flags for macOS compatibility
-          # Don't force minimum version to avoid linking issues
-          export CFLAGS="-O2"
-          export CXXFLAGS="-O2"
-          export LDFLAGS=""
+          # IMPORTANT: Do NOT set CFLAGS, CXXFLAGS, or LDFLAGS
+          # crosstool-ng will handle these internally and setting them will cause build failure
+          # See: https://crosstool-ng.github.io/docs/Troubleshooting.html
 
           # Construct PATH with GNU tools
           export PATH="${HOMEBREW_PREFIX}/opt/coreutils/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gnu-sed/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gettext/bin:${HOMEBREW_PREFIX}/opt/binutils/bin:${HOMEBREW_PREFIX}/opt/texinfo/bin:${HOMEBREW_PREFIX}/opt/bison/bin:${HOMEBREW_PREFIX}/opt/flex/bin:${HOMEBREW_PREFIX}/bin:/usr/local/bin:$PATH"
