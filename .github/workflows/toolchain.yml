@@ -156,9 +156,11 @@ jobs:
           CT_VERSION: 1.26.0
         run: |
           # Patch crosstool-NG.sh to bypass case-sensitivity checks
-          # Use -i '' for macOS compatibility
-          sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+          # Use -i.bak for macOS compatibility
+          sed -i.bak '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+          sed -i.bak '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
+          # Clean up backup files
+          rm -f toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh.bak
 
       - name: Set architecture-specific environment
         env:
