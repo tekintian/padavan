@@ -51,6 +51,7 @@ jobs:
             fi
           done
 
+          # Build following the same logic as Makefile
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
@@ -301,11 +302,6 @@ jobs:
             - **mipsel-linux-uclibc-x86_64-darwin**: uClibc-based toolchain for macOS (Intel)
             - **mipsel-linux-musl-x86_64-darwin**: musl-based toolchain for macOS (Intel)
 
-            ### Apple Silicon (arm64)
-            Minimum macOS version: 11.0 (Big Sur)
-            - **mipsel-linux-uclibc-arm64-darwin**: uClibc-based toolchain for macOS (Apple Silicon)
-            - **mipsel-linux-musl-arm64-darwin**: musl-based toolchain for macOS (Apple Silicon)
-
             ## Usage
 
             Extract the toolchain to `/opt/toolchain`:
@@ -319,8 +315,6 @@ jobs:
             artifacts/toolchain-mipsel-linux-musl-linux/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
             artifacts/toolchain-mipsel-linux-uclibc-x86_64-darwin/mipsel-linux-uclibc-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
             artifacts/toolchain-mipsel-linux-musl-x86_64-darwin/mipsel-linux-musl-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-uclibc-arm64-darwin/mipsel-linux-uclibc-arm64-darwin-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-musl-arm64-darwin/mipsel-linux-musl-arm64-darwin-v${{ env.CT_VERSION }}.tar.xz
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
