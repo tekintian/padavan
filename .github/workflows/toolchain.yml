@@ -39,12 +39,12 @@ jobs:
           cd toolchain
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-linux-v${CT_VERSION}.tar.xz *
+          tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
       
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain-mipsel-linux-uclibc-linux
-          path: toolchain/mipsel-linux-uclibc-linux-v${{ env.CT_VERSION }}.tar.xz
+          name: toolchain-mipsel-linux-uclibc-linux-x86_64
+          path: toolchain/mipsel-linux-uclibc-linux-x86_64-v${{ env.CT_VERSION }}.tar.xz
 
   build-linux-musl:
     name: Build Linux musl Toolchain
@@ -67,13 +67,22 @@ jobs:
         run: |
           cd toolchain
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
+          # Install missing sys/queue.h for musl
+          if [ ! -f crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h ]; then
+            echo "Installing sys/queue.h for musl..."
+            mkdir -p crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/
+            cp files/musl/sys/queue.h crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h || \
+            curl -fsSL -o crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h \
+              "https://github.com/tekintian/padavan/raw/refs/heads/main/toolchain/files/musl/sys/queue.h" || \
+              echo "Warning: Failed to install sys/queue.h, but continuing..."
+          fi
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-linux-v${CT_VERSION}.tar.xz *
+          tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
       
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain-mipsel-linux-musl-linux
-          path: toolchain/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
+          name: toolchain-mipsel-linux-musl-linux-x86_64
+          path: toolchain/mipsel-linux-musl-linux-x86_64-v${{ env.CT_VERSION }}.tar.xz
 
   build-macos:
     name: Build macOS Toolchain (${{ matrix.arch }}, ${{ matrix.libc }})
@@ -172,11 +181,13 @@ jobs:
             echo "Setting up for Intel (x86_64) architecture"
             echo "ARCH_TARGET=x86_64" >> $GITHUB_ENV
             echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+            echo "HOST_ARCH=x86_64" >> $GITHUB_ENV
             echo "Minimum macOS version: 10.15 (Catalina)"
           else
             echo "Setting up for Apple Silicon (arm64) architecture"
             echo "ARCH_TARGET=arm64" >> $GITHUB_ENV
             echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+            echo "HOST_ARCH=arm64" >> $GITHUB_ENV
             echo "Minimum macOS version: 11.0 (Big Sur)"
           fi
 
@@ -188,12 +199,15 @@ jobs:
           HOMEBREW_PREFIX: ${{ env.HOMEBREW_PREFIX }}
           ARCH_TARGET: ${{ env.ARCH_TARGET }}
           MACOSX_DEPLOYMENT_TARGET: ${{ env.MACOSX_DEPLOYMENT_TARGET }}
+          HOST_ARCH: ${{ env.HOST_ARCH }}
         run: |
           cd toolchain
 
-          # Set deployment target and linker flags
-          export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}
-          export LDFLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+          # Simplified flags for macOS compatibility
+          # Don't force minimum version to avoid linking issues
+          export CFLAGS="-O2"
+          export CXXFLAGS="-O2"
+          export LDFLAGS=""
 
           # Construct PATH with GNU tools
           export PATH="${HOMEBREW_PREFIX}/opt/coreutils/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gnu-sed/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gettext/bin:${HOMEBREW_PREFIX}/opt/binutils/bin:${HOMEBREW_PREFIX}/opt/texinfo/bin:${HOMEBREW_PREFIX}/opt/bison/bin:${HOMEBREW_PREFIX}/opt/flex/bin:${HOMEBREW_PREFIX}/bin:/usr/local/bin:$PATH"
