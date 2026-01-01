@@ -51,6 +51,19 @@ jobs:
             fi
           done
 
+          # Pre-download uClibc-ng to avoid network issues
+          echo "Pre-downloading uClibc-ng..."
+          mkdir -p .build/tarballs
+          UCLIBC_VERSION="1.0.43"
+          if [ ! -f .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz ]; then
+            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
+              "https://downloads.uclibc-ng.org/releases/v${UCLIBC_VERSION}/uClibc-ng-${UCLIBC_VERSION}.tar.xz" || \
+            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
+              "https://fossies.org/linux/misc/uClibc-ng-${UCLIBC_VERSION}.tar.xz" || \
+            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
+              "https://sourceforge.net/projects/uclibc-ng/files/uClibc-ng-${UCLIBC_VERSION}/uClibc-ng-${UCLIBC_VERSION}.tar.xz/download"
+          fi
+
           # Build following the same logic as Makefile
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
