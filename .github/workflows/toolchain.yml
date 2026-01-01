@@ -72,125 +72,22 @@ jobs:
           name: toolchain-mipsel-linux-musl-linux
           path: toolchain/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
 
-  build-macos-uclibc:
-    name: Build macOS uClibc Toolchain
+  build-macos:
+    name: Build macOS Toolchain (${{ matrix.arch }}, ${{ matrix.libc }})
     runs-on: macos-14
     env:
       TZ: Asia/Shanghai
     if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+        libc: [uclibc, musl]
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Prepare macOS Environment (Install all dependencies)
-        run: |
-          # Install all required and potentially needed packages
-          brew update
-          brew install \
-            bash \
-            coreutils \
-            gnu-sed \
-            gawk \
-            git \
-            gettext \
-            libtool \
-            automake \
-            autoconf \
-            gmp \
-            mpfr \
-            libmpc \
-            zlib \
-            xz \
-            openssl@1.1 \
-            binutils \
-            texinfo \
-            bison \
-            flex \
-            help2man \
-            ncurses \
-            ccache \
-            pkg-config
-          
-          # Add GNU tools to PATH
-          echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/gettext/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/texinfo/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/flex/bin" >> $GITHUB_PATH
-          
-      - name: Download and extract crosstool-ng
-        env:
-          CT_TARGET: mipsel-linux-uclibc
-          CT_VERSION: 1.26.0
-        run: |
-          cd toolchain
-          TOPDIR=${CURDIR}
-          CT_DIR=${TOPDIR}/crosstool-ng-${CT_VERSION}
-          CT_URL=https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-${CT_VERSION}/crosstool-ng-${CT_VERSION}.tar.xz
-          
-          if [ ! -d ${CT_DIR} ]; then
-            echo "Downloading crosstool-ng-${CT_VERSION}..."
-            curl -fSsLo- ${CT_URL} | tar Jx
-          fi
-          
-      - name: Patch case-sensitive checks for macOS
-        env:
-          CT_VERSION: 1.26.0
-        run: |
-           # Patch crosstool-NG.sh to bypass case-sensitivity checks
-           sed -i '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-           sed -i '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          
-      - name: Build toolchain
-        env:
-          CT_TARGET: mipsel-linux-uclibc
-          CT_VERSION: 1.26.0
-          PLATFORM: darwin
-        run: |
-          cd toolchain
-          export MACOSX_DEPLOYMENT_TARGET=10.15
-          # 移除了 CFLAGS 和 CXXFLAGS 的设置
-          export LDFLAGS="-mmacosx-version-min=10.15"
-          # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/opt/homebrew/opt/texinfo/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
-          # Dynamically find bash path
-          BASH_PATH=$(which bash)
-          export CONFIG_SHELL=$BASH_PATH
-          export BASH=$BASH_PATH
-          
-          # Copy configs and build
-          CT_DIR=crosstool-ng-${CT_VERSION}
-          cp -r configs/${CT_TARGET} ${CT_DIR}/samples
-          (cd ${CT_DIR}; \
-            ${BASH_PATH} ./bootstrap && \
-            ${BASH_PATH} ./configure --enable-local && \
-            make && \
-            ./ct-ng ${CT_TARGET} && \
-            ./ct-ng build \
-          )
-          
-          # Package the toolchain
-          cd ${CT_DIR}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-mipsel-linux-uclibc-darwin
-          path: toolchain/mipsel-linux-uclibc-darwin-v${{ env.CT_VERSION }}.tar.xz
 
-  build-macos-musl:
-    name: Build macOS musl Toolchain
-    runs-on: macos-14
-    env:
-      TZ: Asia/Shanghai
-    if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Prepare macOS Environment (Install all dependencies)
+      - name: Prepare macOS Environment (Install dependencies)
         run: |
-          # Install all required and potentially needed packages
+          # Install all required packages
           brew update
           brew install \
             bash \
@@ -216,59 +113,95 @@ jobs:
             ncurses \
             ccache \
             pkg-config
-          
+
+          # Detect Homebrew prefix and add GNU tools to PATH
+          if [[ "$(uname -m)" == "arm64" ]]; then
+            HOMEBREW_PREFIX="/opt/homebrew"
+          else
+            HOMEBREW_PREFIX="/usr/local"
+          fi
+
           # Add GNU tools to PATH
-          echo "/opt/homebrew/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/gettext/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/texinfo/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/bison/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/opt/flex/bin" >> $GITHUB_PATH
-          
+          echo "${HOMEBREW_PREFIX}/opt/coreutils/libexec/gnubin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/gnu-sed/libexec/gnubin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/gettext/bin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/binutils/bin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/texinfo/bin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/bison/bin" >> $GITHUB_PATH
+          echo "${HOMEBREW_PREFIX}/opt/flex/bin" >> $GITHUB_PATH
+
+          # Save Homebrew prefix for later steps
+          echo "HOMEBREW_PREFIX=${HOMEBREW_PREFIX}" >> $GITHUB_ENV
+
       - name: Download and extract crosstool-ng
         env:
-          CT_TARGET: mipsel-linux-musl
+          CT_TARGET: mipsel-linux-${{ matrix.libc }}
           CT_VERSION: 1.26.0
         run: |
           cd toolchain
           TOPDIR=${CURDIR}
           CT_DIR=${TOPDIR}/crosstool-ng-${CT_VERSION}
           CT_URL=https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-${CT_VERSION}/crosstool-ng-${CT_VERSION}.tar.xz
-          
+
           if [ ! -d ${CT_DIR} ]; then
             echo "Downloading crosstool-ng-${CT_VERSION}..."
             curl -fSsLo- ${CT_URL} | tar Jx
           fi
-          
+
       - name: Patch case-sensitive checks for macOS
         env:
           CT_VERSION: 1.26.0
         run: |
           # Patch crosstool-NG.sh to bypass case-sensitivity checks
+          # Use -i '' for macOS compatibility
           sed -i '' '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
           sed -i '' '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          
+
+      - name: Set architecture-specific environment
+        env:
+          CT_TARGET: mipsel-linux-${{ matrix.libc }}
+          CT_VERSION: 1.26.0
+        run: |
+          # Set architecture-specific deployment target
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            echo "Setting up for Intel (x86_64) architecture"
+            echo "ARCH_TARGET=x86_64" >> $GITHUB_ENV
+            echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+            echo "Minimum macOS version: 10.15 (Catalina)"
+          else
+            echo "Setting up for Apple Silicon (arm64) architecture"
+            echo "ARCH_TARGET=arm64" >> $GITHUB_ENV
+            echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+            echo "Minimum macOS version: 11.0 (Big Sur)"
+          fi
+
       - name: Build toolchain
         env:
-          CT_TARGET: mipsel-linux-musl
+          CT_TARGET: mipsel-linux-${{ matrix.libc }}
           CT_VERSION: 1.26.0
           PLATFORM: darwin
+          HOMEBREW_PREFIX: ${{ env.HOMEBREW_PREFIX }}
+          ARCH_TARGET: ${{ env.ARCH_TARGET }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ env.MACOSX_DEPLOYMENT_TARGET }}
         run: |
           cd toolchain
-          export MACOSX_DEPLOYMENT_TARGET=10.15
-          # 移除了 CFLAGS 和 CXXFLAGS 的设置
-          export LDFLAGS="-mmacosx-version-min=10.15"
-          # Ensure we use GNU tools and bash 5
-          export PATH="/usr/local/opt/coreutils/libexec/gnubin:/usr/local/opt/gnu-sed/libexec/gnubin:/usr/local/opt/gettext/bin:/opt/homebrew/opt/binutils/bin:/opt/homebrew/opt/texinfo/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
-          # Dynamically find bash path
+
+          # Set deployment target and linker flags
+          export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}
+          export LDFLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+
+          # Construct PATH with GNU tools
+          export PATH="${HOMEBREW_PREFIX}/opt/coreutils/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gnu-sed/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gettext/bin:${HOMEBREW_PREFIX}/opt/binutils/bin:${HOMEBREW_PREFIX}/opt/texinfo/bin:${HOMEBREW_PREFIX}/opt/bison/bin:${HOMEBREW_PREFIX}/opt/flex/bin:${HOMEBREW_PREFIX}/bin:/usr/local/bin:$PATH"
+
+          # Find bash path
           BASH_PATH=$(which bash)
           export CONFIG_SHELL=$BASH_PATH
           export BASH=$BASH_PATH
-          
+
           # Copy configs and build
           CT_DIR=crosstool-ng-${CT_VERSION}
           cp -r configs/${CT_TARGET} ${CT_DIR}/samples
+
           (cd ${CT_DIR}; \
             ${BASH_PATH} ./bootstrap && \
             ${BASH_PATH} ./configure --enable-local && \
@@ -276,42 +209,73 @@ jobs:
             ./ct-ng ${CT_TARGET} && \
             ./ct-ng build \
           )
-          
-          # Package the toolchain
+
+          # Package the toolchain with architecture in filename
           cd ${CT_DIR}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-${PLATFORM}-v${CT_VERSION}.tar.xz *
-      
+          tar cJf ../../${CT_TARGET}-${ARCH_TARGET}-darwin-v${CT_VERSION}.tar.xz *
+
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain-mipsel-linux-musl-darwin
-          path: toolchain/mipsel-linux-musl-darwin-v${{ env.CT_VERSION }}.tar.xz
+          name: toolchain-mipsel-linux-${{ matrix.libc }}-${{ matrix.arch }}-darwin
+          path: toolchain/mipsel-linux-${{ matrix.libc }}-${{ matrix.arch }}-darwin-v${{ env.CT_VERSION }}.tar.xz
 
   release:
     name: Release Toolchain
     runs-on: ubuntu-22.04
-    needs: [build-linux-uclibc, build-linux-musl, build-macos-uclibc, build-macos-musl]
+    needs: [build-linux-uclibc, build-linux-musl, build-macos]
     if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'macos'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      
+
       - name: List artifacts
         run: ls -la artifacts/
-      
+
       - name: Create release
+        env:
+          CT_VERSION: 1.26.0
         uses: ncipollo/release-action@v1
         with:
           tag: v${{ env.CT_VERSION }}
           name: Toolchain Release v${{ env.CT_VERSION }}
+          body: |
+            # Toolchain Release v${{ env.CT_VERSION }}
+
+            ## Linux Toolchains
+            - **mipsel-linux-uclibc-linux**: uClibc-based toolchain for Linux (Intel/AMD x86_64)
+            - **mipsel-linux-musl-linux**: musl-based toolchain for Linux (Intel/AMD x86_64)
+
+            ## macOS Toolchains
+
+            ### Intel (x86_64)
+            Minimum macOS version: 10.15 (Catalina)
+            - **mipsel-linux-uclibc-x86_64-darwin**: uClibc-based toolchain for macOS (Intel)
+            - **mipsel-linux-musl-x86_64-darwin**: musl-based toolchain for macOS (Intel)
+
+            ### Apple Silicon (arm64)
+            Minimum macOS version: 11.0 (Big Sur)
+            - **mipsel-linux-uclibc-arm64-darwin**: uClibc-based toolchain for macOS (Apple Silicon)
+            - **mipsel-linux-musl-arm64-darwin**: musl-based toolchain for macOS (Apple Silicon)
+
+            ## Usage
+
+            Extract the toolchain to `/opt/toolchain`:
+            ```bash
+            sudo mkdir -p /opt/toolchain
+            sudo tar xJf toolchain-*.tar.xz -C /opt/toolchain
+            export PATH=/opt/toolchain/bin:$PATH
+            ```
           artifacts: |
             artifacts/toolchain-mipsel-linux-uclibc-linux/mipsel-linux-uclibc-linux-v${{ env.CT_VERSION }}.tar.xz
             artifacts/toolchain-mipsel-linux-musl-linux/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-uclibc-darwin/mipsel-linux-uclibc-darwin-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-musl-darwin/mipsel-linux-musl-darwin-v${{ env.CT_VERSION }}.tar.xz
+            artifacts/toolchain-mipsel-linux-uclibc-x86_64-darwin/mipsel-linux-uclibc-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
+            artifacts/toolchain-mipsel-linux-musl-x86_64-darwin/mipsel-linux-musl-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
+            artifacts/toolchain-mipsel-linux-uclibc-arm64-darwin/mipsel-linux-uclibc-arm64-darwin-v${{ env.CT_VERSION }}.tar.xz
+            artifacts/toolchain-mipsel-linux-musl-arm64-darwin/mipsel-linux-musl-arm64-darwin-v${{ env.CT_VERSION }}.tar.xz
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
