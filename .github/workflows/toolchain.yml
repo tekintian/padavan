@@ -39,6 +39,18 @@ jobs:
           CT_VERSION: 1.26.0
         run: |
           cd toolchain
+
+          # Update config.guess and config.sub for modern Ubuntu compatibility
+          echo "Updating config.guess and config.sub..."
+          for dir in crosstool-ng-${CT_VERSION} crosstool-ng-${CT_VERSION}/config; do
+            if [ -f ${dir}/config.guess ]; then
+              curl -fsSL -o ${dir}/config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess'
+            fi
+            if [ -f ${dir}/config.sub ]; then
+              curl -fsSL -o ${dir}/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'
+            fi
+          done
+
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
@@ -70,6 +82,18 @@ jobs:
           CT_VERSION: 1.26.0
         run: |
           cd toolchain
+
+          # Update config.guess and config.sub for modern Ubuntu compatibility
+          echo "Updating config.guess and config.sub..."
+          for dir in crosstool-ng-${CT_VERSION} crosstool-ng-${CT_VERSION}/config; do
+            if [ -f ${dir}/config.guess ]; then
+              curl -fsSL -o ${dir}/config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess'
+            fi
+            if [ -f ${dir}/config.sub ]; then
+              curl -fsSL -o ${dir}/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'
+            fi
+          done
+
           make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           # Install missing sys/queue.h for musl
           if [ ! -f crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h ]; then
@@ -96,7 +120,7 @@ jobs:
     if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
     strategy:
       matrix:
-        arch: [x86_64, arm64]
+        arch: [x86_64]
         libc: [uclibc, musl]
     steps:
       - uses: actions/checkout@v4
