@@ -45,6 +45,17 @@
 - 清晰列出最低 macOS 版本要求
 - 提供安装和使用示例
 
+### 7. 修复 GitHub 权限问题
+- **问题**：`rickstaa/action-create-tag@v1` 推送 tag 时报错：
+  ```
+  refusing to allow a GitHub App to create or update workflow `.github/workflows/toolchain.yml` without `workflows` permission
+  ```
+- **解决**：为所有 workflow 添加 `permissions: contents: write`，确保有权限创建和推送 tag
+- **影响文件**：
+  - `.github/workflows/build.yml`
+  - `.github/workflows/build-k2.yml`
+  - `.github/workflows/toolchain.yml`
+
 ## 构建输出
 
 ### Linux 工具链（2个）

@@ -13,6 +13,9 @@ on:
           - macos
           - all
 
+permissions:
+  contents: write
+
 jobs:
   build-linux-uclibc:
     name: Build Linux uClibc Toolchain

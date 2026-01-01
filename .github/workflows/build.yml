@@ -1,9 +1,13 @@
 name: Padvan Firmware build
 
-on: 
+on:
   push:
     branches: ["main"] # 触发分支
   workflow_dispatch:
+
+permissions:
+  contents: write
+  # workflows: write  # 如果需要推送 tag 触发其他 workflow，取消注释此行
 
 jobs:
   build:
