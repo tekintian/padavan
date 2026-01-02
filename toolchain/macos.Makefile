@@ -59,6 +59,13 @@ build:
 		echo "Linux kernel source will be used from custom location"; \
 	fi
 	@(cd $(CT_DIR); \
+		export CC="${HOMEBREW_PREFIX}/opt/gcc/bin/gcc"; \
+		export CXX="${HOMEBREW_PREFIX}/opt/gcc/bin/g++"; \
+		export LD="${HOMEBREW_PREFIX}/opt/binutils/bin/ld"; \
+		export AR="${HOMEBREW_PREFIX}/opt/binutils/bin/ar"; \
+		export AS="${HOMEBREW_PREFIX}/opt/binutils/bin/as"; \
+		export NM="${HOMEBREW_PREFIX}/opt/binutils/bin/nm"; \
+		export RANLIB="${HOMEBREW_PREFIX}/opt/binutils/bin/ranlib"; \
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
