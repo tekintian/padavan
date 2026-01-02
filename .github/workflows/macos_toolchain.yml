@@ -1,4 +1,4 @@
-name: Toolchain Build
+name: Macos Toolchain Build
 
 on:
   workflow_dispatch:
@@ -17,94 +17,6 @@ permissions:
   contents: write
 
 jobs:
-  build-linux-uclibc:
-    name: Build Linux uClibc Toolchain
-    runs-on: ubuntu-22.04
-    env:
-      TZ: Asia/Shanghai
-    if: github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all'
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Prepare Ubuntu Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git ccache bison flex texinfo help2man libtool automake libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev liblzma-dev libssl-dev
-          # Verify libtool installation
-          which libtool && libtool --version || echo "libtool not found in PATH"
-
-      - name: Build
-        env:
-          CT_TARGET: mipsel-linux-uclibc
-          CT_VERSION: 1.26.0
-        run: |
-          cd toolchain
-
-          # Pre-download uClibc-ng to avoid network issues
-          echo "Pre-downloading uClibc-ng..."
-          mkdir -p .build/tarballs
-          UCLIBC_VERSION="1.0.43"
-          if [ ! -f .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz ]; then
-            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
-              "https://downloads.uclibc-ng.org/releases/v${UCLIBC_VERSION}/uClibc-ng-${UCLIBC_VERSION}.tar.xz" || \
-            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
-              "https://fossies.org/linux/misc/uClibc-ng-${UCLIBC_VERSION}.tar.xz" || \
-            curl -fsSL -o .build/tarballs/uClibc-ng-${UCLIBC_VERSION}.tar.xz \
-              "https://sourceforge.net/projects/uclibc-ng/files/uClibc-ng-${UCLIBC_VERSION}/uClibc-ng-${UCLIBC_VERSION}.tar.xz/download"
-          fi
-
-          # Build following the same logic as Makefile
-          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
-          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-mipsel-linux-uclibc-linux-x86_64
-          path: toolchain/mipsel-linux-uclibc-linux-x86_64-v${{ env.CT_VERSION }}.tar.xz
-
-  build-linux-musl:
-    name: Build Linux musl Toolchain
-    runs-on: ubuntu-22.04
-    env:
-      TZ: Asia/Shanghai
-    if: github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all'
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Prepare Ubuntu Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git ccache bison flex texinfo help2man libtool automake libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev liblzma-dev libssl-dev
-          # Verify libtool installation
-          which libtool && libtool --version || echo "libtool not found in PATH"
-
-      - name: Build
-        env:
-          CT_TARGET: mipsel-linux-musl
-          CT_VERSION: 1.26.0
-        run: |
-          cd toolchain
-
-          # Build following the same logic as Makefile
-          make CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
-          # Install missing sys/queue.h for musl
-          if [ ! -f crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h ]; then
-            echo "Installing sys/queue.h for musl..."
-            mkdir -p crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/
-            cp files/musl/sys/queue.h crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h || \
-            curl -fsSL -o crosstool-ng-${CT_VERSION}/toolchain-mipsel/mipsel-linux-musl/sysroot/usr/include/sys/queue.h \
-              "https://github.com/tekintian/padavan/raw/refs/heads/main/toolchain/files/musl/sys/queue.h" || \
-              echo "Warning: Failed to install sys/queue.h, but continuing..."
-          fi
-          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-linux-x86_64-v${CT_VERSION}.tar.xz *
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-mipsel-linux-musl-linux-x86_64
-          path: toolchain/mipsel-linux-musl-linux-x86_64-v${{ env.CT_VERSION }}.tar.xz
-
   build-macos:
     name: Build macOS Toolchain (${{ matrix.libc }})
     runs-on: macos-13
@@ -214,41 +126,9 @@ jobs:
           HOST_ARCH: ${{ env.HOST_ARCH }}
         run: |
           cd toolchain
-
-          # IMPORTANT: Do NOT set CFLAGS, CXXFLAGS, or LDFLAGS
-          # crosstool-ng will handle these internally and setting them will cause build failure
-          # See: https://crosstool-ng.github.io/docs/Troubleshooting.html
-
-          # Construct PATH with GNU tools
-          export PATH="${HOMEBREW_PREFIX}/opt/coreutils/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gnu-sed/libexec/gnubin:${HOMEBREW_PREFIX}/opt/gettext/bin:${HOMEBREW_PREFIX}/opt/binutils/bin:${HOMEBREW_PREFIX}/opt/texinfo/bin:${HOMEBREW_PREFIX}/opt/bison/bin:${HOMEBREW_PREFIX}/opt/flex/bin:${HOMEBREW_PREFIX}/bin:/usr/local/bin:$PATH"
-
-          # Find bash path
-          BASH_PATH=$(which bash)
-          export CONFIG_SHELL=$BASH_PATH
-          export BASH=$BASH_PATH
-
-          # Copy configs and build
-          CT_DIR=crosstool-ng-${CT_VERSION}
-          cp -r configs/${CT_TARGET} ${CT_DIR}/samples
-
-          # Update config.guess and config.sub for modern macOS compatibility
-          echo "Updating config.guess and config.sub for modern macOS compatibility..."
-          for dir in ${CT_DIR} ${CT_DIR}/config; do
-            if [ -f ${dir}/config.guess ]; then
-              curl -fsSL -o ${dir}/config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess'
-            fi
-            if [ -f ${dir}/config.sub ]; then
-              curl -fsSL -o ${dir}/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'
-            fi
-          done
-
-          (cd ${CT_DIR}; \
-            ${BASH_PATH} ./bootstrap && \
-            ${BASH_PATH} ./configure --enable-local && \
-            make && \
-            ./ct-ng ${CT_TARGET} && \
-            ./ct-ng build \
-          )
+          export CT_DIR=$(pwd)
+          source ${HOMEBREW_PREFIX}/bin/brew shellenv
+          make -f macos.Makefile CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION} PLATFORM=${PLATFORM} ARCH_TARGET=${ARCH_TARGET} MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET} HOST_ARCH=${HOST_ARCH}
 
           # Package the toolchain with architecture in filename
           cd ${CT_DIR}/toolchain-mipsel
@@ -262,7 +142,7 @@ jobs:
   release:
     name: Release Toolchain
     runs-on: ubuntu-22.04
-    needs: [build-linux-uclibc, build-linux-musl, build-macos]
+    needs: [build-macos]
     if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'macos'
     steps:
       - uses: actions/checkout@v4
