@@ -8,7 +8,6 @@ toolchain/toolchain-*/
 /files
 /trunk/user/iptables/Makefile.bak
 /trunk/user/iptables/temp.txt
-*.xz
 /trunk/user/adbyby/adbyby
 /trunk/user/adbyby/src/adbyby
 /trunk/user/adbyby/share/adbyby
