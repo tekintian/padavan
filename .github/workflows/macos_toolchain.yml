@@ -75,7 +75,7 @@ jobs:
       - name: Build
         run: |
           cd toolchain
-          source ${HOMEBREW_PREFIX}/bin/brew shellenv
+          eval "$(${HOMEBREW_PREFIX}/bin/brew shellenv)"
           make -f macos.Makefile CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
           cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
           tar cJf ../../${CT_TARGET}-darwin-${ARCH_SUFFIX}.tar.xz *
