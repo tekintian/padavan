@@ -7,6 +7,10 @@ CT_URL        := https://github.com/crosstool-ng/crosstool-ng/releases/download/
 TOOLCHAIN_URL := https://github.com/tekintian/padavan/releases/download/toolchain/$(CT_TARGET).tar.xz
 CT_LOCAL_FILE := $(TOPDIR)/files/crosstool-ng-$(CT_VERSION).tar.xz
 
+# uClibc-ng download URLs
+UCLIBC_NG_LOCAL := $(TOPDIR)/files/uClibc-ng-1.0.43.tar.xz
+UCLIBC_NG_OFFICIAL := https://downloads.uclibc-ng.org/releases/1.0.43/uClibc-ng-1.0.43.tar.xz
+
 # 使用环境变量中的bash路径，默认使用/bin/bash
 BASH := $(or $(BASH),/bin/bash)
 
@@ -39,6 +43,21 @@ build:
 			curl -fsSL -o $$dir/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'; \
 		fi; \
 	done
+	@echo "Pre-downloading uClibc-ng source for reliability..."
+	@mkdir -p $(CT_DIR)/.build/tarballs
+	@if [ ! -f $(CT_DIR)/.build/tarballs/uClibc-ng-1.0.43.tar.xz ]; then \
+		echo "Downloading uClibc-ng-1.0.43..."; \
+		if [ -f $(UCLIBC_NG_LOCAL) ]; then \
+			echo "Found local uClibc-ng-1.0.43.tar.xz, copying..."; \
+			cp $(UCLIBC_NG_LOCAL) $(CT_DIR)/.build/tarballs/uClibc-ng-1.0.43.tar.xz; \
+		else \
+			curl -fSsLo $(CT_DIR)/.build/tarballs/uClibc-ng-1.0.43.tar.xz $(UCLIBC_NG_OFFICIAL); \
+		fi; \
+	fi
+	@echo "Pre-downloading Linux kernel source..."
+	@if [ ! -f $(CT_DIR)/.build/tarballs/linux-4.4.x.tar.xz ]; then \
+		echo "Linux kernel source will be used from custom location"; \
+	fi
 	@(cd $(CT_DIR); \
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
