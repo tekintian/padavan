@@ -66,6 +66,10 @@ build:
 		export AS="${HOMEBREW_PREFIX}/opt/binutils/bin/as"; \
 		export NM="${HOMEBREW_PREFIX}/opt/binutils/bin/nm"; \
 		export RANLIB="${HOMEBREW_PREFIX}/opt/binutils/bin/ranlib"; \
+		export CFLAGS="-I${HOMEBREW_PREFIX}/include -L${HOMEBREW_PREFIX}/lib"; \
+		export LDFLAGS="-L${HOMEBREW_PREFIX}/lib"; \
+		export CPPFLAGS="-I${HOMEBREW_PREFIX}/include"; \
+		export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig"; \
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
