@@ -56,21 +56,17 @@ download:
 		echo "Downloading toolchain..."; \
 		mkdir -p $(CT_PREFIX); \
 		curl -fSsLo- $(TOOLCHAIN_URL) | tar Jx -C $(CT_PREFIX); \
-	fi
+	endif
 ifeq ($(CT_TARGET),mipsel-linux-musl)
 	@if [ ! -f $(CT_PREFIX)/$(CT_TARGET)/sysroot/usr/include/sys/queue.h ]; then \
 		echo "Installing sys/queue.h..."; \
 		if [ -f $(TOPDIR)/files/musl/sys/queue.h ]; then \
 			cp $(TOPDIR)/files/musl/sys/queue.h $(CT_PREFIX)/$(CT_TARGET)/sysroot/usr/include/sys/queue.h; \
-			echo "Successfully copied local queue.h"; \
 		elif curl -fSsL -o $(CT_PREFIX)/$(CT_TARGET)/sysroot/usr/include/sys/queue.h \
 			"https://github.com/tekintian/padavan/raw/refs/heads/main/toolchain/files/musl/sys/queue.h" ; then \
-			echo "Successfully downloaded queue.h from GitHub"; \
+			: ; \
 		else \
-			echo "Warning: Failed to get queue.h, but continuing..."; \
-			echo "You may need to manually install sys/queue.h if compilation fails"; \
+			echo "Warning: Failed to install sys/queue.h"; \
 		fi; \
-	else \
-		echo "sys/queue.h already exists, skipping copy"; \
 	fi
 endif

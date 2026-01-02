@@ -1,37 +1,29 @@
-name: Macos Toolchain Build
+name: macOS Toolchain Build
 
 on:
   workflow_dispatch:
-    inputs:
-      platform:
-        description: 'Build platform'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - linux
-          - macos
-          - all
-
-permissions:
-  contents: write
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'toolchain/**'
+      - '.github/workflows/macos_toolchain.yml'
 
 jobs:
-  build-macos:
-    name: Build macOS Toolchain (${{ matrix.libc }})
-    runs-on: macos-13
-    env:
-      TZ: Asia/Shanghai
-    if: github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all'
+  build:
+    name: build (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     strategy:
       matrix:
-        libc: [uclibc, musl]
+        target: [mipsel-linux-uclibc, mipsel-linux-musl]
+        runner: [macos-15, macos-15-intel]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare macOS Environment (Install dependencies)
+      - name: Prepare macOS Environment
         run: |
-          # Install all required packages
           brew update
           brew install \
             bash \
@@ -61,8 +53,10 @@ jobs:
           # Detect Homebrew prefix and add GNU tools to PATH
           if [[ "$(uname -m)" == "arm64" ]]; then
             HOMEBREW_PREFIX="/opt/homebrew"
+            ARCH_SUFFIX="arm64"
           else
             HOMEBREW_PREFIX="/usr/local"
+            ARCH_SUFFIX="x86_64"
           fi
 
           # Add GNU tools to PATH
@@ -74,121 +68,49 @@ jobs:
           echo "${HOMEBREW_PREFIX}/opt/bison/bin" >> $GITHUB_PATH
           echo "${HOMEBREW_PREFIX}/opt/flex/bin" >> $GITHUB_PATH
 
-          # Save Homebrew prefix for later steps
+          # Save Homebrew prefix and architecture for later steps
           echo "HOMEBREW_PREFIX=${HOMEBREW_PREFIX}" >> $GITHUB_ENV
+          echo "ARCH_SUFFIX=${ARCH_SUFFIX}" >> $GITHUB_ENV
 
-      - name: Download and extract crosstool-ng
-        env:
-          CT_TARGET: mipsel-linux-${{ matrix.libc }}
-          CT_VERSION: 1.26.0
+      - name: Patch crosstool-NG.sh for macOS
         run: |
-          cd toolchain
-          TOPDIR=${CURDIR}
-          CT_DIR=${TOPDIR}/crosstool-ng-${CT_VERSION}
-          CT_URL=https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-${CT_VERSION}/crosstool-ng-${CT_VERSION}.tar.xz
-
-          if [ ! -d ${CT_DIR} ]; then
-            echo "Downloading crosstool-ng-${CT_VERSION}..."
-            curl -fSsLo- ${CT_URL} | tar Jx
-          fi
-
-      - name: Patch case-sensitive checks for macOS
-        env:
-          CT_VERSION: 1.26.0
-        run: |
-          # Patch crosstool-NG.sh to bypass case-sensitivity checks
-          # Use -i.bak for macOS compatibility
+          CT_VERSION=1.26.0
           sed -i.bak '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
           sed -i.bak '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          # Clean up backup files
           rm -f toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh.bak
 
-      - name: Set architecture-specific environment
-        env:
-          CT_TARGET: mipsel-linux-${{ matrix.libc }}
-          CT_VERSION: 1.26.0
-        run: |
-          # Set architecture-specific deployment target for x86_64
-          echo "Setting up for Intel (x86_64) architecture"
-          echo "ARCH_TARGET=x86_64" >> $GITHUB_ENV
-          echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
-          echo "HOST_ARCH=x86_64" >> $GITHUB_ENV
-          echo "Minimum macOS version: 10.15 (Catalina)"
-
-      - name: Build toolchain
-        env:
-          CT_TARGET: mipsel-linux-${{ matrix.libc }}
-          CT_VERSION: 1.26.0
-          PLATFORM: darwin
-          HOMEBREW_PREFIX: ${{ env.HOMEBREW_PREFIX }}
-          ARCH_TARGET: ${{ env.ARCH_TARGET }}
-          MACOSX_DEPLOYMENT_TARGET: ${{ env.MACOSX_DEPLOYMENT_TARGET }}
-          HOST_ARCH: ${{ env.HOST_ARCH }}
+      - name: Build
         run: |
           cd toolchain
-          export CT_DIR=$(pwd)
           source ${HOMEBREW_PREFIX}/bin/brew shellenv
-          make -f macos.Makefile CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION} PLATFORM=${PLATFORM} ARCH_TARGET=${ARCH_TARGET} MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET} HOST_ARCH=${HOST_ARCH}
-
-          # Package the toolchain with architecture in filename
-          cd ${CT_DIR}/toolchain-mipsel
-          tar cJf ../../${CT_TARGET}-${ARCH_TARGET}-darwin-v${CT_VERSION}.tar.xz *
+          make -f macos.Makefile CT_TARGET=${CT_TARGET} CT_VERSION=${CT_VERSION}
+          cd crosstool-ng-${CT_VERSION}/toolchain-mipsel
+          tar cJf ../../${CT_TARGET}-darwin-${ARCH_SUFFIX}.tar.xz *
+        env:
+          CT_TARGET: ${{ matrix.target }}
+          CT_VERSION: 1.26.0
+          HOMEBREW_PREFIX: ${{ env.HOMEBREW_PREFIX }}
+          ARCH_SUFFIX: ${{ env.ARCH_SUFFIX }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: toolchain-mipsel-linux-${{ matrix.libc }}-x86_64-darwin
-          path: toolchain/mipsel-linux-${{ matrix.libc }}-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
+          name: toolchain-${{ matrix.target }}-darwin-${{ env.ARCH_SUFFIX }}
+          path: toolchain/${{ matrix.target }}-darwin-${{ env.ARCH_SUFFIX }}.tar.xz
 
-  release:
-    name: Release Toolchain
-    runs-on: ubuntu-22.04
-    needs: [build-macos]
-    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'macos'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Upload to toolchain (no tag)
+        if: startsWith(github.ref, 'refs/tags/') == false
+        uses: svenstaro/upload-release-action@2.2.0
         with:
-          path: artifacts
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: toolchain/${{ matrix.target }}-darwin-${{ env.ARCH_SUFFIX }}.tar.xz
+          tag: toolchain
+          overwrite: true
 
-      - name: List artifacts
-        run: ls -la artifacts/
-
-      - name: Create release
+      - name: Create release (with tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: toolchain/${{ matrix.target }}-darwin-${{ env.ARCH_SUFFIX }}.tar.xz
+          generate_release_notes: true
         env:
-          CT_VERSION: 1.26.0
-        uses: ncipollo/release-action@v1
-        with:
-          tag: v${{ env.CT_VERSION }}
-          name: Toolchain Release v${{ env.CT_VERSION }}
-          body: |
-            # Toolchain Release v${{ env.CT_VERSION }}
-
-            ## Linux Toolchains
-            - **mipsel-linux-uclibc-linux**: uClibc-based toolchain for Linux (Intel/AMD x86_64)
-            - **mipsel-linux-musl-linux**: musl-based toolchain for Linux (Intel/AMD x86_64)
-
-            ## macOS Toolchains
-
-            ### Intel (x86_64)
-            Minimum macOS version: 10.15 (Catalina)
-            - **mipsel-linux-uclibc-x86_64-darwin**: uClibc-based toolchain for macOS (Intel)
-            - **mipsel-linux-musl-x86_64-darwin**: musl-based toolchain for macOS (Intel)
-
-            ## Usage
-
-            Extract the toolchain to `/opt/toolchain`:
-            ```bash
-            sudo mkdir -p /opt/toolchain
-            sudo tar xJf toolchain-*.tar.xz -C /opt/toolchain
-            export PATH=/opt/toolchain/bin:$PATH
-            ```
-          artifacts: |
-            artifacts/toolchain-mipsel-linux-uclibc-linux/mipsel-linux-uclibc-linux-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-musl-linux/mipsel-linux-musl-linux-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-uclibc-x86_64-darwin/mipsel-linux-uclibc-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
-            artifacts/toolchain-mipsel-linux-musl-x86_64-darwin/mipsel-linux-musl-x86_64-darwin-v${{ env.CT_VERSION }}.tar.xz
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
-          prerelease: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

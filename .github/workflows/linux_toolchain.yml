@@ -1,7 +1,13 @@
 name: Linux Toolchain Build
 
-on: 
+on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'toolchain/**'
+      - '.github/workflows/linux_toolchain.yml'
 
 jobs:
   build:
@@ -36,9 +42,19 @@ jobs:
         with:
           name: toolchain-${{ matrix.target }}
           path: toolchain/${{ matrix.target }}.tar.xz
-      - uses: svenstaro/upload-release-action@2.2.0
+      - name: Upload to toolchain (no tag)
+        if: startsWith(github.ref, 'refs/tags/') == false
+        uses: svenstaro/upload-release-action@2.2.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: toolchain/${{ matrix.target }}.tar.xz
           tag: toolchain
           overwrite: true
+      - name: Create release (with tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: toolchain/${{ matrix.target }}.tar.xz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
