@@ -26,6 +26,15 @@ build:
 
 	@echo "Building toolchain..."
 	cp -r $(TOPDIR)/configs/$(CT_TARGET) $(CT_DIR)/samples
+	@echo "Updating config.guess and config.sub for modern system compatibility..."
+	@for dir in $(CT_DIR) $(CT_DIR)/config; do \
+		if [ -f $$dir/config.guess ]; then \
+			curl -fsSL -o $$dir/config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess'; \
+		fi; \
+		if [ -f $$dir/config.sub ]; then \
+			curl -fsSL -o $$dir/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'; \
+		fi; \
+	done
 	@(cd $(CT_DIR); \
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
