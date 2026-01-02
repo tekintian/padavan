@@ -26,6 +26,10 @@ build:
 
 	@echo "Building toolchain..."
 	cp -r $(TOPDIR)/configs/$(CT_TARGET) $(CT_DIR)/samples
+	@echo "Patching crosstool-NG.sh for macOS case-insensitive filesystem..."
+	@sed -i.bak '122s/CT_TestAndAbort/CT_DoLog WARN/' $(CT_DIR)/scripts/crosstool-NG.sh
+	@sed -i.bak '329s/CT_TestAndAbort/CT_DoLog WARN/' $(CT_DIR)/scripts/crosstool-NG.sh
+	@rm -f $(CT_DIR)/scripts/crosstool-NG.sh.bak
 	@echo "Updating config.guess and config.sub for modern system compatibility..."
 	@for dir in $(CT_DIR) $(CT_DIR)/config; do \
 		if [ -f $$dir/config.guess ]; then \

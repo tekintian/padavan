@@ -72,13 +72,6 @@ jobs:
           echo "HOMEBREW_PREFIX=${HOMEBREW_PREFIX}" >> $GITHUB_ENV
           echo "ARCH_SUFFIX=${ARCH_SUFFIX}" >> $GITHUB_ENV
 
-      - name: Patch crosstool-NG.sh for macOS
-        run: |
-          CT_VERSION=1.26.0
-          sed -i.bak '122s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          sed -i.bak '329s/CT_TestAndAbort/CT_DoLog WARN/' toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh
-          rm -f toolchain/crosstool-ng-${CT_VERSION}/scripts/crosstool-NG.sh.bak
-
       - name: Build
         run: |
           cd toolchain
