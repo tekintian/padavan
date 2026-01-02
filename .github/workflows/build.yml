@@ -3,6 +3,8 @@ name: Padvan Firmware build
 on:
   push:
     branches: ["main"] # 触发分支
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -14,9 +16,11 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       TZ: Asia/Shanghai
+    # 如果是 tag 触发,则不执行 branches 触发的任务
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        # 构建目标可选: K2P, K2P-NANO, K2P-TINY, K2P-USB 
+        # 构建目标可选: K2P, K2P-NANO, K2P-TINY, K2P-USB
         # 还有 trunk/configs/templates/ 下的其他 xxx.config 配置中的名称xxx即为构建目标可选,
         # 如: K2P-NANO.config 文件,构建目标即 K2P-NANO
         target: [ K2P, K2P-NANO, K2P-TINY, K2P-USB]
@@ -51,7 +55,7 @@ jobs:
           fi
           VERSION="${KERNEL_VER}.${ROOTFS_VER}-${BUILDS_VER}-${BUILDS_REV}"
           echo "FIRMWARE_VERSION=${VERSION}" >> $GITHUB_ENV
-          
+
           make ${{ matrix.target }} TOOLCHAIN=${{ matrix.toolchain}}
           if [ "${{ matrix.target }}" = "K2P-NANO" ]; then
             image=$(ls trunk/images/*.trx)
@@ -71,46 +75,29 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       TZ: Asia/Shanghai
-    # 发布触发条件为：main 分支，且是 push 或 workflow_dispatch 事件
-    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    # 仅在推送 tag 时发布
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v3
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/ # 统一存放下载的产物，避免文件冲突
-      - name: Set Tag Name and Build Time
-        run: |
-          # 优化标签：添加提交短哈希，避免重复（比如一天多次构建）
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          TAG_NAME="firmware-$(date +%Y%m%d)-$COMMIT_SHORT"
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          
-          # 获取构建时间并设置为环境变量
-          BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S %Z')
-          echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
-      - uses: rickstaa/action-create-tag@v1
+      - name: Create release
+        uses: softprops/action-gh-release@v1
         with:
-          tag: ${{ env.TAG_NAME }}
-          force_push_tag: true # 如果标签已存在，强制覆盖
-      - uses: ncipollo/release-action@v1
-        with:
-          commit: ${{ github.sha }}
-          tag: ${{ env.TAG_NAME }}
-          name: "Padavan Build ${{ env.TAG_NAME }}" # 发布名称更清晰
+          generate_release_notes: true
           body: |
-            ## 自动构建固件发布
-            该发布为自动构建，包含以下固件：
+            ## 固件发布
+            该发布包含以下固件：
             - K2P 标准固件,包含所有默认功能
             - K2P-NANO  精简版本固件,包含广告管理
             - K2P-TINY  极精简版本固件.不包含广告管理
             - K2P-USB  带 USB 端口的固件(只有改造过的机器才支持)
-            
+
             构建详情：
-            - 分支：${{ github.ref_name }}
+            - 标签：${{ github.ref_name }}
             - 提交：${{ github.sha }}
-            - 构建时间：${{ env.BUILD_TIME }}
           artifacts: "artifacts/**/*.trx" # 正确匹配所有下载的 trx 文件
-          allowUpdates: true
-          draft: false
-          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
