@@ -602,11 +602,6 @@ setkernel_tz(void)
 
 	tz_minuteswest_last = tz.tz_minuteswest;
 
-	/* Debug: log timezone information */
-	dbg("setkernel_tz: gmtoff=%ld, tz_minuteswest=%d, tz_name=%s, gm.tm_hour=%d, gm.tm_min=%d, local.tm_hour=%d, local.tm_min=%d",
-	    gmtoff, tz.tz_minuteswest, nvram_safe_get("time_zone_x"),
-	    gm.tm_hour, gm.tm_min, local.tm_hour, local.tm_min);
-
 	/* Verify calculation with a test */
 	if (abs(gmtoff) % 3600 != 0) {
 		dbg("setkernel_tz: WARNING - gmtoff %% 3600 = %ld, should be multiple of 3600", gmtoff);

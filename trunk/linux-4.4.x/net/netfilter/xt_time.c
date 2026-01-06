@@ -265,6 +265,19 @@ static int __init time_mt_init(void)
 {
 	int minutes = sys_tz.tz_minuteswest;
 
+	// 修复：仅当内核时区为UTC（0）时才强制设置为CST（UTC+8）
+	// 这样既解决了初始时区不正确的问题，又允许用户后续修改时区
+	if (minutes == 0) {  // 仅当当前时区为UTC时才修复
+		sys_tz.tz_minuteswest = -480;  // 设置为UTC+8（CST）
+		sys_tz.tz_dsttime = 0;         // 无夏令时
+		
+		printk(KERN_INFO KBUILD_MODNAME
+		       ": FIXED kernel timezone from UTC to CST+8 (tz_minuteswest=%d)\n",
+		       sys_tz.tz_minuteswest);
+	}
+
+	// 显示当前内核时区
+	minutes = sys_tz.tz_minuteswest;
 	if (minutes < 0) /* east of Greenwich */
 		printk(KERN_INFO KBUILD_MODNAME
 		       ": kernel timezone is +%02d%02d\n",
