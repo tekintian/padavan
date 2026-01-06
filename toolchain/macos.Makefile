@@ -59,9 +59,11 @@ build:
 		echo "Linux kernel source will be used from custom location"; \
 	fi
 	@(cd $(CT_DIR); \
-		export CC="${HOMEBREW_PREFIX}/opt/gcc/bin/gcc"; \
-		export CXX="${HOMEBREW_PREFIX}/opt/gcc/bin/g++"; \
-		export LD="${HOMEBREW_PREFIX}/opt/binutils/bin/ld"; \
+		# Fix: Use correct GCC version with version suffix on macOS
+		export CC="$(which gcc)"; \
+		export CXX="$(which g++)"; \
+		# Fix: Remove problematic LD setting that causes linker issues on macOS
+		# export LD="${HOMEBREW_PREFIX}/opt/binutils/bin/ld"; \
 		export AR="${HOMEBREW_PREFIX}/opt/binutils/bin/ar"; \
 		export AS="${HOMEBREW_PREFIX}/opt/binutils/bin/as"; \
 		export NM="${HOMEBREW_PREFIX}/opt/binutils/bin/nm"; \
@@ -70,6 +72,9 @@ build:
 		export LDFLAGS="-L${HOMEBREW_PREFIX}/lib"; \
 		export CPPFLAGS="-I${HOMEBREW_PREFIX}/include"; \
 		export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig"; \
+		# Add debug information to see what's happening
+		which gcc; \
+		gcc --version; \
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
@@ -90,7 +95,7 @@ download:
 		echo "Downloading toolchain..."; \
 		mkdir -p $(CT_PREFIX); \
 		curl -fSsLo- $(TOOLCHAIN_URL) | tar Jx -C $(CT_PREFIX); \
-	endif
+	fi
 ifeq ($(CT_TARGET),mipsel-linux-musl)
 	@if [ ! -f $(CT_PREFIX)/$(CT_TARGET)/sysroot/usr/include/sys/queue.h ]; then \
 		echo "Installing sys/queue.h..."; \
