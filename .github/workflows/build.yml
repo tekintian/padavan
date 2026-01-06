@@ -2,7 +2,7 @@ name: Padvan Firmware build
 
 on:
   push:
-    branches: ["main"] # 触发分支
+    branches: ["dev"] # 触发分支
     tags:
       - 'v*'
   workflow_dispatch:

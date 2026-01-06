@@ -3,6 +3,8 @@ name: macOS Toolchain Build
 on:
   workflow_dispatch:
   push:
+    branches:
+      - dev
     tags:
       - 'v*'
     paths:
