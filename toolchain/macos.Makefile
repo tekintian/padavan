@@ -69,7 +69,7 @@ build:
 	@if [ ! -f $(CT_DIR)/.build/tarballs/linux-4.4.x.tar.xz ]; then \
 		echo "Linux kernel source will be used from custom location"; \
 	fi
-	@(cd $(CT_DIR); \
+	@cd $(CT_DIR) && \
 		# Use system compilers
 		export CC="gcc"; \
 		export CXX="g++"; \
@@ -84,15 +84,14 @@ build:
 		export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include"; \
 		export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig"; \
 		# Add debug information
-		which gcc; \
-		gcc --version; \
+		which gcc && \
+		gcc --version && \
 		# Build the toolchain
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
 		./ct-ng $(CT_TARGET) && \
-		./ct-ng build \
-	)
+		./ct-ng build
 
 clean:
 	@if [ -d $(CT_DIR) ]; then \
