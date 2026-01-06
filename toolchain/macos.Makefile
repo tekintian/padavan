@@ -70,23 +70,18 @@ build:
 		echo "Linux kernel source will be used from custom location"; \
 	fi
 	@cd $(CT_DIR) && \
-		# Use system compilers
-		export CC="gcc"; \
-		export CXX="g++"; \
-		# Set binutils from Homebrew
-		export AR="$(HOMEBREW_PREFIX)/opt/binutils/bin/ar"; \
-		export AS="$(HOMEBREW_PREFIX)/opt/binutils/bin/as"; \
-		export NM="$(HOMEBREW_PREFIX)/opt/binutils/bin/nm"; \
-		export RANLIB="$(HOMEBREW_PREFIX)/opt/binutils/bin/ranlib"; \
-		# Set include and lib paths
-		export CFLAGS="-I$(HOMEBREW_PREFIX)/include -L$(HOMEBREW_PREFIX)/lib"; \
-		export LDFLAGS="-L$(HOMEBREW_PREFIX)/lib"; \
-		export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include"; \
-		export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig"; \
-		# Add debug information
+		export CC="gcc" && \
+		export CXX="g++" && \
+		export AR="$(HOMEBREW_PREFIX)/opt/binutils/bin/ar" && \
+		export AS="$(HOMEBREW_PREFIX)/opt/binutils/bin/as" && \
+		export NM="$(HOMEBREW_PREFIX)/opt/binutils/bin/nm" && \
+		export RANLIB="$(HOMEBREW_PREFIX)/opt/binutils/bin/ranlib" && \
+		export CFLAGS="-I$(HOMEBREW_PREFIX)/include -L$(HOMEBREW_PREFIX)/lib" && \
+		export LDFLAGS="-L$(HOMEBREW_PREFIX)/lib" && \
+		export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include" && \
+		export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig" && \
 		which gcc && \
 		gcc --version && \
-		# Build the toolchain
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
