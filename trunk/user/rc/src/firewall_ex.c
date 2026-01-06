@@ -307,7 +307,20 @@ is_ip_address(const char *str)
  * @param[in] nv_time 时间配置的NVRAM变量名，格式为8位数字字符串(HHMMHHMM)
  *
  * @author tekintian@gmail.com https://dev.tekin.cn
- * @note 使用内核时区(--kerneltz)，无需手动处理时区转换
+ *
+ * @note 时区处理机制：
+ *       1. start_firewall_ex() 在生成规则前调用 setkernel_tz() 设置内核时区
+ *       2. setkernel_tz() 计算并设置 sys_tz.tz_minuteswest (内核时区变量)
+ *       3. 规则中使用 --kerneltz 参数，让内核模块自动使用 sys_tz.tz_minuteswest
+ *       4. 内核 xt_time 模块通过 stamp -= 60 * sys_tz.tz_minuteswest 转换时间
+ *
+ * @note 时区转换原理：
+ *       - tm_gmtoff: 东偏秒数 (UTC+8 = +28800)
+ *       - tz_minuteswest: 西偏分钟数 (UTC+8 = -480)
+ *       - 关键：两者符号相反，需要取负号转换
+ *       - 对于 UTC+8 (北京时间): tz_minuteswest = -(28800 / 60) = -480
+ *
+ * @note 使用内核时区(--kerneltz)，无需在用户空间手动处理时区转换
  * @note 对于跨夜时间段(开始时间>结束时间)，自动添加--contiguous参数
  * @note 如果日期为"1111111"且时间为"00002359"或相同起止时间，则不生成任何规则
  */
@@ -344,9 +357,23 @@ timematch_conv(char *mstr, const char *nv_date, const char *nv_time)
 	i_time_s = atoi(time_s);
 	i_time_e = atoi(time_e);
 
-	/* Use kernel timezone -- no manual conversion needed! */
-	/* The kernel timezone is set by setkernel_tz() in rc.c using sys_tz.tz_minuteswest */
-	/* iptables time module with --kerneltz will automatically use the system timezone */
+	/*
+	 * 时区处理说明：
+	 * - start_firewall_ex() 在生成时间规则前调用 setkernel_tz()
+	 * - setkernel_tz() 计算并设置内核时区 sys_tz.tz_minuteswest
+	 * - 此处生成的规则使用 --kerneltz 参数
+	 * - 内核 xt_time 模块使用 sys_tz.tz_minuteswest 自动转换时间戳
+	 * - 用户空间无需手动处理时区转换
+	 *
+	 * 时区转换公式 (在 setkernel_tz() 中):
+	 *   tm_gmtoff: 东偏秒数 (UTC+8 = +28800)
+	 *   tz_minuteswest: 西偏分钟数 (UTC+8 = -480)
+	 *   转换: tz_minuteswest = -(tm_gmtoff / 60)
+	 *
+	 * 内核时间戳转换 (在 xt_time.c 中):
+	 *   local_stamp = utc_stamp - 60 * sys_tz.tz_minuteswest
+	 *   对于 UTC+8: local_stamp = utc_stamp - 60 * (-480) = utc_stamp + 28800
+	 */
 
 	i_full_time = ((i_time_s == i_time_e) || (i_time_s == 0 && i_time_e == 2359)) ? 1 : 0;
 
@@ -2941,7 +2968,7 @@ ipt_nat_default(void)
  * - 执行自定义防火墙脚本
  *
  * 主要功能流程：
- * 1. 设置内核时区
+ * 1. 设置内核时区 (time_zone_x_mapping + setkernel_tz)
  * 2. 获取WAN/LAN/MAN接口信息
  * 3. 配置路由策略过滤
  * 4. 设置日志记录类型
@@ -2951,6 +2978,13 @@ ipt_nat_default(void)
  * 8. 启用IPv4转发
  * 9. 卸载未使用的iptables模块
  *
+ * @note 时区设置说明：
+ *       - time_zone_x_mapping(): 将时区名称(如"PRC")转换为POSIX格式(如"CST-8")
+ *       - setkernel_tz(): 计算内核时区偏移量并调用 settimeofday() 设置 sys_tz
+ *       - 生成的iptables时间规则使用 --kerneltz 参数
+ *       - 内核 xt_time 模块使用 sys_tz.tz_minuteswest 进行时间转换
+ *       - 修复：setkernel_tz() 中 tz_minuteswest = -(gmtoff / 60) 解决符号问题
+ *
  * @note 该函数会修改系统iptables配置和内核网络参数
  * @note 依赖于NVRAM配置和系统网络接口状态
  *
@@ -2958,7 +2992,24 @@ ipt_nat_default(void)
  */
 void start_firewall_ex(void)
 {
-	/* Ensure timezone is set before generating time-based firewall rules */
+	/*
+	 * 设置内核时区，确保时间匹配规则使用正确的时区
+	 *
+	 * 时区设置流程：
+	 * 1. time_zone_x_mapping(): 将时区名称(如"PRC")转换为POSIX格式(如"CST-8")
+	 * 2. setkernel_tz(): 计算内核时区偏移量并调用 settimeofday()
+	 *
+	 * setkernel_tz() 中的关键修复：
+	 *   - 计算: tz_minuteswest = -(gmtoff / 60)
+	 *   - tm_gmtoff: 东偏秒数 (UTC+8 = +28800)
+	 *   - tz_minuteswest: 西偏分钟数 (UTC+8 = -480)
+	 *   - 解决了之前缺少负号导致的时区反转问题
+	 *
+	 * 防火墙时间匹配：
+	 *   - 生成的规则使用 --kerneltz 参数
+	 *   - 内核 xt_time 模块使用 sys_tz.tz_minuteswest 自动转换
+	 *   - 例如: UTC 12:00 + tz_minuteswest(-480) = 本地 20:00 (北京时间)
+	 */
 	time_zone_x_mapping();
 	setkernel_tz();
 

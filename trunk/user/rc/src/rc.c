@@ -572,24 +572,45 @@ void
 setkernel_tz(void)
 {
 	time_t now;
-	struct tm gm, local;
+	struct tm local, gm;
 	struct timezone tz;
 	struct timeval *tvp = NULL;
 	static int tz_minuteswest_last = -1;
+	long gmtoff = 0;
 
 	/* Update kernel timezone */
 	time(&now);
-	gmtime_r(&now, &gm);
 	localtime_r(&now, &local);
+	gmtime_r(&now, &gm);
 
-	gm.tm_isdst = local.tm_isdst;
+	/* Calculate gmtoff: seconds east of UTC (negative = west, positive = east) */
+#if defined(__GLIBC__) || defined(__UCLIBC__)
+	gmtoff = local.tm_gmtoff;
+#else
+	/* For systems without tm_gmtoff, calculate it */
+	gmtoff = (long)(mktime(&local) - mktime(&gm));
+#endif
 
-	tz.tz_minuteswest = (mktime(&gm) - mktime(&local)) / 60;
+	/* Convert to minutes west of UTC */
+	/* tm_gmtoff: positive=east of UTC, negative=west of UTC */
+	/* tz.tz_minuteswest: minutes west of UTC */
+	/* For CST (UTC+8): gmtoff=28800, tz_minuteswest should be -480 */
+	tz.tz_minuteswest = -(gmtoff / 60);
 
 	if (tz_minuteswest_last == tz.tz_minuteswest)
 		return;
 
 	tz_minuteswest_last = tz.tz_minuteswest;
+
+	/* Debug: log timezone information */
+	dbg("setkernel_tz: gmtoff=%ld, tz_minuteswest=%d, tz_name=%s, gm.tm_hour=%d, gm.tm_min=%d, local.tm_hour=%d, local.tm_min=%d",
+	    gmtoff, tz.tz_minuteswest, nvram_safe_get("time_zone_x"),
+	    gm.tm_hour, gm.tm_min, local.tm_hour, local.tm_min);
+
+	/* Verify calculation with a test */
+	if (abs(gmtoff) % 3600 != 0) {
+		dbg("setkernel_tz: WARNING - gmtoff %% 3600 = %ld, should be multiple of 3600", gmtoff);
+	}
 
 	settimeofday(tvp, &tz);
 }
