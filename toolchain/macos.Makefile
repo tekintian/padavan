@@ -69,24 +69,7 @@ build:
 	@if [ ! -f $(CT_DIR)/.build/tarballs/linux-4.4.x.tar.xz ]; then \
 		echo "Linux kernel source will be used from custom location"; \
 	fi
-	@cd $(CT_DIR) && \
-		export CC="gcc" && \
-		export CXX="g++" && \
-		export AR="$(HOMEBREW_PREFIX)/opt/binutils/bin/ar" && \
-		export AS="$(HOMEBREW_PREFIX)/opt/binutils/bin/as" && \
-		export NM="$(HOMEBREW_PREFIX)/opt/binutils/bin/nm" && \
-		export RANLIB="$(HOMEBREW_PREFIX)/opt/binutils/bin/ranlib" && \
-		export CFLAGS="-I$(HOMEBREW_PREFIX)/include -L$(HOMEBREW_PREFIX)/lib" && \
-		export LDFLAGS="-L$(HOMEBREW_PREFIX)/lib" && \
-		export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include" && \
-		export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig" && \
-		which gcc && \
-		gcc --version && \
-		$(BASH) ./bootstrap && \
-		$(BASH) ./configure --enable-local && \
-		make && \
-		./ct-ng $(CT_TARGET) && \
-		./ct-ng build
+	@cd $(CT_DIR) && export CC="gcc" && export CXX="g++" && export AR="$(HOMEBREW_PREFIX)/opt/binutils/bin/ar" && export AS="$(HOMEBREW_PREFIX)/opt/binutils/bin/as" && export NM="$(HOMEBREW_PREFIX)/opt/binutils/bin/nm" && export RANLIB="$(HOMEBREW_PREFIX)/opt/binutils/bin/ranlib" && export CFLAGS="-I$(HOMEBREW_PREFIX)/include -L$(HOMEBREW_PREFIX)/lib" && export LDFLAGS="-L$(HOMEBREW_PREFIX)/lib" && export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include" && export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig" && which gcc && gcc --version && $(BASH) ./bootstrap && $(BASH) ./configure --enable-local && make && ./ct-ng $(CT_TARGET) && ./ct-ng build
 
 clean:
 	@if [ -d $(CT_DIR) ]; then \

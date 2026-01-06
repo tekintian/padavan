@@ -98,6 +98,6 @@ jobs:
             构建详情：
             - 标签：${{ github.ref_name }}
             - 提交：${{ github.sha }}
-          artifacts: "artifacts/**/*.trx" # 正确匹配所有下载的 trx 文件
+          files: "artifacts/**/*.trx"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
