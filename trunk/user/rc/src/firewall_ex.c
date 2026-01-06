@@ -487,7 +487,7 @@ apply_url_mac_group_filter(FILE *fp, const char *dtype, const char *lan_if, cons
 		// 这样可以确保URL过滤在没有MAC地址限制的情况下也能工作
 		// logmessage("URL Filter", "DEBUG: No MAC addresses configured, generating basic traffic diversion rule");
 		fprintf(fp, "-A %s -i %s%s -j %s\n", dtype, lan_if, timematch, chain_name);
-		logmessage("URL Filter", "DEBUG: Added basic FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, chain_name);
+		// logmessage("URL Filter", "DEBUG: Added basic FORWARD rule: -A %s -i %s%s -j %s", dtype, lan_if, timematch, chain_name);
 	}
 }
 
@@ -795,16 +795,16 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 			for (int j = 0; j < mac_count; j++) {
 				mac_entry_t *entry = &mac_entries[j];
 
-				logmessage("MAC Filter", "DEBUG: Processing MAC %s with %d time rules",
-						   entry->mac, entry->time_rule_count);
+				// logmessage("MAC Filter", "DEBUG: Processing MAC %s with %d time rules",
+						//    entry->mac, entry->time_rule_count);
 
 				// 生成所有时间允许规则
 				for (int r = 0; r < entry->time_rule_count; r++) {
 					fprintf(fp, "-A %s -m mac --mac-source %s%s -j RETURN\n",
 							dtype, entry->mac, entry->time_rules[r]);
 
-					logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s",
-							   entry->mac, entry->time_rules[r]);
+					// logmessage("MAC Filter", "DEBUG: Added time rule for MAC %s: %s",
+					// 		   entry->mac, entry->time_rules[r]);
 				}
 
 				// 最后添加DROP规则（确保是该MAC的最后一条规则）
@@ -812,12 +812,12 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 					fprintf(fp, "-A %s -m mac --mac-source %s -j %s\n",
 							dtype, entry->mac, logdrop);
 
-					logmessage("MAC Filter", "DEBUG: Added DROP rule for MAC %s", entry->mac);
+					// logmessage("MAC Filter", "DEBUG: Added DROP rule for MAC %s", entry->mac);
 				}
 			}
 			
-			logmessage("MAC Filter", "INFO: Processed %d unique MACs with %d total rules in deny mode", 
-					   mac_count, mac_num);
+			// logmessage("MAC Filter", "INFO: Processed %d unique MACs with %d total rules in deny mode", 
+					//    mac_count, mac_num);
 		}
 		else {
 			// 允许模式: 列表中的设备允许，其他设备拒绝
@@ -838,14 +838,14 @@ include_mac_filter(FILE *fp, int mac_filter_mode, char *logdrop)
 						dtype, filter_mac, mac_timematch, ftype);
 				
 				mac_num++;
-				logmessage("MAC Filter", "DEBUG: Added allow rule for MAC %s: %s", 
-						   filter_mac, mac_timematch);
+				// logmessage("MAC Filter", "DEBUG: Added allow rule for MAC %s: %s", 
+				// 		   filter_mac, mac_timematch);
 			}
 			
 			if (mac_num > 0) {
 				// 允许模式: 列表外的设备拒绝
 				fprintf(fp, "-A %s -j %s\n", dtype, logdrop);
-				logmessage("MAC Filter", "INFO: Processed %d MAC entries in allow mode", mac_num);
+				// logmessage("MAC Filter", "INFO: Processed %d MAC entries in allow mode", mac_num);
 			}
 		}
 		
@@ -885,7 +885,7 @@ include_webstr_filter(FILE *fp)
 
     /* 获取URL过滤的时间设置 */
     timematch_conv(url_timematch, "url_date_x", "url_time_x");
-    logmessage("URL Filter", "DEBUG: Time match condition: %s", url_timematch);
+    // logmessage("URL Filter", "DEBUG: Time match condition: %s", url_timematch);
 
     /* 原有的webstr逻辑 */
     url_list[0] = 0;
@@ -927,7 +927,7 @@ include_webstr_filter(FILE *fp)
                     if (!is_duplicate) {
                         strcpy(mac_addresses[unique_count], mac_buf);
                         unique_count++;
-                        logmessage("URL Filter", "DEBUG: Collected MAC %d: %s", unique_count-1, mac_buf);
+                        // logmessage("URL Filter", "DEBUG: Collected MAC %d: %s", unique_count-1, mac_buf);
                     }
                 }
             }
@@ -942,12 +942,12 @@ include_webstr_filter(FILE *fp)
             strcpy(mac_addresses[0], mac_buf);
             mac_count = 1;
             need_mac_condition = 1;
-            logmessage("URL Filter", "DEBUG: Single MAC mode: %s", mac_buf);
+            // logmessage("URL Filter", "DEBUG: Single MAC mode: %s", mac_buf);
         }
     }
     
     if (need_mac_condition) {
-        logmessage("URL Filter", "DEBUG: Will generate URL rules for %d MAC addresses", mac_count);
+        // logmessage("URL Filter", "DEBUG: Will generate URL rules for %d MAC addresses", mac_count);
         int mac_idx;  // 🔥 修复：使用独立变量
         for (mac_idx = 0; mac_idx < mac_count; mac_idx++) {
             logmessage("URL Filter", "DEBUG: MAC %d: %s", mac_idx, mac_addresses[mac_idx]);
@@ -957,14 +957,14 @@ include_webstr_filter(FILE *fp)
         mac_count = 0;
     }
 
-    logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
+    // logmessage("URL Filter", "DEBUG: About to start foreach_x loop, url_count=%d", url_count);
     foreach_x("url_num_x") {
         // logmessage("URL Filter", "DEBUG: foreach_x loop iteration i=%d", i);
         sprintf(nv_name, "url_keyword_x%d", i);
         filterstr = nvram_safe_get(nv_name);
         
         /* 调试：记录每个URL */
-        logmessage("URL Filter", "DEBUG: Processing URL %d: '%s'", i, filterstr);
+        //logmessage("URL Filter", "DEBUG: Processing URL %d: '%s'", i, filterstr);
         
         /* 复制到缓冲区以避免修改原始字符串 */
         strncpy(url_buf, filterstr, sizeof(url_buf) - 1);
@@ -992,13 +992,13 @@ include_webstr_filter(FILE *fp)
 				if (is_ip_address(filterstr)) {
 					fprintf(fp, "-A %s -p tcp -d %s%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                         dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
-                    logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+                    // logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
 					
 				} else {
 					 fprintf(fp, "-A %s -p tcp -m string --string \"%s\" --algo bm%s -m mac --mac-source %s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch, mac_addresses[mac_idx]);
 					
-					logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
+					// logmessage("URL Filter", "DEBUG: Added string rule for HTTPS: %s%s (MAC: %s)", filterstr, url_timematch, mac_addresses[mac_idx]);
 
 				}
 				webstr_items++;
@@ -1008,11 +1008,11 @@ include_webstr_filter(FILE *fp)
             if (is_ip_address(filterstr)) {
                 fprintf(fp, "-A %s -p tcp -d %s%s -j REJECT --reject-with tcp-reset\n",
                     dtype, filterstr, url_timematch);
-                logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (all MAC)", filterstr, url_timematch);
+                // logmessage("URL Filter", "DEBUG: Added IP block rule for %s%s (all MAC)", filterstr, url_timematch);
             } else {
                 fprintf(fp, "-A %s -p tcp -m string --string \"%s\" --algo bm%s -j REJECT --reject-with tcp-reset\n",
                 dtype, filterstr, url_timematch);
-                logmessage("URL Filter", "DEBUG: Added string rule for tcp: %s%s (all MAC)", filterstr, url_timematch);
+                // logmessage("URL Filter", "DEBUG: Added string rule for tcp: %s%s (all MAC)", filterstr, url_timematch);
             }
             webstr_items++;
         }
@@ -1021,10 +1021,10 @@ include_webstr_filter(FILE *fp)
     /* 🔥 修复：添加默认RETURN规则，确保不匹配URL规则的流量能正常通过 */
     if (webstr_items > 0) {
         fprintf(fp, "-A %s -j RETURN\n", dtype);
-        logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
+        // logmessage("URL Filter", "DEBUG: Added default RETURN rule to urllist chain");
     }
     
-    logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
+    // logmessage("URL Filter", "DEBUG: include_webstr_filter() returning webstr_items=%d", webstr_items);
     return webstr_items;
 }
 static int
@@ -1305,10 +1305,10 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	is_url_enabled = nvram_match("url_enable_x", "1");
 	is_lwf_enabled = nvram_match("fw_lw_enable_x", "1");
 
-	logmessage("Firewall", "DEBUG: fw_enable_x = %s, url_enable_x = %s, macfilter_enable_x = %s", 
-		nvram_safe_get("fw_enable_x"), 
-		nvram_safe_get("url_enable_x"), 
-		nvram_safe_get("macfilter_enable_x"));
+	// logmessage("Firewall", "DEBUG: fw_enable_x = %s, url_enable_x = %s, macfilter_enable_x = %s", 
+	// 	nvram_safe_get("fw_enable_x"), 
+	// 	nvram_safe_get("url_enable_x"), 
+	// 	nvram_safe_get("macfilter_enable_x"));
 
 	i_mac_filter   = nvram_get_int("macfilter_enable_x");
 
@@ -1584,7 +1584,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		/* 同时启用MAC和URL过滤时，根据模式决定顺序 */
 		if (mac_filter_mode == 1) {
 			/* MAC允许模式：先MAC过滤，再URL过滤，效率更高 */
-			logmessage("Firewall", "INFO: Using MAC allow mode - MAC filter first, then URL filter");
+			// logmessage("Firewall", "INFO: Using MAC allow mode - MAC filter first, then URL filter");
 			
 			/* MAC过滤 - 允许模式 */
 			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -1616,7 +1616,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 			}
 		} else {
 			/* MAC拒绝模式：优化处理，先MAC过滤规则设备，再URL过滤，效率更高 */
-			logmessage("Firewall", "INFO: Using MAC deny mode - MAC filter for rule devices, then URL filter");
+			// logmessage("Firewall", "INFO: Using MAC deny mode - MAC filter for rule devices, then URL filter");
 			
 			/* MAC过滤 - 拒绝模式：只处理规则列表中的设备，其他设备跳过MAC检查 */
 			foreach_x("macfilter_num_x") {
@@ -1657,7 +1657,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		/* 只启用其中一种过滤或都未启用 */
 		if (need_url_filter) {
 			/* 只启用URL过滤 */
-			logmessage("Firewall", "INFO: URL filter only");
+			// logmessage("Firewall", "INFO: URL filter only");
 			int webstr_result = include_webstr_filter(fp);
 			if (webstr_result > 0) {
 				char mac_buf[24] = {0};
@@ -1686,7 +1686,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		
 		if (need_mac_filter) {
 			/* 只启用MAC过滤 */
-			logmessage("Firewall", "INFO: MAC filter only");
+			// logmessage("Firewall", "INFO: MAC filter only");
 			
 			if (mac_filter_mode == 2) {
 				// 拒绝模式：只将规则列表中的设备重定向到maclist链
@@ -2252,7 +2252,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		/* 同时启用MAC和URL过滤时，根据模式决定顺序 */
 		if (mac_filter_mode == 1) {
 			/* MAC允许模式：先MAC过滤，再URL过滤，效率更高 */
-			logmessage("Firewall", "INFO: Using MAC allow mode - MAC filter first, then URL filter");
+			// logmessage("Firewall", "INFO: Using MAC allow mode - MAC filter first, then URL filter");
 			
 			/* MAC过滤 - 允许模式 */
 			fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -2289,7 +2289,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 			}
 		} else {
 			/* MAC拒绝模式：优化处理，先MAC过滤规则设备，再URL过滤，效率更高 */
-			logmessage("Firewall", "INFO: Using MAC deny mode - MAC filter for rule devices, then URL filter");
+			// logmessage("Firewall", "INFO: Using MAC deny mode - MAC filter for rule devices, then URL filter");
 			
 			/* MAC过滤 - 拒绝模式：只处理规则列表中的设备，其他设备跳过MAC检查 */
 			foreach_x("macfilter_num_x") {
@@ -2335,7 +2335,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		/* 只启用其中一种过滤或都未启用 */
 		if (need_url_filter) {
 			/* 只启用URL过滤 */
-			logmessage("Firewall", "INFO: URL filter only");
+			// logmessage("Firewall", "INFO: URL filter only");
 			int webstr_result = include_webstr_filter(fp);
 			if (webstr_result > 0) {
 				char mac_buf[24] = {0};
@@ -2364,7 +2364,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 		
 		if (need_mac_filter) {
 			/* 只启用MAC过滤 */
-			logmessage("Firewall", "INFO: MAC filter only");
+			// logmessage("Firewall", "INFO: MAC filter only");
 			
 			if (mac_filter_mode == 2) {
 				// 拒绝模式：只将规则列表中的设备重定向到maclist链
