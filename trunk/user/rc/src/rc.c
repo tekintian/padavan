@@ -566,6 +566,8 @@ setenv_tz(void)
 	snprintf(TZ_env, sizeof(TZ_env), "TZ=%s", nvram_safe_get("time_zone_x"));
 	TZ_env[sizeof(TZ_env)-1] = '\0';
 	putenv(TZ_env);
+	// 同步更新内核时区 解决内核时区不同步问题
+	setkernel_tz();
 }
 
 void 
