@@ -11,8 +11,19 @@ CT_LOCAL_FILE := $(TOPDIR)/files/crosstool-ng-$(CT_VERSION).tar.xz
 UCLIBC_NG_LOCAL := $(TOPDIR)/files/uClibc-ng-1.0.43.tar.xz
 UCLIBC_NG_OFFICIAL := https://downloads.uclibc-ng.org/releases/1.0.43/uClibc-ng-1.0.43.tar.xz
 
-# 使用环境变量中的bash路径，默认使用/bin/bash
-BASH := $(or $(BASH),/bin/bash)
+# Set BASH path with compatibility check
+ifndef BASH
+  BASH := /bin/bash
+endif
+
+# Set HOMEBREW_PREFIX with compatibility for both Apple Silicon and Intel macOS
+ifndef HOMEBREW_PREFIX
+  ifneq ($(shell arch),arm64)
+    HOMEBREW_PREFIX := /usr/local
+  else
+    HOMEBREW_PREFIX := /opt/homebrew
+  endif
+endif
 
 all: build
 
@@ -59,22 +70,23 @@ build:
 		echo "Linux kernel source will be used from custom location"; \
 	fi
 	@(cd $(CT_DIR); \
-		# Fix: Use correct GCC version with version suffix on macOS
-		export CC="$(which gcc)"; \
-		export CXX="$(which g++)"; \
-		# Fix: Remove problematic LD setting that causes linker issues on macOS
-		# export LD="${HOMEBREW_PREFIX}/opt/binutils/bin/ld"; \
-		export AR="${HOMEBREW_PREFIX}/opt/binutils/bin/ar"; \
-		export AS="${HOMEBREW_PREFIX}/opt/binutils/bin/as"; \
-		export NM="${HOMEBREW_PREFIX}/opt/binutils/bin/nm"; \
-		export RANLIB="${HOMEBREW_PREFIX}/opt/binutils/bin/ranlib"; \
-		export CFLAGS="-I${HOMEBREW_PREFIX}/include -L${HOMEBREW_PREFIX}/lib"; \
-		export LDFLAGS="-L${HOMEBREW_PREFIX}/lib"; \
-		export CPPFLAGS="-I${HOMEBREW_PREFIX}/include"; \
-		export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig"; \
-		# Add debug information to see what's happening
+		# Use system compilers
+		export CC="gcc"; \
+		export CXX="g++"; \
+		# Set binutils from Homebrew
+		export AR="$(HOMEBREW_PREFIX)/opt/binutils/bin/ar"; \
+		export AS="$(HOMEBREW_PREFIX)/opt/binutils/bin/as"; \
+		export NM="$(HOMEBREW_PREFIX)/opt/binutils/bin/nm"; \
+		export RANLIB="$(HOMEBREW_PREFIX)/opt/binutils/bin/ranlib"; \
+		# Set include and lib paths
+		export CFLAGS="-I$(HOMEBREW_PREFIX)/include -L$(HOMEBREW_PREFIX)/lib"; \
+		export LDFLAGS="-L$(HOMEBREW_PREFIX)/lib"; \
+		export CPPFLAGS="-I$(HOMEBREW_PREFIX)/include"; \
+		export PKG_CONFIG_PATH="$(HOMEBREW_PREFIX)/lib/pkgconfig"; \
+		# Add debug information
 		which gcc; \
 		gcc --version; \
+		# Build the toolchain
 		$(BASH) ./bootstrap && \
 		$(BASH) ./configure --enable-local && \
 		make && \
