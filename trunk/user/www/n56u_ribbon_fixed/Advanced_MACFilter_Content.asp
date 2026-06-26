@@ -25,7 +25,7 @@
 var $j = jQuery.noConflict();
 
 $j(document).ready(function() {
-	init_itoggle('fw_mac_drop');
+        init_itoggle('fw_mac_drop');
 });
 
 </script>
@@ -46,270 +46,270 @@ var MACList = [<% get_nvram_list("FirewallConfig", "MFList"); %>];
 var isMenuopen = 0;
 
 function initial(){
-	show_banner(1);
-	show_menu(5,5,4);
-	show_footer();
+        show_banner(1);
+        show_menu(5,5,4);
+        show_footer();
 
-	load_body();
+        load_body();
 
-	change_macfilter();
+        change_macfilter();
 
-	showMFList();
-	showLANIPList();
+        showMFList();
+        showLANIPList();
 }
 
 function applyRule(){
-	if(prevent_lock()){
-		showLoading();
-		
-		if (document.form.macfilter_enable_x.value == "0")
-			document.form.action_mode.value = " Apply ";
-		else
-			document.form.action_mode.value = " Restart ";
-		document.form.current_page.value = "/Advanced_MACFilter_Content.asp";
-		document.form.next_page.value = "";
-		document.form.submit();
-	}
-	else
-		return false;
+        if(prevent_lock()){
+                showLoading();
+                
+                if (document.form.macfilter_enable_x.value == "0")
+                        document.form.action_mode.value = " Apply ";
+                else
+                        document.form.action_mode.value = " Restart ";
+                document.form.current_page.value = "/Advanced_MACFilter_Content.asp";
+                document.form.next_page.value = "";
+                document.form.submit();
+        }
+        else
+                return false;
 }
 
 function change_macfilter() {
-	if(document.form.macfilter_enable_x.value == "0"){
-		$("mac_drop_row").style.display = "none";
-		$("MFList_Block").style.display = "none";
-	}
-	else{
-		$("mac_drop_row").style.display = "";
-		$("MFList_Block").style.display = "";
-	}
+        if(document.form.macfilter_enable_x.value == "0"){
+                $("mac_drop_row").style.display = "none";
+                $("MFList_Block").style.display = "none";
+        }
+        else{
+                $("mac_drop_row").style.display = "";
+                $("MFList_Block").style.display = "";
+        }
 }
 
 function prevent_lock(){
-	if(document.form.macfilter_enable_x.value == "1"){
-		if(document.form.macfilter_num_x_0.value < 1){
-			if(confirm("<#FirewallConfig_MFList_accept_hint1#>")){
-				document.form.macfilter_list_x_0.value = smac[0] + smac[1] + smac[2] + smac[3] + smac[4] + smac[5];
-				document.form.macfilter_time_x_0.value = "00002359";
-				document.form.macfilter_date_x_0.value = "1111111";
-				markGroupMAC(document.form.MFList2, 64, ' Add ');
-				document.form.submit();
-			}
-			else
-				return false;
-		}
-		else
-			return true;
-	}
-	else
-		return true;
+        if(document.form.macfilter_enable_x.value == "1"){
+                if(document.form.macfilter_num_x_0.value < 1){
+                        if(confirm("<#FirewallConfig_MFList_accept_hint1#>")){
+                                document.form.macfilter_list_x_0.value = smac[0] + smac[1] + smac[2] + smac[3] + smac[4] + smac[5];
+                                document.form.macfilter_time_x_0.value = "00002359";
+                                document.form.macfilter_date_x_0.value = "1111111";
+                                markGroupMAC(document.form.MFList2, 64, ' Add ');
+                                document.form.submit();
+                        }
+                        else
+                                return false;
+                }
+                else
+                        return true;
+        }
+        else
+                return true;
 }
 
 
 function setClientMAC(num){
-	document.form.macfilter_list_x_0.value = clients_info[num][2];
-	hideClients_Block();
+        document.form.macfilter_list_x_0.value = clients_info[num][2];
+        hideClients_Block();
 }
 
 function showLANIPList(){
-	var code = "";
-	var show_name = "";
-	for(var i = 0; i < clients_info.length ; i++){
-		if(clients_info[i][0] && clients_info[i][0].length > 20)
-			show_name = clients_info[i][0].substring(0, 18) + "..";
-		else
-			show_name = clients_info[i][0];
-		
-		if(clients_info[i][2]){
-			code += '<a href="javascript:void(0)"><div onclick="setClientMAC('+i+');"><strong>'+clients_info[i][1]+'</strong>';
-			code += ' ['+clients_info[i][2]+']';
-			if(show_name && show_name.length > 0)
-				code += ' ('+show_name+')';
-			code += ' </div></a>';
-		}
-	}
-	if (code == "")
-		code = '<div style="text-align: center;" onclick="hideClients_Block();"><#Nodata#></div>';
-	code +='<!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->';	
-	$("ClientList_Block").innerHTML = code;
+        var code = "";
+        var show_name = "";
+        for(var i = 0; i < clients_info.length ; i++){
+                if(clients_info[i][0] && clients_info[i][0].length > 20)
+                        show_name = clients_info[i][0].substring(0, 18) + "..";
+                else
+                        show_name = clients_info[i][0];
+                
+                if(clients_info[i][2]){
+                        code += '<a href="javascript:void(0)"><div onclick="setClientMAC('+i+');"><strong>'+clients_info[i][1]+'</strong>';
+                        code += ' ['+clients_info[i][2]+']';
+                        if(show_name && show_name.length > 0)
+                                code += ' ('+show_name+')';
+                        code += ' </div></a>';
+                }
+        }
+        if (code == "")
+                code = '<div style="text-align: center;" onclick="hideClients_Block();"><#Nodata#></div>';
+        code +='<!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->'; 
+        $("ClientList_Block").innerHTML = code;
 }
 
 function hideClients_Block(){
-	$j("#chevron").children('i').removeClass('icon-chevron-up').addClass('icon-chevron-down');
-	$('ClientList_Block').style.display='none';
-	isMenuopen = 0;
+        $j("#chevron").children('i').removeClass('icon-chevron-up').addClass('icon-chevron-down');
+        $('ClientList_Block').style.display='none';
+        isMenuopen = 0;
 }
 
 function pullLANIPList(obj){
-	if(isMenuopen == 0){
-		$j(obj).children('i').removeClass('icon-chevron-down').addClass('icon-chevron-up');
-		$("ClientList_Block").style.display = 'block';
-		document.form.macfilter_list_x_0.focus();
-		isMenuopen = 1;
-	}
-	else
-		hideClients_Block();
+        if(isMenuopen == 0){
+                $j(obj).children('i').removeClass('icon-chevron-down').addClass('icon-chevron-up');
+                $("ClientList_Block").style.display = 'block';
+                document.form.macfilter_list_x_0.focus();
+                isMenuopen = 1;
+        }
+        else
+                hideClients_Block();
 }
 
 function validNewRow(max_rows) {
-	if (document.form.macfilter_num_x_0.value >= max_rows){
-		alert("<#JS_itemlimit1#> " + max_rows + " <#JS_itemlimit2#>");
-		return false;
-	}
+        if (document.form.macfilter_num_x_0.value >= max_rows){
+                alert("<#JS_itemlimit1#> " + max_rows + " <#JS_itemlimit2#>");
+                return false;
+        }
 
-	if (document.form.macfilter_list_x_0.value==""){
-		alert("<#JS_fieldblank#>");
-		document.form.macfilter_list_x_0.focus();
-		document.form.macfilter_list_x_0.select();
-		return false;
-	}
+        if (document.form.macfilter_list_x_0.value==""){
+                alert("<#JS_fieldblank#>");
+                document.form.macfilter_list_x_0.focus();
+                document.form.macfilter_list_x_0.select();
+                return false;
+        }
 
-	if (!validate_hwaddr(document.form.macfilter_list_x_0)){
-		return false;
-	}
+        if (!validate_hwaddr(document.form.macfilter_list_x_0)){
+                return false;
+        }
 
-	if ((document.form.macfilter_date_x_Sun.checked == false) &&
-		(document.form.macfilter_date_x_Mon.checked == false) &&
-		(document.form.macfilter_date_x_Tue.checked == false) &&
-		(document.form.macfilter_date_x_Wed.checked == false) &&
-		(document.form.macfilter_date_x_Thu.checked == false) &&
-		(document.form.macfilter_date_x_Fri.checked == false) &&
-		(document.form.macfilter_date_x_Sat.checked == false)){
-		alert("<#MAC_Days#> - <#JS_fieldblank#>");
-		return false;
-	}
+        if ((document.form.macfilter_date_x_Sun.checked == false) &&
+                (document.form.macfilter_date_x_Mon.checked == false) &&
+                (document.form.macfilter_date_x_Tue.checked == false) &&
+                (document.form.macfilter_date_x_Wed.checked == false) &&
+                (document.form.macfilter_date_x_Thu.checked == false) &&
+                (document.form.macfilter_date_x_Fri.checked == false) &&
+                (document.form.macfilter_date_x_Sat.checked == false)){
+                alert("<#MAC_Days#> - <#JS_fieldblank#>");
+                return false;
+        }
 
-	if (!validate_timerange(document.form.macfilter_time_x_starthour, 0) ||
-		!validate_timerange(document.form.macfilter_time_x_startmin, 1) ||
-		!validate_timerange(document.form.macfilter_time_x_endhour, 2) ||
-		!validate_timerange(document.form.macfilter_time_x_endmin, 3)){
-		return false;
-	}
+        if (!validate_timerange(document.form.macfilter_time_x_starthour, 0) ||
+                !validate_timerange(document.form.macfilter_time_x_startmin, 1) ||
+                !validate_timerange(document.form.macfilter_time_x_endhour, 2) ||
+                !validate_timerange(document.form.macfilter_time_x_endmin, 3)){
+                return false;
+        }
 
-	var starttime = eval(document.form.macfilter_time_x_starthour.value + document.form.macfilter_time_x_startmin.value);
-	var endtime = eval(document.form.macfilter_time_x_endhour.value + document.form.macfilter_time_x_endmin.value);
-	if(starttime == endtime){
-		alert("<#FirewallConfig_URLActiveTime_itemhint2#>");
-		document.form.macfilter_time_x_starthour.focus();
-		document.form.macfilter_time_x_starthour.select();
-		return false;
-	}
+        var starttime = eval(document.form.macfilter_time_x_starthour.value + document.form.macfilter_time_x_startmin.value);
+        var endtime = eval(document.form.macfilter_time_x_endhour.value + document.form.macfilter_time_x_endmin.value);
+        if(starttime == endtime){
+                alert("<#FirewallConfig_URLActiveTime_itemhint2#>");
+                document.form.macfilter_time_x_starthour.focus();
+                document.form.macfilter_time_x_starthour.select();
+                return false;
+        }
 
-	return true;
+        return true;
 }
 
 function updateDT() {
-	document.form.macfilter_date_x_0.value = setDateCheck(
-		document.form.macfilter_date_x_Sun,
-		document.form.macfilter_date_x_Mon,
-		document.form.macfilter_date_x_Tue,
-		document.form.macfilter_date_x_Wed,
-		document.form.macfilter_date_x_Thu,
-		document.form.macfilter_date_x_Fri,
-		document.form.macfilter_date_x_Sat);
-	document.form.macfilter_time_x_0.value = setTimeRange(
-		document.form.macfilter_time_x_starthour,
-		document.form.macfilter_time_x_startmin,
-		document.form.macfilter_time_x_endhour,
-		document.form.macfilter_time_x_endmin);
+        document.form.macfilter_date_x_0.value = setDateCheck(
+                document.form.macfilter_date_x_Sun,
+                document.form.macfilter_date_x_Mon,
+                document.form.macfilter_date_x_Tue,
+                document.form.macfilter_date_x_Wed,
+                document.form.macfilter_date_x_Thu,
+                document.form.macfilter_date_x_Fri,
+                document.form.macfilter_date_x_Sat);
+        document.form.macfilter_time_x_0.value = setTimeRange(
+                document.form.macfilter_time_x_starthour,
+                document.form.macfilter_time_x_startmin,
+                document.form.macfilter_time_x_endhour,
+                document.form.macfilter_time_x_endmin);
 }
 
 function markGroupMAC(o, c, b) {
-	document.form.group_id.value = "MFList";
-	if(b == " Add "){
-		if (validNewRow(c) == false)
-			return false;
-		
-		updateDT();
-	}
-	pageChanged = 0;
-	document.form.action_mode.value = b;
-	return true;
+        document.form.group_id.value = "MFList";
+        if(b == " Add "){
+                if (validNewRow(c) == false)
+                        return false;
+                
+                updateDT();
+        }
+        pageChanged = 0;
+        document.form.action_mode.value = b;
+        return true;
 }
 
 function format_time(nvtime) {
-	if (nvtime == "")
-		nvtime = "00002359";
-	return nvtime.substring(0, 2) + ":" + nvtime.substring(2, 4) + " - " + nvtime.substring(4, 6) + ":" + nvtime.substring(6, 8);
+        if (nvtime == "")
+                nvtime = "00002359";
+        return nvtime.substring(0, 2) + ":" + nvtime.substring(2, 4) + " - " + nvtime.substring(4, 6) + ":" + nvtime.substring(6, 8);
 }
 
 function format_date(nvdate) {
-	var caption = "";
-	if (getDateCheck(nvdate, 1) == true)
-		caption = caption + ", <#DAY_Mon#>";
-	if (getDateCheck(nvdate, 2) == true)
-		caption = caption + ", <#DAY_Tue#>";
-	if (getDateCheck(nvdate, 3) == true)
-		caption = caption + ", <#DAY_Wed#>";
-	if (getDateCheck(nvdate, 4) == true)
-		caption = caption + ", <#DAY_Thu#>";
-	if (getDateCheck(nvdate, 5) == true)
-		caption = caption + ", <#DAY_Fri#>";
-	if (getDateCheck(nvdate, 6) == true)
-		caption = caption + ", <#DAY_Sat#>";
-	if (getDateCheck(nvdate, 0) == true)
-		caption = caption + ", <#DAY_Sun#>";
-	
-	if (caption == "")
-		caption = "-";
-	else
-		caption = caption.substring(2);
-	
-	return caption;
+        var caption = "";
+        if (getDateCheck(nvdate, 1) == true)
+                caption = caption + ", <#DAY_Mon#>";
+        if (getDateCheck(nvdate, 2) == true)
+                caption = caption + ", <#DAY_Tue#>";
+        if (getDateCheck(nvdate, 3) == true)
+                caption = caption + ", <#DAY_Wed#>";
+        if (getDateCheck(nvdate, 4) == true)
+                caption = caption + ", <#DAY_Thu#>";
+        if (getDateCheck(nvdate, 5) == true)
+                caption = caption + ", <#DAY_Fri#>";
+        if (getDateCheck(nvdate, 6) == true)
+                caption = caption + ", <#DAY_Sat#>";
+        if (getDateCheck(nvdate, 0) == true)
+                caption = caption + ", <#DAY_Sun#>";
+        
+        if (caption == "")
+                caption = "-";
+        else
+                caption = caption.substring(2);
+        
+        return caption;
 }
 
 function showMFList(){
-	var code = '';
-	var temp_time = '<% nvram_get_x("", "macfilter_time_x_0"); %>';
-	var temp_date = '<% nvram_get_x("", "macfilter_date_x_0"); %>';
+        var code = '';
+        var temp_time = '<% nvram_get_x("", "macfilter_time_x_0"); %>';
+        var temp_date = '<% nvram_get_x("", "macfilter_date_x_0"); %>';
 
-	if(MACList.length == 0) {
-		code +='<tr><td colspan="4" style="text-align: center;"><div class="alert alert-info"><#IPConnection_VSList_Norule#></div></td></tr>';
-		
-		document.form.macfilter_time_x_0.value = (temp_time == '') ? "00002359" : temp_time;
-		document.form.macfilter_date_x_0.value = (temp_date == '') ? "1111111" : temp_date;
-	}
-	else{
-	    for(var i = 0; i < MACList.length; i++){
-		code +='<tr id="row' + i + '">';
-		code +='<td width="25%">&nbsp;' + MACList[i][0] + '</td>';
-		code +='<td width="25%" style="text-align: center;">' + format_time(MACList[i][1]) + '</td>';
-		code +='<td width="45%">' + format_date(MACList[i][2]) + '</td>';
-		code +='<td width="5%" style="text-align: center;"><input type="checkbox" name="MFList_s" value="' + i + '" onClick="changeBgColor(this,' + i + ');" id="check' + i + '"></td>';
-		code +='</tr>';
-	    }
-		code += '<tr>';
-		code += '<td colspan="3">&nbsp;</td>'
-		code += '<td><button class="btn btn-danger" type="submit" onclick="return markGroupMAC(this, 64, \' Del \');" name="MFList"><i class="icon icon-minus icon-white"></i></button></td>';
-		code += '</tr>'
-		
-		var last_row = MACList.length - 1;
-		document.form.macfilter_time_x_0.value = (temp_time == '') ? MACList[last_row][1] : temp_time;
-		document.form.macfilter_date_x_0.value = (temp_date == '') ? MACList[last_row][2] : temp_date;
-	}
+        if(MACList.length == 0) {
+                code +='<tr><td colspan="4" style="text-align: center;"><div class="alert alert-info"><#IPConnection_VSList_Norule#></div></td></tr>';
+                
+                document.form.macfilter_time_x_0.value = (temp_time == '') ? "00002359" : temp_time;
+                document.form.macfilter_date_x_0.value = (temp_date == '') ? "1111111" : temp_date;
+        }
+        else{
+            for(var i = 0; i < MACList.length; i++){
+                code +='<tr id="row' + i + '">';
+                code +='<td width="25%">&nbsp;' + MACList[i][0] + '</td>';
+                code +='<td width="25%" style="text-align: center;">' + format_time(MACList[i][1]) + '</td>';
+                code +='<td width="45%">' + format_date(MACList[i][2]) + '</td>';
+                code +='<td width="5%" style="text-align: center;"><input type="checkbox" name="MFList_s" value="' + i + '" onClick="changeBgColor(this,' + i + ');" id="check' + i + '"></td>';
+                code +='</tr>';
+            }
+                code += '<tr>';
+                code += '<td colspan="3">&nbsp;</td>'
+                code += '<td><button class="btn btn-danger" type="submit" onclick="return markGroupMAC(this, 64, \' Del \');" name="MFList"><i class="icon icon-minus icon-white"></i></button></td>';
+                code += '</tr>'
+                
+                var last_row = MACList.length - 1;
+                document.form.macfilter_time_x_0.value = (temp_time == '') ? MACList[last_row][1] : temp_time;
+                document.form.macfilter_date_x_0.value = (temp_date == '') ? MACList[last_row][2] : temp_date;
+        }
 
-	document.form.macfilter_date_x_Sun.checked = getDateCheck(document.form.macfilter_date_x_0.value, 0);
-	document.form.macfilter_date_x_Mon.checked = getDateCheck(document.form.macfilter_date_x_0.value, 1);
-	document.form.macfilter_date_x_Tue.checked = getDateCheck(document.form.macfilter_date_x_0.value, 2);
-	document.form.macfilter_date_x_Wed.checked = getDateCheck(document.form.macfilter_date_x_0.value, 3);
-	document.form.macfilter_date_x_Thu.checked = getDateCheck(document.form.macfilter_date_x_0.value, 4);
-	document.form.macfilter_date_x_Fri.checked = getDateCheck(document.form.macfilter_date_x_0.value, 5);
-	document.form.macfilter_date_x_Sat.checked = getDateCheck(document.form.macfilter_date_x_0.value, 6);
+        document.form.macfilter_date_x_Sun.checked = getDateCheck(document.form.macfilter_date_x_0.value, 0);
+        document.form.macfilter_date_x_Mon.checked = getDateCheck(document.form.macfilter_date_x_0.value, 1);
+        document.form.macfilter_date_x_Tue.checked = getDateCheck(document.form.macfilter_date_x_0.value, 2);
+        document.form.macfilter_date_x_Wed.checked = getDateCheck(document.form.macfilter_date_x_0.value, 3);
+        document.form.macfilter_date_x_Thu.checked = getDateCheck(document.form.macfilter_date_x_0.value, 4);
+        document.form.macfilter_date_x_Fri.checked = getDateCheck(document.form.macfilter_date_x_0.value, 5);
+        document.form.macfilter_date_x_Sat.checked = getDateCheck(document.form.macfilter_date_x_0.value, 6);
 
-	document.form.macfilter_time_x_starthour.value = getTimeRange(document.form.macfilter_time_x_0.value, 0);
-	document.form.macfilter_time_x_startmin.value = getTimeRange(document.form.macfilter_time_x_0.value, 1);
-	document.form.macfilter_time_x_endhour.value = getTimeRange(document.form.macfilter_time_x_0.value, 2);
-	document.form.macfilter_time_x_endmin.value = getTimeRange(document.form.macfilter_time_x_0.value, 3);
+        document.form.macfilter_time_x_starthour.value = getTimeRange(document.form.macfilter_time_x_0.value, 0);
+        document.form.macfilter_time_x_startmin.value = getTimeRange(document.form.macfilter_time_x_0.value, 1);
+        document.form.macfilter_time_x_endhour.value = getTimeRange(document.form.macfilter_time_x_0.value, 2);
+        document.form.macfilter_time_x_endmin.value = getTimeRange(document.form.macfilter_time_x_0.value, 3);
 
-	$j('#MFList_Block').append(code);
+        $j('#MFList_Block').append(code);
 }
 
 function changeBgColor(obj, num){
-	$("row" + num).style.background=(obj.checked)?'#D9EDF7':'whiteSmoke';
+        $("row" + num).style.background=(obj.checked)?'#D9EDF7':'whiteSmoke';
 }
 
 function done_validating(action){
-	refreshpage();
+        refreshpage();
 }
 
 </script>
@@ -386,6 +386,11 @@ function done_validating(action){
                                 <div class="row-fluid">
                                     <div id="tabMenu" class="submenuBlock"></div>
                                     <div class="alert alert-info" style="margin: 10px;"><#FirewallConfig_display5_sectiondesc#></div>
+
+                                    <!-- Kids-control hint: how to configure multi-window schedules -->
+                                    <div class="alert alert-success" style="margin: 10px;">
+                                        <strong>儿童上网控制提示：</strong>要为同一台设备配置多个时段（例如工作日 19:00-21:00 + 周末 09:00-21:00），请添加<strong>多条规则使用相同的 MAC 地址</strong>，每条规则配一个时段。底层防火墙会自动按 MAC 合并所有时间窗口。支持跨夜时段（如 22:00-02:00）。
+                                    </div>
 
                                     <table width="100%" cellpadding="4" cellspacing="0" class="table">
                                         <tr>

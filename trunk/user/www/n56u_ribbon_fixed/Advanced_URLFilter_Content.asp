@@ -25,7 +25,7 @@
 var $j = jQuery.noConflict();
 
 $j(document).ready(function() {
-	init_itoggle('url_enable', change_url_enable);
+        init_itoggle('url_enable', change_url_enable);
 });
 
 </script>
@@ -39,164 +39,177 @@ var clients_info = getclients(1,0);
 var isMenuopen = 0;
 
 function initial(){
-	show_banner(1);
-	show_menu(5,5,3);
-	show_footer();
+        show_banner(1);
+        show_menu(5,5,3);
+        show_footer();
 
-	change_url_enable();
+        change_url_enable();
 
-	document.form.url_date_x_Sun.checked = getDateCheck(document.form.url_date_x.value, 0);
-	document.form.url_date_x_Mon.checked = getDateCheck(document.form.url_date_x.value, 1);
-	document.form.url_date_x_Tue.checked = getDateCheck(document.form.url_date_x.value, 2);
-	document.form.url_date_x_Wed.checked = getDateCheck(document.form.url_date_x.value, 3);
-	document.form.url_date_x_Thu.checked = getDateCheck(document.form.url_date_x.value, 4);
-	document.form.url_date_x_Fri.checked = getDateCheck(document.form.url_date_x.value, 5);
-	document.form.url_date_x_Sat.checked = getDateCheck(document.form.url_date_x.value, 6);
+        document.form.url_date_x_Sun.checked = getDateCheck(document.form.url_date_x.value, 0);
+        document.form.url_date_x_Mon.checked = getDateCheck(document.form.url_date_x.value, 1);
+        document.form.url_date_x_Tue.checked = getDateCheck(document.form.url_date_x.value, 2);
+        document.form.url_date_x_Wed.checked = getDateCheck(document.form.url_date_x.value, 3);
+        document.form.url_date_x_Thu.checked = getDateCheck(document.form.url_date_x.value, 4);
+        document.form.url_date_x_Fri.checked = getDateCheck(document.form.url_date_x.value, 5);
+        document.form.url_date_x_Sat.checked = getDateCheck(document.form.url_date_x.value, 6);
 
-	document.form.url_time_x_starthour.value = getTimeRange(document.form.url_time_x.value, 0);
-	document.form.url_time_x_startmin.value = getTimeRange(document.form.url_time_x.value, 1);
-	document.form.url_time_x_endhour.value = getTimeRange(document.form.url_time_x.value, 2);
-	document.form.url_time_x_endmin.value = getTimeRange(document.form.url_time_x.value, 3);
+        document.form.url_time_x_starthour.value = getTimeRange(document.form.url_time_x.value, 0);
+        document.form.url_time_x_startmin.value = getTimeRange(document.form.url_time_x.value, 1);
+        document.form.url_time_x_endhour.value = getTimeRange(document.form.url_time_x.value, 2);
+        document.form.url_time_x_endmin.value = getTimeRange(document.form.url_time_x.value, 3);
 
-	showLANIPList();
+        showLANIPList();
 
-	load_body();
+        load_body();
 }
 
 function applyRule(){
-	if(validForm()){
-		document.form.url_date_x.value = setDateCheck(
-			document.form.url_date_x_Sun,
-			document.form.url_date_x_Mon,
-			document.form.url_date_x_Tue,
-			document.form.url_date_x_Wed,
-			document.form.url_date_x_Thu,
-			document.form.url_date_x_Fri,
-			document.form.url_date_x_Sat);
-		document.form.url_time_x.value = setTimeRange(
-			document.form.url_time_x_starthour,
-			document.form.url_time_x_startmin,
-			document.form.url_time_x_endhour,
-			document.form.url_time_x_endmin);
-		
-		showLoading();
-		
-		document.form.action_mode.value = " Restart ";
-		document.form.current_page.value = "/Advanced_URLFilter_Content.asp";
-		document.form.next_page.value = "";
-		
-		document.form.submit();
-	}
+        if(validForm()){
+                document.form.url_date_x.value = setDateCheck(
+                        document.form.url_date_x_Sun,
+                        document.form.url_date_x_Mon,
+                        document.form.url_date_x_Tue,
+                        document.form.url_date_x_Wed,
+                        document.form.url_date_x_Thu,
+                        document.form.url_date_x_Fri,
+                        document.form.url_date_x_Sat);
+                document.form.url_time_x.value = setTimeRange(
+                        document.form.url_time_x_starthour,
+                        document.form.url_time_x_startmin,
+                        document.form.url_time_x_endhour,
+                        document.form.url_time_x_endmin);
+                
+                showLoading();
+                
+                document.form.action_mode.value = " Restart ";
+                document.form.current_page.value = "/Advanced_URLFilter_Content.asp";
+                document.form.next_page.value = "";
+                
+                document.form.submit();
+        }
 }
 
 function validForm(){
-	if((document.form.url_enable_x[0].checked ==true)
-		&& (document.form.url_date_x_Sun.checked ==false)
-		&& (document.form.url_date_x_Mon.checked ==false)
-		&& (document.form.url_date_x_Tue.checked ==false)
-		&& (document.form.url_date_x_Wed.checked ==false)
-		&& (document.form.url_date_x_Thu.checked ==false)
-		&& (document.form.url_date_x_Fri.checked ==false)
-		&& (document.form.url_date_x_Sat.checked ==false)){
-			alert("<#FirewallConfig_URLActiveDate_itemname#><#JS_fieldblank#>");
-			return false;
-	}
+        if((document.form.url_enable_x[0].checked ==true)
+                && (document.form.url_date_x_Sun.checked ==false)
+                && (document.form.url_date_x_Mon.checked ==false)
+                && (document.form.url_date_x_Tue.checked ==false)
+                && (document.form.url_date_x_Wed.checked ==false)
+                && (document.form.url_date_x_Thu.checked ==false)
+                && (document.form.url_date_x_Fri.checked ==false)
+                && (document.form.url_date_x_Sat.checked ==false)){
+                        alert("<#FirewallConfig_URLActiveDate_itemname#><#JS_fieldblank#>");
+                        return false;
+        }
 
-	if(document.form.url_enable_x[0].checked ==true){
-		if(!validate_timerange(document.form.url_time_x_starthour, 0)
-			|| !validate_timerange(document.form.url_time_x_startmin, 1)
-			|| !validate_timerange(document.form.url_time_x_endhour, 2)
-			|| !validate_timerange(document.form.url_time_x_endmin, 3)
-			){
-			return false;
-		}
-		
-		var starttime = eval(document.form.url_time_x_starthour.value + document.form.url_time_x_startmin.value);
-		var endtime = eval(document.form.url_time_x_endhour.value + document.form.url_time_x_endmin.value);
-		if(starttime == endtime){
-			alert("<#FirewallConfig_URLActiveTime_itemhint2#>");
-			document.form.url_time_x_starthour.focus();
-			document.form.url_time_x_starthour.select();
-			return false;
-		}
-	}
+        if(document.form.url_enable_x[0].checked ==true){
+                if(!validate_timerange(document.form.url_time_x_starthour, 0)
+                        || !validate_timerange(document.form.url_time_x_startmin, 1)
+                        || !validate_timerange(document.form.url_time_x_endhour, 2)
+                        || !validate_timerange(document.form.url_time_x_endmin, 3)
+                        ){
+                        return false;
+                }
+                
+                var starttime = eval(document.form.url_time_x_starthour.value + document.form.url_time_x_startmin.value);
+                var endtime = eval(document.form.url_time_x_endhour.value + document.form.url_time_x_endmin.value);
+                if(starttime == endtime){
+                        alert("<#FirewallConfig_URLActiveTime_itemhint2#>");
+                        document.form.url_time_x_starthour.focus();
+                        document.form.url_time_x_starthour.select();
+                        return false;
+                }
+        }
 
-	if (!validate_hwaddr(document.form.url_mac_x))
-		return false;
+        if (!validate_hwaddr(document.form.url_mac_x))
+                return false;
 
-	return true;
+        return true;
 }
 
 function change_url_enable(){
-	var v = document.form.url_enable_x[0].checked;
-	showhide_div('tbl_urlf_main', v);
+        var v = document.form.url_enable_x[0].checked;
+        showhide_div('tbl_urlf_main', v);
 }
 
 function click_mac_inv(o){
-	document.form.url_inv_x.value = (o.checked) ? "1" : "0";
+        document.form.url_inv_x.value = (o.checked) ? "1" : "0";
 }
 
 function setClientMAC(num){
-	document.form.url_mac_x.value = clients_info[num][2];
-	hideClients_Block();
+        document.form.url_mac_x.value = clients_info[num][2];
+        hideClients_Block();
 }
 
 function showLANIPList(){
-	var code = "";
-	var show_name = "";
-	
-	for(var i = 0; i < clients_info.length ; i++){
-		if(clients_info[i][0] && clients_info[i][0].length > 20)
-			show_name = clients_info[i][0].substring(0, 18) + "..";
-		else
-			show_name = clients_info[i][0];
-		
-		if(clients_info[i][2]){
-			code += '<a href="javascript:void(0)"><div onclick="setClientMAC('+i+');"><strong>'+clients_info[i][1]+'</strong>';
-			code += ' ['+clients_info[i][2]+']';
-			if(show_name && show_name.length > 0)
-				code += ' ('+show_name+')';
-			code += ' </div></a>';
-		}
-	}
-	if (code == "")
-		code = '<div style="text-align: center;" onclick="hideClients_Block();"><#Nodata#></div>';
-	code +='<!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->';	
-	$("ClientList_Block").innerHTML = code;
+        var code = "";
+        var show_name = "";
+        
+        for(var i = 0; i < clients_info.length ; i++){
+                if(clients_info[i][0] && clients_info[i][0].length > 20)
+                        show_name = clients_info[i][0].substring(0, 18) + "..";
+                else
+                        show_name = clients_info[i][0];
+                
+                if(clients_info[i][2]){
+                        code += '<a href="javascript:void(0)"><div onclick="setClientMAC('+i+');"><strong>'+clients_info[i][1]+'</strong>';
+                        code += ' ['+clients_info[i][2]+']';
+                        if(show_name && show_name.length > 0)
+                                code += ' ('+show_name+')';
+                        code += ' </div></a>';
+                }
+        }
+        if (code == "")
+                code = '<div style="text-align: center;" onclick="hideClients_Block();"><#Nodata#></div>';
+        code +='<!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->'; 
+        $("ClientList_Block").innerHTML = code;
 }
 
 function hideClients_Block(){
-	$j("#chevron").children('i').removeClass('icon-chevron-up').addClass('icon-chevron-down');
-	$('ClientList_Block').style.display='none';
-	isMenuopen = 0;
+        $j("#chevron").children('i').removeClass('icon-chevron-up').addClass('icon-chevron-down');
+        $('ClientList_Block').style.display='none';
+        isMenuopen = 0;
 }
 
 // 添加MAC地址模式切换函数
 function changeMacMode() {
-	var mode = document.form.url_mac_group_x.value;
-	if (mode == "1") {
-		$('single_mac_div').style.display = 'none';
-		$('mac_group_div').style.display = 'block';
-	} else {
-		$('single_mac_div').style.display = 'block';
-		$('mac_group_div').style.display = 'none';
-	}
+        var mode = document.form.url_mac_group_x.value;
+        if (mode == "1") {
+                $('single_mac_div').style.display = 'none';
+                $('mac_group_div').style.display = 'block';
+        } else {
+                $('single_mac_div').style.display = 'block';
+                $('mac_group_div').style.display = 'none';
+        }
 }
 
 function pullLANIPList(obj){
-	if(isMenuopen == 0){
-		$j(obj).children('i').removeClass('icon-chevron-down').addClass('icon-chevron-up');
-		$("ClientList_Block").style.display = "block";
-		document.form.url_mac_x.focus();
-		isMenuopen = 1;
-	}
-	else
-		hideClients_Block();
+        if(isMenuopen == 0){
+                $j(obj).children('i').removeClass('icon-chevron-down').addClass('icon-chevron-up');
+                $("ClientList_Block").style.display = "block";
+                document.form.url_mac_x.focus();
+                isMenuopen = 1;
+        }
+        else
+                hideClients_Block();
 }
 
 function done_validating(action){
-	refreshpage();
+        refreshpage();
 }
+
+/* ============ Kids-control toggle helpers (added by firewall refactor) ============
+ * These pair a visible checkbox/radio with a hidden NVRAM-bound input,
+ * because the padavan httpd only persists named form fields that exist in
+ * the variables.c registry, and our 0/1 toggles need to round-trip through
+ * the hidden field. */
+function toggle_nvram(cb, nv_name){
+        document.form[nv_name].value = cb.checked ? "1" : "0";
+}
+function set_radio(nv_name, val){
+        document.form[nv_name].value = val;
+}
+/* ============ End toggle helpers ============ */
 </script>
 <style>
     .nav-tabs > li > a {
@@ -238,6 +251,12 @@ function done_validating(action){
     <input type="hidden" name="url_date_x" value="<% nvram_get_x("","url_date_x"); %>">
     <input type="hidden" name="url_time_x" value="<% nvram_get_x("","url_time_x"); %>">
     <input type="hidden" name="url_inv_x" value="<% nvram_get_x("", "url_inv_x"); %>" />
+    <input type="hidden" name="url_filter_mode" value="<% nvram_get_x("", "url_filter_mode"); %>" />
+    <input type="hidden" name="url_filter_whitelist" value="<% nvram_get_x("", "url_filter_whitelist"); %>" />
+    <input type="hidden" name="url_force_dns" value="<% nvram_get_x("", "url_force_dns"); %>" />
+    <input type="hidden" name="url_block_vpn" value="<% nvram_get_x("", "url_block_vpn"); %>" />
+    <input type="hidden" name="url_block_doh" value="<% nvram_get_x("", "url_block_doh"); %>" />
+    <input type="hidden" name="url_log_blocked" value="<% nvram_get_x("", "url_log_blocked"); %>" />
     <input type="hidden" name="url_num_x_0" value="<% nvram_get_x("","url_num_x"); %>" readonly="1">
 
     <div class="container-fluid">
@@ -334,6 +353,50 @@ function done_validating(action){
                                                 </div>
                                             </td>
                                         </tr>
+                                        <!-- ============ Kids-control settings (added by firewall refactor) ============ -->
+                                        <tr>
+                                            <th colspan="3" style="background-color: #E3E3E3;">儿童上网控制 / Kids Control</th>
+                                        </tr>
+                                        <tr>
+                                            <th>过滤模式 (Filter Mode):</th>
+                                            <td colspan="2">
+                                                <label class="radio inline"><input type="radio" name="url_filter_whitelist_fake" value="0" onclick="set_radio('url_filter_whitelist', '0');" <% nvram_match_x("", "url_filter_whitelist", "0", "checked"); %>>黑名单 (Blacklist) — 拦截列出的域名</label>
+                                                <label class="radio inline"><input type="radio" name="url_filter_whitelist_fake" value="1" onclick="set_radio('url_filter_whitelist', '1');" <% nvram_match_x("", "url_filter_whitelist", "1", "checked"); %>>白名单 (Whitelist) — 仅允许列出的域名</label>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>强制 DNS (Force DNS):</th>
+                                            <td colspan="2">
+                                                <label class="checkbox inline"><input type="checkbox" name="url_force_dns_fake" value="" onclick="toggle_nvram(this, 'url_force_dns');" <% nvram_match_x("", "url_force_dns", "1", "checked"); %>/>将所有 53 端口流量强制重定向到本机 dnsmasq（防止孩子改 8.8.8.8 绕过）</label>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>父母设备 MAC (Parent MACs):</th>
+                                            <td colspan="2">
+                                                <input type="text" maxlength="256" class="span12" size="60" name="url_parent_mac_x" value="<% nvram_get_x("", "url_parent_mac_x"); %>" placeholder="AABBCCDDEEFF;112233445566 (12位MAC，分号分隔，留空则所有设备均受限)">
+                                                <span class="help-block">在此列表中的 MAC 设备将<strong>跳过 DNS 强制重定向</strong>，可使用任意 DNS 服务器。孩子设备留空即可，会强制走 dnsmasq。</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>拦截 DoH/DoT (Block DoH/DoT):</th>
+                                            <td colspan="2">
+                                                <label class="checkbox inline"><input type="checkbox" name="url_block_doh_fake" value="" onclick="toggle_nvram(this, 'url_block_doh');" <% nvram_match_x("", "url_block_doh", "1", "checked"); %>/>Sinkhole 已知 DoH 服务器域名（dns.google/cloudflare-dns.com 等）+ 阻断 DoT 853 端口</label>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>阻断 VPN 端口 (Block VPN ports):</th>
+                                            <td colspan="2">
+                                                <label class="checkbox inline"><input type="checkbox" name="url_block_vpn_fake" value="" onclick="toggle_nvram(this, 'url_block_vpn');" <% nvram_match_x("", "url_block_vpn", "1", "checked"); %>/>阻断 OpenVPN(1194) / WireGuard(51820) 等常见 VPN 端口</label>
+                                                <input type="text" maxlength="128" class="span12" size="40" name="url_block_vpn_ports" value="<% nvram_get_x("", "url_block_vpn_ports"); %>" placeholder="留空使用默认 1194 51820，可自定义如 1723 1701 1080 8080">
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>审计日志 (Audit Log):</th>
+                                            <td colspan="2">
+                                                <label class="checkbox inline"><input type="checkbox" name="url_log_blocked_fake" value="" onclick="toggle_nvram(this, 'url_log_blocked');" <% nvram_match_x("", "url_log_blocked", "1", "checked"); %>/>记录所有被拦截的访问尝试到 syslog（前缀 URL_BLOCK / MAC_BLOCK），家长可用 logread | grep 审计</label>
+                                            </td>
+                                        </tr>
+                                        <!-- ============ End of kids-control settings ============ -->
                                         <tr>
                                             <th><#FirewallConfig_UrlList_groupitemdesc#></th>
                                             <td style="padding-right: 0px;">
